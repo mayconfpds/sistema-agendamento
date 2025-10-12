@@ -1,0 +1,130 @@
+{% extends 'layout.html' %}
+
+{% block title %}Agendar {{ service.name }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8 col-md-10">
+        <div class="card shadow">
+            <div class="card-header">
+                <h2 class="mb-0">Agendar Serviço</h2>
+            </div>
+            <div class="card-body">
+                <h4 class="card-title">{{ service.name }}</h4>
+                <p class="text-muted">Duração: {{ service.duration }} minutos</p>
+                <hr>
+
+                <form action="{{ url_for('create_appointment') }}" method="POST" id="scheduleForm">
+                    <input type="hidden" name="service_id" value="{{ service.id }}">
+                    
+                    <div class="mb-3">
+                        <label for="client_name" class="form-label">Seu Nome Completo</label>
+                        <input type="text" class="form-control" id="client_name" name="client_name" required>
+                    </div>
+
+                    <!-- CAMPO DE TELEFONE ADICIONADO -->
+                    <div class="mb-3">
+                        <label for="client_phone" class="form-label">Seu Telefone (WhatsApp)</label>
+                        <input type="tel" class="form-control" id="client_phone" name="client_phone" placeholder="(99) 99999-9999" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="appointment_date" class="form-label">Escolha uma data</label>
+                        <input type="date" class="form-control" id="appointment_date" name="appointment_date" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Horários Disponíveis</label>
+                        <div id="available_times_container" class="border rounded p-3" style="min-height: 100px;">
+                            <p id="times_placeholder" class="text-muted">Selecione uma data para ver os horários.</p>
+                        </div>
+                         <input type="hidden" id="appointment_time" name="appointment_time">
+                    </div>
+
+                    <button type="submit" class="btn btn-success w-100" id="submitBtn" disabled>Confirmar Agendamento</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const dateInput = document.getElementById('appointment_date');
+    const timesContainer = document.getElementById('available_times_container');
+    const timesPlaceholder = document.getElementById('times_placeholder');
+    const serviceId = '{{ service.id }}';
+    const hiddenTimeInput = document.getElementById('appointment_time');
+    const submitBtn = document.getElementById('submitBtn');
+    const phoneInput = document.getElementById('client_phone');
+
+    // MÁSCARA PARA O CAMPO DE TELEFONE
+    phoneInput.addEventListener('input', function (e) {
+        let value = e.target.value.replace(/\D/g, '');
+        value = value.replace(/^(\d{2})(\d)/g, '($1) $2');
+        value = value.replace(/(\d)(\d{4})$/, '$1-$2');
+        e.target.value = value;
+    });
+
+    // Define a data mínima como hoje
+    const today = new Date().toISOString().split('T')[0];
+    dateInput.setAttribute('min', today);
+
+    dateInput.addEventListener('change', async function() {
+        const selectedDate = this.value;
+        if (!selectedDate) return;
+
+        // Limpa horários anteriores e desabilita o botão
+        timesContainer.innerHTML = '<div class="spinner-border spinner-border-sm" role="status"><span class="visually-hidden">Loading...</span></div>';
+        if(timesPlaceholder) timesPlaceholder.style.display = 'none';
+        hiddenTimeInput.value = '';
+        submitBtn.disabled = true;
+
+        try {
+            const response = await fetch(`/api/horarios_disponiveis?service_id=${serviceId}&date=${selectedDate}`);
+            if (!response.ok) {
+                throw new Error('Erro ao buscar horários.');
+            }
+            const availableTimes = await response.json();
+            
+            timesContainer.innerHTML = ''; // Limpa o spinner
+
+            if (availableTimes.length > 0) {
+                 availableTimes.forEach(time => {
+                    const timeButton = document.createElement('button');
+                    timeButton.type = 'button';
+                    timeButton.className = 'btn btn-outline-primary m-1';
+                    timeButton.textContent = time;
+                    timeButton.dataset.time = time;
+                    
+                    timeButton.addEventListener('click', function() {
+                        // Remove a classe 'active' de todos os botões
+                        document.querySelectorAll('#available_times_container .btn').forEach(btn => {
+                            btn.classList.remove('active', 'btn-primary');
+                            btn.classList.add('btn-outline-primary');
+                        });
+                        // Adiciona a classe 'active' ao botão clicado
+                        this.classList.add('active', 'btn-primary');
+                        this.classList.remove('btn-outline-primary');
+
+                        // Define o valor no input hidden e habilita o submit
+                        hiddenTimeInput.value = this.dataset.time;
+                        submitBtn.disabled = false;
+                    });
+
+                    timesContainer.appendChild(timeButton);
+                });
+            } else {
+                 timesContainer.innerHTML = '<p class="text-warning">Nenhum horário disponível para esta data.</p>';
+            }
+        } catch (error) {
+            console.error('Falha:', error);
+            timesContainer.innerHTML = '<p class="text-danger">Não foi possível carregar os horários. Tente novamente.</p>';
+        }
+    });
+});
+</script>
+{% endblock %}
+

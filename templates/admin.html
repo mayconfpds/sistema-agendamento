@@ -1,0 +1,164 @@
+{% extends 'layout.html' %}
+
+{% block title %}Painel do Administrador{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">Painel de Controle</h1>
+
+<!-- Abas de Navegação -->
+<ul class="nav nav-tabs mb-3" id="adminTab" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="appointments-tab" data-bs-toggle="tab" data-bs-target="#appointments-panel" type="button" role="tab" aria-controls="appointments-panel" aria-selected="true">
+            <i class="bi bi-calendar-week me-2"></i>Agendamentos
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="services-tab" data-bs-toggle="tab" data-bs-target="#services-panel" type="button" role="tab" aria-controls="services-panel" aria-selected="false">
+            <i class="bi bi-scissors me-2"></i>Serviços
+        </button>
+    </li>
+</ul>
+
+<!-- Conteúdo das Abas -->
+<div class="tab-content" id="adminTabContent">
+    <!-- Painel de Agendamentos -->
+    <div class="tab-pane fade show active" id="appointments-panel" role="tabpanel" aria-labelledby="appointments-tab">
+        <h2 class="h4">Próximos Agendamentos</h2>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead>
+                    <tr>
+                        <th>Data</th>
+                        <th>Hora</th>
+                        <th>Cliente</th>
+                        <th>Telefone</th> <!-- COLUNA ADICIONADA -->
+                        <th>Serviço</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for appt in appointments %}
+                    <tr>
+                        <td>{{ appt.appointment_date.strftime('%d/%m/%Y') }}</td>
+                        <td>{{ appt.appointment_time.strftime('%H:%M') }}</td>
+                        <td>{{ appt.client_name }}</td>
+                        <td>{{ appt.client_phone }}</td> <!-- CAMPO ADICIONADO -->
+                        <td>{{ appt.service_info.name }}</td>
+                        <td>
+                            <form action="{{ url_for('delete_appointment', appointment_id=appt.id) }}" method="POST" onsubmit="return confirm('Tem certeza que deseja excluir este agendamento?');" class="d-inline">
+                                <button type="submit" class="btn btn-sm btn-outline-danger">
+                                    <i class="bi bi-trash"></i> Excluir
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" class="text-center">Nenhum agendamento futuro encontrado.</td> <!-- COLSPAN ATUALIZADO -->
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Painel de Serviços -->
+    <div class="tab-pane fade" id="services-panel" role="tabpanel" aria-labelledby="services-tab">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h2 class="h4 mb-0">Gerenciar Serviços</h2>
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addServiceModal">
+                <i class="bi bi-plus-circle me-2"></i>Adicionar Serviço
+            </button>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead>
+                    <tr>
+                        <th>Nome do Serviço</th>
+                        <th>Duração (minutos)</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for service in services %}
+                    <tr>
+                        <td>{{ service.name }}</td>
+                        <td>{{ service.duration }}</td>
+                        <td>
+                             <button class="btn btn-sm btn-outline-warning me-2" data-bs-toggle="modal" data-bs-target="#editServiceModal-{{ service.id }}">
+                                <i class="bi bi-pencil"></i> Editar
+                            </button>
+                            <form action="{{ url_for('delete_service', service_id=service.id) }}" method="POST" onsubmit="return confirm('Atenção! Excluir um serviço também excluirá todos os agendamentos associados. Deseja continuar?');" class="d-inline">
+                                <button type="submit" class="btn btn-sm btn-outline-danger">
+                                    <i class="bi bi-trash"></i> Excluir
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Adicionar Serviço -->
+<div class="modal fade" id="addServiceModal" tabindex="-1" aria-labelledby="addServiceModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addServiceModalLabel">Adicionar Novo Serviço</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="{{ url_for('add_service') }}" method="POST">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="name" class="form-label">Nome do Serviço</label>
+                        <input type="text" class="form-control" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="duration" class="form-label">Duração (em minutos)</label>
+                        <input type="number" class="form-control" name="duration" required min="1">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar Serviço</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modals de Edição de Serviço (um para cada serviço) -->
+{% for service in services %}
+<div class="modal fade" id="editServiceModal-{{ service.id }}" tabindex="-1" aria-labelledby="editServiceModalLabel-{{ service.id }}" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editServiceModalLabel-{{ service.id }}">Editar Serviço</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="{{ url_for('edit_service', service_id=service.id) }}" method="POST">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="name-{{ service.id }}" class="form-label">Nome do Serviço</label>
+                        <input type="text" class="form-control" id="name-{{ service.id }}" name="name" value="{{ service.name }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="duration-{{ service.id }}" class="form-label">Duração (em minutos)</label>
+                        <input type="number" class="form-control" id="duration-{{ service.id }}" name="duration" value="{{ service.duration }}" required min="1">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar Alterações</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+{% endblock %}
+
