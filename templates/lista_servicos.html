@@ -1,0 +1,28 @@
+{% extends 'layout.html' %}
+{% block title %}{{ establishment.name }}{% endblock %}
+{% block content %}
+<div class="container py-5">
+    <div class="text-center mb-5">
+        {% if establishment.logo_filename %}
+            <img src="{{ url_for('static', filename='uploads/' + establishment.logo_filename) }}" class="rounded-circle shadow mb-3" style="width: 100px; height: 100px; object-fit: cover;">
+        {% else %}
+            <div class="rounded-circle bg-secondary d-inline-flex align-items-center justify-content-center text-white fw-bold mb-3 shadow" style="width: 100px; height: 100px; font-size: 2rem;">{{ establishment.name[0] }}</div>
+        {% endif %}
+        
+        <h1 class="display-5 fw-bold">{{ establishment.name }}</h1>
+        {% if establishment.contact_phone %}<p class="text-muted"><i class="bi bi-whatsapp text-success"></i> {{ establishment.contact_phone }}</p>{% endif %}
+    </div>
+    <div class="row justify-content-center gap-3">
+        {% for s in services %}
+        <div class="col-md-4">
+            <div class="card shadow-sm border-0 h-100 p-3 text-center">
+                <h4 class="fw-bold">{{ s.name }}</h4>
+                <p class="text-success fw-bold">R$ {{ "%.2f"|format(s.price) }}</p>
+                <p class="text-muted"><i class="bi bi-clock"></i> {{ s.duration }} min</p>
+                <a href="{{ url_for('schedule_service', url_prefix=establishment.url_prefix, service_id=s.id) }}" class="btn btn-outline-primary w-100 fw-bold">Agendar</a>
+            </div>
+        </div>
+        {% else %}<div class="text-center text-muted">Sem serviços cadastrados.</div>{% endfor %}
+    </div>
+</div>
+{% endblock %}

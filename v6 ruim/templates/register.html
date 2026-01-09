@@ -1,0 +1,26 @@
+{% extends 'layout.html' %}
+{% block content %}
+<div class="row justify-content-center mt-5">
+    <div class="col-md-5">
+        <div class="card border-0 shadow-sm p-4">
+            <h3 class="fw-bold mb-4 text-center">Criar Conta</h3>
+            <form method="POST">
+                <label class="form-label small fw-bold">NOME DO NEGÓCIO</label>
+                <input type="text" name="business_name" class="form-control mb-2" required>
+                
+                <label class="form-label small fw-bold">LINK (ex: barbearia-top)</label>
+                <input type="text" name="url_prefix" class="form-control mb-2" required>
+                
+                <label class="form-label small fw-bold">WHATSAPP</label>
+                <input type="text" name="contact_phone" class="form-control mb-3">
+                
+                <div class="row g-2">
+                    <div class="col"><input type="text" name="username" placeholder="Usuário" class="form-control" required></div>
+                    <div class="col"><input type="password" name="password" placeholder="Senha" class="form-control" required></div>
+                </div>
+                <button class="btn btn-primary w-100 mt-4 fw-bold">Cadastrar</button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
