@@ -1,17 +1,15 @@
 import os
 
-# --- ARQUIVOS DE DEPLOY (NOVOS) ---
-
+# --- ARQUIVOS DE DEPLOY ---
 REQUIREMENTS_TXT = r'''Flask
 Flask-SQLAlchemy
 Flask-Login
 Werkzeug
 gunicorn
 '''
-
 PROCFILE = r'''web: gunicorn app:app'''
 
-# --- APP.PY (Com Upload de Imagens) ---
+# --- APP.PY (Mesma lógica robusta da V9) ---
 APP_PY = r'''import os
 import re
 import threading
@@ -24,10 +22,9 @@ from werkzeug.utils import secure_filename
 from datetime import datetime, time, timedelta
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'chave-secreta-v9-logo'
+app.config['SECRET_KEY'] = 'chave-secreta-v10-marketing'
 basedir = os.path.abspath(os.path.dirname(__file__))
 
-# Configuração de Banco de Dados (Compatível com Render Postgres ou SQLite Local)
 database_url = os.environ.get('DATABASE_URL')
 if database_url and database_url.startswith("postgres://"):
     database_url = database_url.replace("postgres://", "postgresql://", 1)
@@ -35,17 +32,13 @@ if database_url and database_url.startswith("postgres://"):
 app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'sqlite:///' + os.path.join(basedir, 'agendamento.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# Configuração de Upload
 UPLOAD_FOLDER = os.path.join(basedir, 'static', 'uploads')
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-# Cria pasta de uploads se não existir
 if not os.path.exists(UPLOAD_FOLDER):
-    try:
-        os.makedirs(UPLOAD_FOLDER)
-    except OSError:
-        pass # Ignora erro se já existir (comum em alguns ambientes)
+    try: os.makedirs(UPLOAD_FOLDER)
+    except OSError: pass
 
 db = SQLAlchemy(app)
 login_manager = LoginManager(app)
@@ -55,17 +48,14 @@ login_manager.login_message = 'Faça login para continuar.'
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-# --- MODELOS ---
-
+# MODELOS
 class Establishment(db.Model):
     __tablename__ = 'establishments'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     url_prefix = db.Column(db.String(50), nullable=False, unique=True)
     contact_phone = db.Column(db.String(20), nullable=True)
-    logo_filename = db.Column(db.String(100), nullable=True) # NOVO: Nome do arquivo da logo
-    
-    # Relacionamentos
+    logo_filename = db.Column(db.String(100), nullable=True)
     schedules = db.relationship('DaySchedule', backref='establishment', lazy=True, cascade="all, delete-orphan")
     admins = db.relationship('Admin', backref='establishment', lazy=True)
     services = db.relationship('Service', backref='establishment', lazy=True)
@@ -77,7 +67,6 @@ class DaySchedule(db.Model):
     establishment_id = db.Column(db.Integer, db.ForeignKey('establishments.id'), nullable=False)
     day_index = db.Column(db.Integer, nullable=False)
     is_active = db.Column(db.Boolean, default=True)
-    
     work_start = db.Column(db.Time, nullable=False, default=time(9, 0))
     work_end = db.Column(db.Time, nullable=False, default=time(18, 0))
     lunch_start = db.Column(db.Time, nullable=True)
@@ -115,7 +104,6 @@ class Appointment(db.Model):
 @login_manager.user_loader
 def load_user(user_id): return Admin.query.get(int(user_id))
 
-# NOTIFICAÇÕES
 def notification_worker():
     while True:
         try:
@@ -132,8 +120,6 @@ def notification_worker():
         except: pass
         time_module.sleep(60)
 
-# --- ROTAS ---
-
 @app.route('/')
 def index(): return render_template('index.html')
 
@@ -148,17 +134,9 @@ def register_business():
         )
         db.session.add(est)
         db.session.commit()
-        
         for i in range(7):
-            day_schedule = DaySchedule(
-                establishment_id=est.id,
-                day_index=i,
-                is_active=(i < 5),
-                work_start=time(9,0),
-                work_end=time(18,0)
-            )
+            day_schedule = DaySchedule(establishment_id=est.id, day_index=i, is_active=(i < 5), work_start=time(9,0), work_end=time(18,0))
             db.session.add(day_schedule)
-        
         adm = Admin(username=request.form.get('username'), establishment_id=est.id)
         adm.set_password(request.form.get('password'))
         db.session.add(adm)
@@ -184,16 +162,12 @@ def create_appointment(url_prefix):
     est = Establishment.query.filter_by(url_prefix=url_prefix).first_or_404()
     d = datetime.strptime(request.form.get('appointment_date'), '%Y-%m-%d').date()
     t = datetime.strptime(request.form.get('appointment_time'), '%H:%M').time()
-    
     if datetime.combine(d, t) < datetime.now():
         flash('Data inválida (passado).', 'danger')
         return redirect(url_for('schedule_service', url_prefix=url_prefix, service_id=request.form.get('service_id')))
-
     appt = Appointment(
-        client_name=request.form.get('client_name'),
-        client_phone=request.form.get('client_phone'),
-        service_id=request.form.get('service_id'),
-        appointment_date=d, appointment_time=t, establishment_id=est.id
+        client_name=request.form.get('client_name'), client_phone=request.form.get('client_phone'),
+        service_id=request.form.get('service_id'), appointment_date=d, appointment_time=t, establishment_id=est.id
     )
     db.session.add(appt)
     db.session.commit()
@@ -229,61 +203,37 @@ def admin_dashboard():
 def update_settings():
     est = current_user.establishment
     form_type = request.form.get('form_type')
-    
     if form_type == 'contact':
         est.contact_phone = request.form.get('contact_phone')
-        
-        # Upload da Logo
         if 'logo' in request.files:
             file = request.files['logo']
             if file and allowed_file(file.filename):
-                filename = secure_filename(file.filename)
-                # Adiciona timestamp para evitar cache e conflitos
-                unique_filename = f"{est.id}_{int(time_module.time())}_{filename}"
-                file.save(os.path.join(app.config['UPLOAD_FOLDER'], unique_filename))
-                est.logo_filename = unique_filename
-        
-        flash('Informações do negócio atualizadas!', 'success')
-
+                fname = secure_filename(file.filename)
+                unique = f"{est.id}_{int(time_module.time())}_{fname}"
+                file.save(os.path.join(app.config['UPLOAD_FOLDER'], unique))
+                est.logo_filename = unique
+        flash('Dados atualizados!', 'success')
     elif form_type == 'schedule':
-        schedule_ids = request.form.getlist('schedule_id')
-        for sid in schedule_ids:
-            day_sched = DaySchedule.query.get(sid)
-            if day_sched and day_sched.establishment_id == est.id:
-                day_sched.is_active = (request.form.get(f'active_{sid}') == 'on')
-                ws = request.form.get(f'work_start_{sid}')
-                we = request.form.get(f'work_end_{sid}')
-                ls = request.form.get(f'lunch_start_{sid}')
-                le = request.form.get(f'lunch_end_{sid}')
-                
-                if ws and we:
-                    day_sched.work_start = datetime.strptime(ws, '%H:%M').time()
-                    day_sched.work_end = datetime.strptime(we, '%H:%M').time()
-                
-                if ls and le:
-                    day_sched.lunch_start = datetime.strptime(ls, '%H:%M').time()
-                    day_sched.lunch_end = datetime.strptime(le, '%H:%M').time()
-                else:
-                    day_sched.lunch_start = None
-                    day_sched.lunch_end = None
+        sids = request.form.getlist('schedule_id')
+        for sid in sids:
+            ds = DaySchedule.query.get(sid)
+            if ds and ds.establishment_id == est.id:
+                ds.is_active = (request.form.get(f'active_{sid}') == 'on')
+                ws, we = request.form.get(f'work_start_{sid}'), request.form.get(f'work_end_{sid}')
+                ls, le = request.form.get(f'lunch_start_{sid}'), request.form.get(f'lunch_end_{sid}')
+                if ws and we: ds.work_start = datetime.strptime(ws, '%H:%M').time(); ds.work_end = datetime.strptime(we, '%H:%M').time()
+                if ls and le: ds.lunch_start = datetime.strptime(ls, '%H:%M').time(); ds.lunch_end = datetime.strptime(le, '%H:%M').time()
+                else: ds.lunch_start = None; ds.lunch_end = None
         flash('Horários salvos!', 'success')
-
     db.session.commit()
     return redirect(url_for('admin_dashboard'))
 
 @app.route('/admin/servicos/novo', methods=['POST'])
 @login_required
 def add_service():
-    price_str = request.form.get('price', '0').replace(',', '.')
-    try: price = float(price_str)
-    except ValueError: price = 0.0
-
-    svc = Service(
-        name=request.form.get('name'), 
-        duration=int(request.form.get('duration')), 
-        price=price,
-        establishment_id=current_user.establishment_id
-    )
+    try: price = float(request.form.get('price', '0').replace(',', '.'))
+    except: price = 0.0
+    svc = Service(name=request.form.get('name'), duration=int(request.form.get('duration')), price=price, establishment_id=current_user.establishment_id)
     db.session.add(svc); db.session.commit()
     return redirect(url_for('admin_dashboard'))
 
@@ -303,57 +253,179 @@ def delete_appointment(id):
 
 @app.route('/api/horarios_disponiveis')
 def get_available_times():
-    sid = request.args.get('service_id'); d_str = request.args.get('date')
+    sid, d_str = request.args.get('service_id'), request.args.get('date')
     if not sid or not d_str: return jsonify([])
     try: sel_date = datetime.strptime(d_str, '%Y-%m-%d').date()
     except: return jsonify([])
-
     svc = Service.query.get(sid)
     est = svc.establishment
-    
-    day_idx = sel_date.weekday()
-    day_sched = DaySchedule.query.filter_by(establishment_id=est.id, day_index=day_idx).first()
-    
+    day_sched = DaySchedule.query.filter_by(establishment_id=est.id, day_index=sel_date.weekday()).first()
     if not day_sched or not day_sched.is_active: return jsonify([])
-
+    
     appts = Appointment.query.filter_by(appointment_date=sel_date, establishment_id=est.id).all()
     busy = []
-    
     if day_sched.lunch_start and day_sched.lunch_end:
         busy.append((datetime.combine(sel_date, day_sched.lunch_start), datetime.combine(sel_date, day_sched.lunch_end)))
-        
     for a in appts:
         s = datetime.combine(sel_date, a.appointment_time)
         busy.append((s, s + timedelta(minutes=a.service_info.duration)))
-
+        
     avail = []
     curr = datetime.combine(sel_date, day_sched.work_start)
     limit = datetime.combine(sel_date, day_sched.work_end)
     now = datetime.now()
-
+    
     while curr + timedelta(minutes=svc.duration) <= limit:
         end = curr + timedelta(minutes=svc.duration)
-        if sel_date == now.date() and curr < now: 
-            curr += timedelta(minutes=15); continue
-        
+        if sel_date == now.date() and curr < now: curr += timedelta(minutes=15); continue
         collision = False
         for bs, be in busy:
             if max(curr, bs) < min(end, be): collision = True; break
-        
         if not collision: avail.append(curr.strftime('%H:%M'))
         curr += timedelta(minutes=15)
-        
     return jsonify(avail)
 
 if __name__ == '__main__':
     with app.app_context(): db.create_all()
-    if not app.debug or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
-        threading.Thread(target=notification_worker, daemon=True).start()
+    if not app.debug or os.environ.get('WERKZEUG_RUN_MAIN') == 'true': threading.Thread(target=notification_worker, daemon=True).start()
     app.run(debug=True)
 '''
 
-# --- TEMPLATES ---
+# --- TEMPLATE: LANDING PAGE PROFISSIONAL (INDEX.HTML) ---
+INDEX_HTML = r'''{% extends 'layout.html' %}
+{% block title %}Agenda Fácil - A Plataforma do Profissional{% endblock %}
+{% block content %}
+<div class="tailwind-scope font-sans">
+    <!-- HERO SECTION -->
+    <section class="bg-gradient-to-b from-white to-gray-50 overflow-hidden pt-16 pb-20">
+        <div class="max-w-7xl mx-auto px-6 lg:px-8 grid lg:grid-cols-2 gap-12 items-center">
+            <!-- Texto Hero -->
+            <div class="text-center lg:text-left">
+                <div class="inline-block bg-blue-100 text-blue-700 text-xs font-bold px-3 py-1 rounded-full mb-6">
+                    🚀 Nova Versão 2.0 Disponível
+                </div>
+                <h1 class="text-5xl lg:text-6xl font-extrabold tracking-tight text-gray-900 leading-tight mb-6">
+                    Transforme agendamentos em <span class="text-blue-600">mais lucro</span> e tempo livre.
+                </h1>
+                <p class="text-lg text-gray-600 mb-8 leading-relaxed max-w-lg mx-auto lg:mx-0">
+                    A ferramenta definitiva para barbearias, salões e clínicas. Tenha um link profissional, receba agendamentos 24h e elimine a troca de mensagens no WhatsApp.
+                </p>
+                <div class="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
+                    <a href="{{ url_for('register_business') }}" class="bg-blue-600 text-white px-8 py-4 rounded-xl font-bold text-lg hover:bg-blue-700 transition shadow-lg hover:shadow-xl transform hover:-translate-y-1">
+                        Começar Agora
+                    </a>
+                    <a href="{{ url_for('login') }}" class="px-8 py-4 rounded-xl font-bold text-gray-700 hover:bg-gray-200 transition border border-gray-300">
+                        Já sou Cliente
+                    </a>
+                </div>
+                <p class="mt-4 text-xs text-gray-500">Gestão simplificada para o seu crescimento.</p>
+            </div>
 
+            <!-- Imagem do Painel (Notebook) -->
+            <div class="relative mt-12 lg:mt-0 perspective-1000">
+                <div class="relative bg-gray-900 rounded-2xl p-2 shadow-2xl transform rotate-y-12 transition hover:rotate-y-0 duration-700">
+                    <div class="absolute top-0 left-1/2 -translate-x-1/2 w-20 h-1 bg-gray-800 rounded-b-md z-20"></div>
+                    <div class="relative rounded-xl overflow-hidden bg-white aspect-video group">
+                        <img src="{{ url_for('static', filename='painel.png') }}" 
+                             alt="Painel Administrativo" 
+                             class="w-full h-full object-cover transition duration-500 group-hover:scale-105"
+                             onerror="this.onerror=null; this.src='https://placehold.co/1280x800/E2E8F0/475569?text=Insira+painel.png+na+pasta+static';">
+                        
+                        <!-- Overlay de reflexo -->
+                        <div class="absolute inset-0 bg-gradient-to-tr from-white/10 to-transparent pointer-events-none"></div>
+                    </div>
+                </div>
+                <!-- Sombra decorativa -->
+                <div class="absolute -bottom-10 -right-10 w-72 h-72 bg-blue-400/20 rounded-full blur-3xl -z-10"></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SEÇÃO PARA QUEM É -->
+    <section class="py-20 bg-white">
+        <div class="max-w-7xl mx-auto px-6 text-center">
+            <h2 class="text-3xl font-bold text-gray-900 mb-12">Ideal para profissionais exigentes</h2>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-8">
+                <div class="p-6 rounded-2xl bg-gray-50 hover:bg-blue-50 transition border border-gray-100 hover:border-blue-200">
+                    <div class="text-4xl mb-4">💈</div>
+                    <h3 class="font-bold text-gray-900">Barbearias</h3>
+                </div>
+                <div class="p-6 rounded-2xl bg-gray-50 hover:bg-pink-50 transition border border-gray-100 hover:border-pink-200">
+                    <div class="text-4xl mb-4">💇‍♀️</div>
+                    <h3 class="font-bold text-gray-900">Salões</h3>
+                </div>
+                <div class="p-6 rounded-2xl bg-gray-50 hover:bg-green-50 transition border border-gray-100 hover:border-green-200">
+                    <div class="text-4xl mb-4">💆‍♂️</div>
+                    <h3 class="font-bold text-gray-900">Clínicas</h3>
+                </div>
+                <div class="p-6 rounded-2xl bg-gray-50 hover:bg-purple-50 transition border border-gray-100 hover:border-purple-200">
+                    <div class="text-4xl mb-4">💅</div>
+                    <h3 class="font-bold text-gray-900">Estética</h3>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- BENEFÍCIOS -->
+    <section class="py-20 bg-gray-900 text-white">
+        <div class="max-w-7xl mx-auto px-6">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl lg:text-4xl font-bold mb-4">Tudo o que você precisa para crescer</h2>
+                <p class="text-gray-400">Funcionalidades pensadas para simplificar sua rotina.</p>
+            </div>
+            
+            <div class="grid md:grid-cols-3 gap-8">
+                <!-- Card 1 -->
+                <div class="bg-gray-800 p-8 rounded-2xl border border-gray-700 hover:border-blue-500 transition group">
+                    <div class="w-12 h-12 bg-blue-500/20 rounded-lg flex items-center justify-center mb-6 text-blue-400 group-hover:bg-blue-500 group-hover:text-white transition">
+                        <i class="bi bi-link-45deg text-2xl"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3">Link Personalizado</h3>
+                    <p class="text-gray-400 text-sm leading-relaxed">
+                        Pare de perguntar "qual horário você quer?". Envie seu link (agendafacil/b/voce) e deixe o cliente escolher.
+                    </p>
+                </div>
+
+                <!-- Card 2 -->
+                <div class="bg-gray-800 p-8 rounded-2xl border border-gray-700 hover:border-green-500 transition group">
+                    <div class="w-12 h-12 bg-green-500/20 rounded-lg flex items-center justify-center mb-6 text-green-400 group-hover:bg-green-500 group-hover:text-white transition">
+                        <i class="bi bi-clock-history text-2xl"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3">Agenda 24 horas</h3>
+                    <p class="text-gray-400 text-sm leading-relaxed">
+                        Seu negócio aberto mesmo quando você está dormindo. Preencha horários vazios automaticamente.
+                    </p>
+                </div>
+
+                <!-- Card 3 -->
+                <div class="bg-gray-800 p-8 rounded-2xl border border-gray-700 hover:border-purple-500 transition group">
+                    <div class="w-12 h-12 bg-purple-500/20 rounded-lg flex items-center justify-center mb-6 text-purple-400 group-hover:bg-purple-500 group-hover:text-white transition">
+                        <i class="bi bi-calendar-check text-2xl"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3">Controle Total</h3>
+                    <p class="text-gray-400 text-sm leading-relaxed">
+                        Defina horários de almoço, dias de folga e duração de cada serviço. Você no comando da sua agenda.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA FINAL -->
+    <section class="py-24 bg-blue-600 text-center">
+        <div class="max-w-4xl mx-auto px-6">
+            <h2 class="text-3xl lg:text-4xl font-bold text-white mb-8">Pronto para profissionalizar seu negócio?</h2>
+            <a href="{{ url_for('register_business') }}" class="inline-block bg-white text-blue-600 px-10 py-4 rounded-full font-bold text-lg hover:bg-gray-100 transition shadow-lg">
+                Criar Minha Conta Agora
+            </a>
+            <p class="mt-6 text-blue-200 text-sm">Configuração em menos de 2 minutos.</p>
+        </div>
+    </section>
+</div>
+{% endblock %}
+'''
+
+# --- OUTROS TEMPLATES (MANTIDOS DA V9) ---
 LAYOUT_HTML = r'''<!DOCTYPE html>
 <html lang="pt-br">
 <head>
@@ -363,7 +435,7 @@ LAYOUT_HTML = r'''<!DOCTYPE html>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>body{font-family:'Inter',sans-serif;background-color:#f8f9fa} .tailwind-scope{font-family:'Inter',sans-serif} a{text-decoration:none} main{flex:1} body{min-height:100vh;display:flex;flex-direction:column}</style>
 </head>
 <body>
@@ -396,71 +468,45 @@ LAYOUT_HTML = r'''<!DOCTYPE html>
         {% endwith %}
         {% block content %}{% endblock %}
     </main>
-    <footer class="bg-white border-top pt-4 pb-3 mt-auto"><div class="container text-center"><p class="text-muted small">© 2025 Agenda Fácil.</p></div></footer>
+    <footer class="bg-white border-top pt-8 pb-8 mt-auto">
+        <div class="container text-center">
+            <p class="text-gray-500 text-sm mb-2">© 2025 Agenda Fácil SaaS. Todos os direitos reservados.</p>
+            <div class="flex justify-center gap-4 text-gray-400 text-sm">
+                <a href="#" class="hover:text-blue-600">Termos</a>
+                <a href="#" class="hover:text-blue-600">Privacidade</a>
+                <a href="#" class="hover:text-blue-600">Suporte</a>
+            </div>
+        </div>
+    </footer>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     {% block scripts %}{% endblock %}
 </body>
 </html>
 '''
 
-INDEX_HTML = r'''{% extends 'layout.html' %}
-{% block title %}Agenda Fácil - Plataforma para seu Negócio{% endblock %}
-{% block content %}
-<div class="tailwind-scope">
-    <section class="relative w-full overflow-hidden bg-white">
-        <div class="max-w-7xl mx-auto px-6 lg:px-8">
-            <div class="relative grid grid-cols-1 lg:grid-cols-2 gap-12 items-center py-16 lg:py-24">
-                <div class="text-center lg:text-left">
-                    <h1 class="text-4xl lg:text-5xl font-bold tracking-tight text-gray-900">
-                        Sua agenda online, <span class="text-blue-600">organizada e profissional.</span>
-                    </h1>
-                    <p class="mt-6 text-lg leading-8 text-gray-600">
-                        Automatize seus agendamentos. Defina horários, pausas e dias de trabalho. Seus clientes agendam 24h por dia e você é notificado.
-                    </p>
-                    <div class="mt-10 flex items-center justify-center lg:justify-start gap-x-6">
-                        <a href="{{ url_for('register_business') }}" class="rounded-md bg-green-600 px-5 py-3 text-base font-semibold text-white shadow-sm hover:bg-green-700 transition-all duration-150">
-                            Começar Agora
-                        </a>
-                        <a href="{{ url_for('login') }}" class="text-sm font-semibold leading-6 text-gray-900">
-                            Já tenho conta <span aria-hidden="true">→</span>
-                        </a>
-                    </div>
-                </div>
-                <div class="relative mt-8 lg:mt-0 flex justify-center">
-                    <div class="relative w-full max-w-lg rounded-xl shadow-2xl ring-1 ring-gray-900/10 overflow-hidden bg-gray-50 aspect-video flex items-center justify-center">
-                        <img src="{{ url_for('static', filename='painel.png') }}" 
-                             alt="Painel Administrativo" 
-                             class="w-full h-auto object-cover"
-                             onerror="this.onerror=null; this.src='{{ url_for('static', filename='painel.jpg') }}'; this.nextElementSibling.style.display='flex'; this.style.display='none';">
-                        <div class="absolute inset-0 bg-gray-200 flex-col items-center justify-center text-gray-500 hidden">
-                            <span class="text-sm font-bold">Coloque "painel.png" na pasta static</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-</div>
-{% endblock %}
-'''
-
 REGISTER_HTML = r'''{% extends 'layout.html' %}
 {% block title %}Criar Conta{% endblock %}
 {% block content %}
-<div class="row justify-content-center mt-5">
+<div class="row justify-content-center mt-5 mb-5">
     <div class="col-md-8 col-lg-6">
-        <div class="card shadow-sm border-0 rounded-3">
-            <div class="card-body p-4 p-md-5">
-                <h1 class="card-title h3 mb-4 text-center fw-bold">Comece seu Teste</h1>
+        <div class="card shadow-lg border-0 rounded-4 overflow-hidden">
+            <div class="card-header bg-blue-600 text-white text-center py-4">
+                <h3 class="fw-bold mb-0">Comece Agora</h3>
+                <p class="text-blue-100 text-sm mb-0">Crie sua conta em segundos</p>
+            </div>
+            <div class="card-body p-4 p-md-5 bg-white">
                 <form method="POST" action="{{ url_for('register_business') }}">
-                    <h5 class="mb-3 text-primary">Dados do Estabelecimento</h5>
-                    <div class="mb-3"><label class="form-label">Nome do Negócio</label><input type="text" class="form-control" name="business_name" required></div>
-                    <div class="mb-3"><label class="form-label">Link Personalizado</label><div class="input-group"><span class="input-group-text bg-light">/b/</span><input type="text" class="form-control" name="url_prefix" pattern="[a-z0-9-]+" required></div></div>
-                    <div class="mb-4"><label class="form-label">Seu Contato (WhatsApp)</label><input type="text" class="form-control" name="contact_phone"></div>
-                    <h5 class="mb-3 text-primary border-top pt-3">Acesso</h5>
-                    <div class="mb-3"><label class="form-label">Usuário</label><input type="text" class="form-control" name="username" required></div>
-                    <div class="mb-3"><label class="form-label">Senha</label><input type="password" class="form-control" name="password" required></div>
-                    <button class="btn btn-success w-100 mt-3 fw-bold">Criar Conta</button>
+                    <h5 class="mb-3 text-primary fw-bold small text-uppercase ls-1">Dados do Negócio</h5>
+                    <div class="mb-3"><label class="form-label small fw-bold">Nome do Estabelecimento</label><input type="text" class="form-control" name="business_name" placeholder="Ex: Barbearia Viking" required></div>
+                    <div class="mb-3"><label class="form-label small fw-bold">Link Personalizado</label><div class="input-group"><span class="input-group-text bg-light border-end-0">agendafacil.com/b/</span><input type="text" class="form-control border-start-0 ps-0" name="url_prefix" placeholder="sua-marca" pattern="[a-z0-9-]+" required></div><div class="form-text text-xs">Apenas letras minúsculas e hífens.</div></div>
+                    <div class="mb-4"><label class="form-label small fw-bold">WhatsApp de Contato</label><input type="text" class="form-control" name="contact_phone" placeholder="(99) 99999-9999"></div>
+                    
+                    <h5 class="mb-3 text-primary fw-bold small text-uppercase ls-1 border-top pt-4">Dados de Acesso</h5>
+                    <div class="row g-2">
+                        <div class="col-md-6 mb-3"><label class="form-label small fw-bold">Usuário</label><input type="text" class="form-control" name="username" required></div>
+                        <div class="col-md-6 mb-3"><label class="form-label small fw-bold">Senha</label><input type="password" class="form-control" name="password" required></div>
+                    </div>
+                    <button class="btn btn-primary w-100 py-3 fw-bold rounded-3 shadow-sm mt-2">Criar Minha Conta</button>
                 </form>
             </div>
         </div>
@@ -473,21 +519,26 @@ LOGIN_HTML = r'''{% extends 'layout.html' %}
 {% block title %}Login{% endblock %}
 {% block content %}
 <div class="row justify-content-center mt-5">
-    <div class="col-md-5">
-        <div class="card shadow-sm border-0 rounded-3 p-4">
-            <h2 class="text-center mb-4 fw-bold">Login</h2>
+    <div class="col-md-5 col-lg-4">
+        <div class="card shadow-lg border-0 rounded-4 p-4">
+            <div class="text-center mb-4">
+                <div class="bg-blue-100 text-blue-600 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3"><i class="bi bi-person-fill text-2xl"></i></div>
+                <h2 class="fw-bold h4">Acessar Painel</h2>
+            </div>
             <form method="POST">
-                <div class="mb-3"><label class="form-label">Usuário</label><input type="text" class="form-control" name="username" required></div>
-                <div class="mb-3"><label class="form-label">Senha</label><input type="password" class="form-control" name="password" required></div>
-                <button class="btn btn-primary w-100 fw-bold">Entrar</button>
+                <div class="mb-3"><label class="form-label small fw-bold">Usuário</label><input type="text" class="form-control form-control-lg" name="username" required></div>
+                <div class="mb-4"><label class="form-label small fw-bold">Senha</label><input type="password" class="form-control form-control-lg" name="password" required></div>
+                <button class="btn btn-dark w-100 py-3 fw-bold rounded-3">Entrar</button>
             </form>
+            <div class="text-center mt-4 border-top pt-3">
+                <a href="{{ url_for('register_business') }}" class="text-decoration-none small text-muted">Não tem conta? <span class="text-blue-600 fw-bold">Cadastre-se</span></a>
+            </div>
         </div>
     </div>
 </div>
 {% endblock %}
 '''
 
-# --- ADMIN COM UPLOAD DE LOGO ---
 ADMIN_HTML = r'''{% extends 'layout.html' %}
 {% block title %}Painel Admin{% endblock %}
 {% block content %}
@@ -496,7 +547,7 @@ ADMIN_HTML = r'''{% extends 'layout.html' %}
         <div class="d-flex align-items-center gap-3">
             <!-- Exibição da Logo -->
             {% if establishment.logo_filename %}
-                <img src="{{ url_for('static', filename='uploads/' + establishment.logo_filename) }}" class="rounded-circle shadow-sm" style="width: 60px; height: 60px; object-fit: cover;">
+                <img src="{{ url_for('static', filename='uploads/' + establishment.logo_filename) }}" class="rounded-circle shadow-sm border border-2 border-white" style="width: 50px; height: 50px; object-fit: cover;">
             {% else %}
                 <div class="rounded-circle bg-secondary d-flex align-items-center justify-content-center text-white fw-bold" style="width: 60px; height: 60px;">Logo</div>
             {% endif %}
@@ -625,7 +676,6 @@ ADMIN_HTML = r'''{% extends 'layout.html' %}
 {% endblock %}
 '''
 
-# --- LISTA COM LOGO ---
 LISTA_SERVICOS_HTML = r'''{% extends 'layout.html' %}
 {% block title %}{{ establishment.name }}{% endblock %}
 {% block content %}
@@ -717,10 +767,8 @@ document.getElementById('date').addEventListener('change', async (e) => {
 
 def atualizar():
     if not os.path.exists('templates'): os.makedirs('templates')
-    # CRIA PASTA DE UPLOADS (DENTRO DE STATIC)
     uploads_path = os.path.join('static', 'uploads')
-    if not os.path.exists(uploads_path): 
-        os.makedirs(uploads_path)
+    if not os.path.exists(uploads_path): os.makedirs(uploads_path)
     
     if os.path.exists('agendamento.db'):
         try: os.remove('agendamento.db')
@@ -742,8 +790,7 @@ def atualizar():
         with open(n, 'w', encoding='utf-8') as f: f.write(c.strip())
         print(f"Atualizado: {n}")
     
-    print("\n[SUCESSO] Versão 9 (Logomarca + Deploy) Instalada!")
-    print("Coloque a imagem 'painel.png' na pasta 'static' para a home.")
+    print("\n[SUCESSO] V10 Instalada (Landing Page Pro)!")
     print("Execute: python app.py")
 
 if __name__ == "__main__":

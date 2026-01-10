@@ -6,7 +6,7 @@
         <div class="d-flex align-items-center gap-3">
             <!-- Exibição da Logo -->
             {% if establishment.logo_filename %}
-                <img src="{{ url_for('static', filename='uploads/' + establishment.logo_filename) }}" class="rounded-circle shadow-sm" style="width: 60px; height: 60px; object-fit: cover;">
+                <img src="{{ url_for('static', filename='uploads/' + establishment.logo_filename) }}" class="rounded-circle shadow-sm border border-2 border-white" style="width: 50px; height: 50px; object-fit: cover;">
             {% else %}
                 <div class="rounded-circle bg-secondary d-flex align-items-center justify-content-center text-white fw-bold" style="width: 60px; height: 60px;">Logo</div>
             {% endif %}

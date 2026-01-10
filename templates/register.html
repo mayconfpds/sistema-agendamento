@@ -1,20 +1,26 @@
 {% extends 'layout.html' %}
 {% block title %}Criar Conta{% endblock %}
 {% block content %}
-<div class="row justify-content-center mt-5">
+<div class="row justify-content-center mt-5 mb-5">
     <div class="col-md-8 col-lg-6">
-        <div class="card shadow-sm border-0 rounded-3">
-            <div class="card-body p-4 p-md-5">
-                <h1 class="card-title h3 mb-4 text-center fw-bold">Comece seu Teste</h1>
+        <div class="card shadow-lg border-0 rounded-4 overflow-hidden">
+            <div class="card-header bg-blue-600 text-white text-center py-4">
+                <h3 class="fw-bold mb-0">Comece Agora</h3>
+                <p class="text-blue-100 text-sm mb-0">Crie sua conta em segundos</p>
+            </div>
+            <div class="card-body p-4 p-md-5 bg-white">
                 <form method="POST" action="{{ url_for('register_business') }}">
-                    <h5 class="mb-3 text-primary">Dados do Estabelecimento</h5>
-                    <div class="mb-3"><label class="form-label">Nome do Negócio</label><input type="text" class="form-control" name="business_name" required></div>
-                    <div class="mb-3"><label class="form-label">Link Personalizado</label><div class="input-group"><span class="input-group-text bg-light">/b/</span><input type="text" class="form-control" name="url_prefix" pattern="[a-z0-9-]+" required></div></div>
-                    <div class="mb-4"><label class="form-label">Seu Contato (WhatsApp)</label><input type="text" class="form-control" name="contact_phone"></div>
-                    <h5 class="mb-3 text-primary border-top pt-3">Acesso</h5>
-                    <div class="mb-3"><label class="form-label">Usuário</label><input type="text" class="form-control" name="username" required></div>
-                    <div class="mb-3"><label class="form-label">Senha</label><input type="password" class="form-control" name="password" required></div>
-                    <button class="btn btn-success w-100 mt-3 fw-bold">Criar Conta</button>
+                    <h5 class="mb-3 text-primary fw-bold small text-uppercase ls-1">Dados do Negócio</h5>
+                    <div class="mb-3"><label class="form-label small fw-bold">Nome do Estabelecimento</label><input type="text" class="form-control" name="business_name" placeholder="Ex: Barbearia Viking" required></div>
+                    <div class="mb-3"><label class="form-label small fw-bold">Link Personalizado</label><div class="input-group"><span class="input-group-text bg-light border-end-0">agendafacil.com/b/</span><input type="text" class="form-control border-start-0 ps-0" name="url_prefix" placeholder="sua-marca" pattern="[a-z0-9-]+" required></div><div class="form-text text-xs">Apenas letras minúsculas e hífens.</div></div>
+                    <div class="mb-4"><label class="form-label small fw-bold">WhatsApp de Contato</label><input type="text" class="form-control" name="contact_phone" placeholder="(99) 99999-9999"></div>
+                    
+                    <h5 class="mb-3 text-primary fw-bold small text-uppercase ls-1 border-top pt-4">Dados de Acesso</h5>
+                    <div class="row g-2">
+                        <div class="col-md-6 mb-3"><label class="form-label small fw-bold">Usuário</label><input type="text" class="form-control" name="username" required></div>
+                        <div class="col-md-6 mb-3"><label class="form-label small fw-bold">Senha</label><input type="password" class="form-control" name="password" required></div>
+                    </div>
+                    <button class="btn btn-primary w-100 py-3 fw-bold rounded-3 shadow-sm mt-2">Criar Minha Conta</button>
                 </form>
             </div>
         </div>
