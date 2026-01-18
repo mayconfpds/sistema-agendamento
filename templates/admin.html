@@ -4,43 +4,27 @@
 <div class="container py-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div class="d-flex align-items-center gap-3">
-            <!-- Exibição da Logo -->
-            {% if establishment.logo_filename %}
-                <img src="{{ url_for('static', filename='uploads/' + establishment.logo_filename) }}" class="rounded-circle shadow-sm border border-2 border-white" style="width: 50px; height: 50px; object-fit: cover;">
-            {% else %}
-                <div class="rounded-circle bg-secondary d-flex align-items-center justify-content-center text-white fw-bold" style="width: 60px; height: 60px;">Logo</div>
-            {% endif %}
-            
-            <div>
-                <h1 class="h3 mb-0">Painel: {{ establishment.name }}</h1>
-                <a href="{{ url_for('establishment_services', url_prefix=establishment.url_prefix) }}" target="_blank" class="text-decoration-none small">Ver Página <i class="bi bi-box-arrow-up-right"></i></a>
-            </div>
+            {% if establishment.logo_filename %}<img src="{{ url_for('static', filename='uploads/' + establishment.logo_filename) }}" class="rounded-circle shadow-sm border border-2 border-white" style="width: 50px; height: 50px; object-fit: cover;">
+            {% else %}<div class="rounded-circle bg-secondary d-flex align-items-center justify-content-center text-white fw-bold" style="width: 60px; height: 60px;">Logo</div>{% endif %}
+            <div><h1 class="h3 mb-0">Painel: {{ establishment.name }}</h1><a href="{{ url_for('establishment_services', url_prefix=establishment.url_prefix) }}" target="_blank" class="text-decoration-none small">Ver Página <i class="bi bi-box-arrow-up-right"></i></a></div>
         </div>
     </div>
     
-    <!-- FORMULÁRIO 1: CONTATO E LOGO -->
+    {% if today_count > 0 %}
+    <div class="alert alert-info d-flex align-items-center mb-4 shadow-sm" role="alert"><i class="bi bi-bell-fill me-2 fs-4"></i><div><strong>Atenção!</strong> Você tem <strong>{{ today_count }}</strong> agendamento(s) para hoje.</div></div>
+    {% endif %}
+    
     <div class="card shadow-sm border-0 mb-4 p-3 bg-light">
         <form action="{{ url_for('update_settings') }}" method="POST" enctype="multipart/form-data" class="row align-items-center g-2">
             <input type="hidden" name="form_type" value="contact"> 
-            
-            <div class="col-md-4">
-                <label class="small fw-bold">WhatsApp:</label>
-                <input type="text" name="contact_phone" class="form-control form-control-sm" value="{{ establishment.contact_phone or '' }}">
-            </div>
-            
-            <div class="col-md-5">
-                <label class="small fw-bold">Logo (Imagem):</label>
-                <input type="file" name="logo" class="form-control form-control-sm" accept="image/*">
-            </div>
-            
-            <div class="col-md-3 text-end pt-4">
-                <button class="btn btn-primary btn-sm w-100">Salvar Dados</button>
-            </div>
+            <div class="col-md-3"><label class="small fw-bold">WhatsApp:</label><input type="text" name="contact_phone" class="form-control form-control-sm" value="{{ establishment.contact_phone or '' }}"></div>
+            <div class="col-md-4"><label class="small fw-bold">E-mail (Notificações):</label><input type="email" name="contact_email" class="form-control form-control-sm" value="{{ establishment.contact_email or '' }}"></div>
+            <div class="col-md-3"><label class="small fw-bold">Logo:</label><input type="file" name="logo" class="form-control form-control-sm" accept="image/*"></div>
+            <div class="col-md-2 text-end pt-4"><button class="btn btn-primary btn-sm w-100">Salvar</button></div>
         </form>
     </div>
 
     <div class="row">
-        <!-- FORMULÁRIO 2: HORÁRIOS -->
         <div class="col-12 mb-4">
             <div class="card shadow-sm border-0">
                 <div class="card-header bg-white fw-bold">Horários de Funcionamento</div>
@@ -49,26 +33,13 @@
                         <input type="hidden" name="form_type" value="schedule">
                         <div class="table-responsive">
                             <table class="table table-bordered mb-0 align-middle text-center">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th style="width: 50px;">Ativo</th>
-                                        <th>Dia</th>
-                                        <th>Abertura</th>
-                                        <th>Fechamento</th>
-                                        <th>Almoço Início</th>
-                                        <th>Almoço Fim</th>
-                                    </tr>
-                                </thead>
+                                <thead class="table-light"><tr><th style="width: 50px;">Ativo</th><th>Dia</th><th>Abertura</th><th>Fechamento</th><th>Almoço Início</th><th>Almoço Fim</th></tr></thead>
                                 <tbody>
                                     {% set day_names = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'] %}
                                     {% for d in schedules %}
                                     <tr class="{% if not d.is_active %}bg-light text-muted{% endif %}">
                                         <input type="hidden" name="schedule_id" value="{{ d.id }}">
-                                        <td>
-                                            <div class="form-check d-flex justify-content-center">
-                                                <input class="form-check-input" type="checkbox" name="active_{{ d.id }}" {% if d.is_active %}checked{% endif %}>
-                                            </div>
-                                        </td>
+                                        <td><div class="form-check d-flex justify-content-center"><input class="form-check-input" type="checkbox" name="active_{{ d.id }}" {% if d.is_active %}checked{% endif %}></div></td>
                                         <td class="fw-bold text-start">{{ day_names[d.day_index] }}</td>
                                         <td><input type="time" class="form-control form-control-sm" name="work_start_{{ d.id }}" value="{{ d.work_start.strftime('%H:%M') }}"></td>
                                         <td><input type="time" class="form-control form-control-sm" name="work_end_{{ d.id }}" value="{{ d.work_end.strftime('%H:%M') }}"></td>
@@ -79,9 +50,7 @@
                                 </tbody>
                             </table>
                         </div>
-                        <div class="p-3 bg-light border-top text-end">
-                            <button class="btn btn-success fw-bold px-4">Salvar Horários</button>
-                        </div>
+                        <div class="p-3 bg-light border-top text-end"><button class="btn btn-success fw-bold px-4">Salvar Horários</button></div>
                     </form>
                 </div>
             </div>
@@ -115,16 +84,13 @@
                         <div class="input-group input-group-sm">
                             <input type="text" name="name" class="form-control" placeholder="Nome (ex: Corte)" required>
                             <input type="number" name="duration" class="form-control" placeholder="Min" style="max-width: 70px;" required>
-                            <input type="text" name="price" class="form-control" placeholder="Preço (R$)" style="max-width: 100px;" required>
+                            <input type="text" name="price" class="form-control" placeholder="R$" style="max-width: 100px;" required>
                             <button class="btn btn-success">+</button>
                         </div>
                     </form>
                     <ul class="list-group list-group-flush small">
                         {% for s in services %}
-                        <li class="list-group-item d-flex justify-content-between px-0">
-                            <span>{{ s.name }} ({{ s.duration }}min) - <span class="fw-bold text-success">R$ {{ "%.2f"|format(s.price) }}</span></span>
-                            <form method="POST" action="{{ url_for('delete_service', id=s.id) }}" onsubmit="return confirm('Excluir?');"><button class="btn btn-link text-danger p-0 border-0"><i class="bi bi-trash"></i></button></form>
-                        </li>
+                        <li class="list-group-item d-flex justify-content-between px-0"><span>{{ s.name }} ({{ s.duration }}min) - <span class="fw-bold text-success">R$ {{ "%.2f"|format(s.price) }}</span></span><form method="POST" action="{{ url_for('delete_service', id=s.id) }}" onsubmit="return confirm('Excluir?');"><button class="btn btn-link text-danger p-0 border-0"><i class="bi bi-trash"></i></button></form></li>
                         {% endfor %}
                     </ul>
                 </div>

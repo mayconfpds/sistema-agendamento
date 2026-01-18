@@ -6,9 +6,7 @@
         <div class="col-lg-6">
             <div class="card shadow-sm border-0 p-4">
                 <div class="text-center mb-4">
-                    {% if establishment.logo_filename %}
-                        <img src="{{ url_for('static', filename='uploads/' + establishment.logo_filename) }}" class="rounded-circle shadow-sm mb-2" style="width: 60px; height: 60px; object-fit: cover;">
-                    {% endif %}
+                    {% if establishment.logo_filename %}<img src="{{ url_for('static', filename='uploads/' + establishment.logo_filename) }}" class="rounded-circle shadow-sm mb-2" style="width: 60px; height: 60px; object-fit: cover;">{% endif %}
                     <h4 class="fw-bold">{{ establishment.name }}</h4>
                     <h5 class="text-muted">{{ service.name }}</h5>
                     <p class="text-success fw-bold">Valor: R$ {{ "%.2f"|format(service.price) }}</p>
@@ -16,13 +14,12 @@
                 <form id="form" method="POST" action="{{ url_for('create_appointment', url_prefix=establishment.url_prefix) }}">
                     <input type="hidden" name="service_id" value="{{ service.id }}">
                     <div class="mb-2"><label class="fw-bold small">Seu Nome</label><input type="text" name="client_name" class="form-control" required></div>
-                    <div class="mb-3"><label class="fw-bold small">Seu WhatsApp</label><input type="tel" name="client_phone" class="form-control" required></div>
-                    <div class="mb-3"><label class="fw-bold small">Data</label><input type="date" id="date" name="appointment_date" class="form-control" required></div>
-                    <div class="mb-4">
-                        <label class="fw-bold small">Horários Disponíveis</label>
-                        <div id="slots" class="d-flex flex-wrap gap-2 mt-2"><small class="text-muted">Selecione a data...</small></div>
-                        <input type="hidden" id="time" name="appointment_time" required>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6"><label class="fw-bold small">WhatsApp</label><input type="tel" name="client_phone" class="form-control" required></div>
+                        <div class="col-6"><label class="fw-bold small">Seu E-mail</label><input type="email" name="client_email" class="form-control" placeholder="Para confirmação" required></div>
                     </div>
+                    <div class="mb-3"><label class="fw-bold small">Data</label><input type="date" id="date" name="appointment_date" class="form-control" required></div>
+                    <div class="mb-4"><label class="fw-bold small">Horários Disponíveis</label><div id="slots" class="d-flex flex-wrap gap-2 mt-2"><small class="text-muted">Selecione a data...</small></div><input type="hidden" id="time" name="appointment_time" required></div>
                     <button id="btn" class="btn btn-primary w-100 fw-bold" disabled>Confirmar Agendamento</button>
                 </form>
             </div>
@@ -32,7 +29,12 @@
 {% endblock %}
 {% block scripts %}
 <script>
-document.getElementById('date').min = new Date().toISOString().split('T')[0];
+const today = new Date();
+const year = today.getFullYear();
+const month = String(today.getMonth() + 1).padStart(2, '0');
+const day = String(today.getDate()).padStart(2, '0');
+document.getElementById('date').min = `${year}-${month}-${day}`;
+
 document.getElementById('date').addEventListener('change', async (e) => {
     if(!e.target.value) return;
     const div = document.getElementById('slots');
