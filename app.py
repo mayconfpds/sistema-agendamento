@@ -23,12 +23,13 @@ if database_url and database_url.startswith("postgres://"):
 app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'sqlite:///' + os.path.join(basedir, 'agendamento.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# --- CONFIGURAÇÃO DE EMAIL (Reconfigure aqui após instalar) ---
-app.config['MAIL_SERVER'] = 'smtp.gmail.com'
-app.config['MAIL_PORT'] = 587
-app.config['MAIL_USE_TLS'] = True
-app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME') 
-app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD') 
+# --- CONFIGURAÇÃO DE EMAIL (CORREÇÃO PARA RENDER: SSL + PORTA 465) ---
+app.config['MAIL_SERVER'] = os.environ.get('MAIL_SERVER', 'smtp.gmail.com')
+app.config['MAIL_PORT'] = int(os.environ.get('MAIL_PORT', 465)) # Mudei para 465
+app.config['MAIL_USE_TLS'] = False # Desliga TLS
+app.config['MAIL_USE_SSL'] = True  # Liga SSL (Obrigatório para porta 465)
+app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME')
+app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD')
 app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_USERNAME')
 
 mail = Mail(app)
@@ -196,6 +197,11 @@ def payment_success():
 def payment_cancel():
     flash('Pagamento pendente.', 'warning')
     return redirect(url_for('login'))
+
+# --- ROTA HEALTH CHECK (MANTÉM O RENDER ACORDADO) ---
+@app.route('/health')
+def health():
+    return "OK", 200
 
 # --- ROTAS NORMAIS ---
 @app.route('/')
