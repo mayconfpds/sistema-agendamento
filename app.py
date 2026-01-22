@@ -14,12 +14,11 @@ from datetime import datetime, time, timedelta
 from sqlalchemy import inspect
 import stripe
 
-# --- CONFIGURAÇÃO DE REDE (EVITA TRAVAMENTO DO RENDER) ---
-# Define um timeout global de 15 segundos para conexões externas
-socket.setdefaulttimeout(15)
+# --- TIMEOUT GLOBAL (Evita travamentos longos) ---
+socket.setdefaulttimeout(20)
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'chave-v25-network-fix'
+app.config['SECRET_KEY'] = 'chave-v26-ssl-force'
 basedir = os.path.abspath(os.path.dirname(__file__))
 
 # --- BANCO ---
@@ -29,11 +28,12 @@ if database_url and database_url.startswith("postgres://"):
 app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'sqlite:///' + os.path.join(basedir, 'agendamento.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# --- EMAIL (PADRÃO ROBUSTO 587) ---
+# --- EMAIL (GMAIL 465 SSL HARDCODED) ---
+# Forçamos isso para ignorar configurações erradas do ambiente
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
-app.config['MAIL_PORT'] = 587
-app.config['MAIL_USE_TLS'] = True
-app.config['MAIL_USE_SSL'] = False
+app.config['MAIL_PORT'] = 465
+app.config['MAIL_USE_TLS'] = False
+app.config['MAIL_USE_SSL'] = True
 app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME')
 app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD')
 app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_USERNAME')
@@ -65,82 +65,65 @@ def get_now_brazil():
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-# --- ENVIO ASSÍNCRONO SEGURO ---
+# --- ENVIO ASSÍNCRONO ---
 def send_async_email(app, msg):
     with app.app_context():
         try:
             mail.send(msg)
             print(f"\n✅ [EMAIL SUCESSO] Para: {msg.recipients}\n")
         except Exception as e:
-            # Captura erro mas não derruba o worker
             print(f"\n❌ [EMAIL FALHA] {str(e)}\n")
 
 def send_email(subject, recipient, body):
     sender = app.config.get('MAIL_USERNAME')
     if not sender:
-        print(f"\n⚠️ [EMAIL SIMULADO] Sem credenciais. Para: {recipient}\n")
+        print(f"\n⚠️ [EMAIL SIMULADO] Sem credenciais.\n")
         return
     
     try:
         msg = Message(subject, sender=sender, recipients=[recipient], body=body)
         threading.Thread(target=send_async_email, args=(app, msg)).start()
     except Exception as e:
-        print(f"Erro ao preparar thread de email: {e}")
+        print(f"Erro thread email: {e}")
 
-# --- ROTA DE DIAGNÓSTICO SMTP (NÃO USA FLASK-MAIL) ---
+# --- ROTA DE DIAGNÓSTICO SMTP (SSL 465) ---
 @app.route('/teste-email')
 def teste_email_diagnostico():
-    """
-    Testa a conexão SMTP manualmente para identificar onde está o bloqueio.
-    Retorna um relatório na tela em vez de travar o servidor.
-    """
     host = 'smtp.gmail.com'
-    port = 587
+    port = 465
     user = app.config.get('MAIL_USERNAME')
     pwd = app.config.get('MAIL_PASSWORD')
     
-    log = []
-    log.append(f"<b>Iniciando Diagnóstico de Rede V25...</b>")
-    log.append(f"Alvo: {host}:{port}")
+    log = [f"<b>Diagnóstico V26 (SSL 465)</b>", f"Alvo: {host}:{port}"]
     
     if not user or not pwd:
-        return "Erro: Variáveis de ambiente MAIL_USERNAME ou MAIL_PASSWORD não encontradas."
+        return "Erro: Variáveis MAIL_USERNAME ou MAIL_PASSWORD faltando."
 
     try:
-        # 1. Teste de Conexão TCP
-        log.append("1. Tentando conectar ao servidor (TCP)...")
-        server = smtplib.SMTP(host, port, timeout=10)
-        log.append("✅ Conectado com sucesso!")
+        log.append("1. Conectando via SMTP_SSL...")
+        server = smtplib.SMTP_SSL(host, port, timeout=15)
+        log.append("✅ Conexão SSL estabelecida!")
         
-        # 2. EHLO
         server.ehlo()
         
-        # 3. STARTTLS
-        log.append("2. Iniciando criptografia TLS...")
-        server.starttls()
-        server.ehlo()
-        log.append("✅ TLS Ativado!")
-        
-        # 4. Login
-        log.append(f"3. Tentando login como: {user}...")
+        log.append(f"2. Login como {user}...")
         server.login(user, pwd)
-        log.append("✅ Login aceito! Senha correta.")
+        log.append("✅ Autenticação aceita!")
         
-        # 5. Envio
-        log.append("4. Enviando e-mail de teste...")
-        msg = f"Subject: Teste V25\n\nDiagnostico de rede com sucesso."
+        log.append("3. Enviando teste...")
+        msg = f"Subject: Teste V26 SSL\n\nEmail enviado via porta 465 com sucesso."
         server.sendmail(user, user, msg)
         log.append("✅ E-mail enviado!")
         
         server.quit()
-        return "<br>".join(log) + "<br><br><h2 style='color:green'>SISTEMA DE E-MAIL FUNCIONAL!</h2>"
+        return "<br>".join(log) + "<br><br><h2 style='color:green'>SUCESSO TOTAL!</h2>"
         
-    except socket.timeout:
-        return "<br>".join(log) + "<br><br><h2 style='color:red'>ERRO: TIMEOUT</h2><p>O Render não conseguiu alcançar o Gmail. Pode ser bloqueio de porta 587.</p>"
-    except smtplib.SMTPAuthenticationError:
-        return "<br>".join(log) + "<br><br><h2 style='color:red'>ERRO: AUTENTICAÇÃO</h2><p>Usuário ou Senha de App incorretos.</p>"
     except Exception as e:
-        return "<br>".join(log) + f"<br><br><h2 style='color:red'>ERRO GENÉRICO: {str(e)}</h2>"
+        return "<br>".join(log) + f"<br><br><h2 style='color:red'>FALHA: {str(e)}</h2>"
+
+# --- ROTA HEALTH ---
+@app.route('/health')
+def health(): return "OK", 200
 
 # --- MODELOS ---
 class Establishment(db.Model):
@@ -221,9 +204,6 @@ def notification_worker():
                         db.session.commit()
         except: pass
         time_module.sleep(60)
-
-@app.route('/health')
-def health(): return "OK", 200
 
 # --- ROTAS DE PAGAMENTO ---
 @app.route('/pagamento')
