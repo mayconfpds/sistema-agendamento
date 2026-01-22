@@ -22,16 +22,20 @@ if database_url and database_url.startswith("postgres://"):
 app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'sqlite:///' + os.path.join(basedir, 'agendamento.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# --- EMAIL (CONFIGURAÇÃO PADRÃO GMAIL - 587 TLS) ---
-app.config['MAIL_SERVER'] = 'smtp.gmail.com'
-app.config['MAIL_PORT'] = 587
-app.config['MAIL_USE_TLS'] = True
-app.config['MAIL_USE_SSL'] = False
-# Pega do Render ou usa string vazia
+# --- EMAIL (CONFIGURAÇÃO GMAIL - 587 TLS) ---
+# Usamos smtp.gmail.com ou smtp.googlemail.com
+app.config['MAIL_SERVER'] = os.environ.get('MAIL_SERVER', 'smtp.gmail.com')
+app.config['MAIL_PORT'] = int(os.environ.get('MAIL_PORT', 587))
+# Conversão segura de booleano
+app.config['MAIL_USE_TLS'] = os.environ.get('MAIL_USE_TLS', 'True').lower() in ['true', 'on', '1']
+app.config['MAIL_USE_SSL'] = os.environ.get('MAIL_USE_SSL', 'False').lower() in ['true', 'on', '1']
 app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME', '')
 app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD', '')
 app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_USERNAME', '')
 app.config['MAIL_DEBUG'] = True 
+app.config['MAIL_MAX_EMAILS'] = None
+# Timeout para não travar o worker do Gunicorn (ex: 10 segundos)
+app.config['MAIL_ASCII_ATTACHMENTS'] = False
 
 mail = Mail(app)
 
@@ -81,7 +85,7 @@ def send_email(subject, recipient, body):
         # Cria a mensagem passando SENDER explicitamente para evitar KeyError
         msg = Message(subject, sender=sender, recipients=[recipient], body=body)
         
-        # Envia em Thread separada
+        # Envia em Thread separada para não bloquear a requisição
         threading.Thread(target=send_async_email, args=(app, msg)).start()
     except Exception as e:
         print(f"Erro ao preparar email: {e}")
@@ -99,6 +103,7 @@ def teste_email():
     try:
         msg = Message("Teste Agenda Fácil V23", sender=user, recipients=[user])
         msg.body = "Se você recebeu isso, o sistema de e-mail está funcionando 100%!"
+        # Envio síncrono aqui para ver o erro na tela se falhar
         mail.send(msg)
         return f"<h1>SUCESSO!</h1> <p>E-mail enviado para {user}. Verifique sua caixa de entrada (e spam).</p>"
     except Exception as e:

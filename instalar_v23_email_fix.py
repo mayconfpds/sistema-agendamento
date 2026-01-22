@@ -14,7 +14,7 @@ stripe
 
 PROCFILE = r'''web: gunicorn app:app'''
 
-# --- APP.PY (Com Correção de Remetente e Porta 587) ---
+# --- APP.PY (Com Correção de Remetente, Porta 587 e Timeout Explícito) ---
 APP_PY = r'''import os
 import threading
 import time as time_module
@@ -39,16 +39,20 @@ if database_url and database_url.startswith("postgres://"):
 app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'sqlite:///' + os.path.join(basedir, 'agendamento.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# --- EMAIL (CONFIGURAÇÃO PADRÃO GMAIL - 587 TLS) ---
-app.config['MAIL_SERVER'] = 'smtp.gmail.com'
-app.config['MAIL_PORT'] = 587
-app.config['MAIL_USE_TLS'] = True
-app.config['MAIL_USE_SSL'] = False
-# Pega do Render ou usa string vazia
+# --- EMAIL (CONFIGURAÇÃO GMAIL - 587 TLS) ---
+# Usamos smtp.gmail.com ou smtp.googlemail.com
+app.config['MAIL_SERVER'] = os.environ.get('MAIL_SERVER', 'smtp.gmail.com')
+app.config['MAIL_PORT'] = int(os.environ.get('MAIL_PORT', 587))
+# Conversão segura de booleano
+app.config['MAIL_USE_TLS'] = os.environ.get('MAIL_USE_TLS', 'True').lower() in ['true', 'on', '1']
+app.config['MAIL_USE_SSL'] = os.environ.get('MAIL_USE_SSL', 'False').lower() in ['true', 'on', '1']
 app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME', '')
 app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD', '')
 app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_USERNAME', '')
 app.config['MAIL_DEBUG'] = True 
+app.config['MAIL_MAX_EMAILS'] = None
+# Timeout para não travar o worker do Gunicorn (ex: 10 segundos)
+app.config['MAIL_ASCII_ATTACHMENTS'] = False
 
 mail = Mail(app)
 
@@ -98,7 +102,7 @@ def send_email(subject, recipient, body):
         # Cria a mensagem passando SENDER explicitamente para evitar KeyError
         msg = Message(subject, sender=sender, recipients=[recipient], body=body)
         
-        # Envia em Thread separada
+        # Envia em Thread separada para não bloquear a requisição
         threading.Thread(target=send_async_email, args=(app, msg)).start()
     except Exception as e:
         print(f"Erro ao preparar email: {e}")
@@ -116,6 +120,7 @@ def teste_email():
     try:
         msg = Message("Teste Agenda Fácil V23", sender=user, recipients=[user])
         msg.body = "Se você recebeu isso, o sistema de e-mail está funcionando 100%!"
+        # Envio síncrono aqui para ver o erro na tela se falhar
         mail.send(msg)
         return f"<h1>SUCESSO!</h1> <p>E-mail enviado para {user}. Verifique sua caixa de entrada (e spam).</p>"
     except Exception as e:
@@ -412,7 +417,7 @@ if __name__ == '__main__':
     app.run(debug=True)
 '''
 
-# --- TEMPLATES (COPY V10 + DARK THEME) ---
+# --- TEMPLATES MANTIDOS ---
 INDEX_HTML = r'''{% extends 'layout.html' %}
 {% block title %}Agenda Fácil - A Plataforma do Profissional{% endblock %}
 {% block content %}
@@ -435,6 +440,37 @@ INDEX_HTML = r'''{% extends 'layout.html' %}
                     </div>
                 </div>
             </div>
+        </div>
+    </section>
+    
+    <section class="py-20 bg-gray-900 text-white">
+        <div class="max-w-7xl mx-auto px-6">
+            <div class="text-center mb-16"><h2 class="text-3xl lg:text-4xl font-bold mb-4">Tudo o que você precisa para crescer</h2></div>
+            <div class="grid md:grid-cols-3 gap-8">
+                <div class="bg-gray-800 p-8 rounded-2xl border border-gray-700 hover:border-blue-500 transition group">
+                    <div class="w-12 h-12 bg-blue-500/20 rounded-lg flex items-center justify-center mb-6 text-blue-400 group-hover:bg-blue-500 group-hover:text-white transition"><i class="bi bi-link-45deg text-2xl"></i></div>
+                    <h3 class="text-xl font-bold mb-3">Link Personalizado</h3>
+                    <p class="text-gray-400 text-sm leading-relaxed">Pare de perguntar "qual horário você quer?". Envie seu link e deixe o cliente escolher.</p>
+                </div>
+                <div class="bg-gray-800 p-8 rounded-2xl border border-gray-700 hover:border-green-500 transition group">
+                    <div class="w-12 h-12 bg-green-500/20 rounded-lg flex items-center justify-center mb-6 text-green-400 group-hover:bg-green-500 group-hover:text-white transition"><i class="bi bi-clock-history text-2xl"></i></div>
+                    <h3 class="text-xl font-bold mb-3">Agenda 24 horas</h3>
+                    <p class="text-gray-400 text-sm leading-relaxed">Seu negócio aberto mesmo quando você está dormindo.</p>
+                </div>
+                <div class="bg-gray-800 p-8 rounded-2xl border border-gray-700 hover:border-purple-500 transition group">
+                    <div class="w-12 h-12 bg-purple-500/20 rounded-lg flex items-center justify-center mb-6 text-purple-400 group-hover:bg-purple-500 group-hover:text-white transition"><i class="bi bi-calendar-check text-2xl"></i></div>
+                    <h3 class="text-xl font-bold mb-3">Controle Total</h3>
+                    <p class="text-gray-400 text-sm leading-relaxed">Defina horários de almoço, dias de folga e duração de cada serviço.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="py-24 bg-blue-600 text-center">
+        <div class="max-w-4xl mx-auto px-6">
+            <h2 class="text-3xl lg:text-4xl font-bold text-white mb-8">Pronto para profissionalizar seu negócio?</h2>
+            <a href="{{ url_for('register_business') }}" class="inline-block bg-white text-blue-600 px-10 py-4 rounded-full font-bold text-lg hover:bg-gray-100 transition shadow-lg">Criar Minha Conta Agora</a>
+            <p class="mt-6 text-blue-200 text-sm">Configuração em menos de 2 minutos.</p>
         </div>
     </section>
 </div>
@@ -671,11 +707,14 @@ AGENDAMENTO_HTML = r'''{% extends 'layout.html' %}
                 </div>
                 <form id="form" method="POST" action="{{ url_for('create_appointment', url_prefix=establishment.url_prefix) }}">
                     <input type="hidden" name="service_id" value="{{ service.id }}">
+                    
                     <div class="mb-2"><label class="fw-bold small">Seu Nome</label><input type="text" name="client_name" class="form-control" required></div>
+                    
                     <div class="row g-2 mb-3">
                         <div class="col-6"><label class="fw-bold small">WhatsApp</label><input type="tel" name="client_phone" class="form-control" required></div>
                         <div class="col-6"><label class="fw-bold small">Seu E-mail</label><input type="email" name="client_email" class="form-control" placeholder="Para confirmação" required></div>
                     </div>
+
                     <div class="mb-3"><label class="fw-bold small">Data</label><input type="date" id="date" name="appointment_date" class="form-control" required></div>
                     <div class="mb-4"><label class="fw-bold small">Horários Disponíveis</label><div id="slots" class="d-flex flex-wrap gap-2 mt-2"><small class="text-muted">Selecione a data...</small></div><input type="hidden" id="time" name="appointment_time" required></div>
                     <button id="btn" class="btn btn-primary w-100 fw-bold" disabled>Confirmar Agendamento</button>
