@@ -9,11 +9,9 @@
             <div><h1 class="h3 mb-0">Painel: {{ establishment.name }}</h1><a href="{{ url_for('establishment_services', url_prefix=establishment.url_prefix) }}" target="_blank" class="text-decoration-none small">Ver Página <i class="bi bi-box-arrow-up-right"></i></a></div>
         </div>
     </div>
-    
     {% if today_count > 0 %}
     <div class="alert alert-info d-flex align-items-center mb-4 shadow-sm" role="alert"><i class="bi bi-bell-fill me-2 fs-4"></i><div><strong>Atenção!</strong> Você tem <strong>{{ today_count }}</strong> agendamento(s) para hoje.</div></div>
     {% endif %}
-    
     <div class="card shadow-sm border-0 mb-4 p-3 bg-light">
         <form action="{{ url_for('update_settings') }}" method="POST" enctype="multipart/form-data" class="row align-items-center g-2">
             <input type="hidden" name="form_type" value="contact"> 
@@ -23,7 +21,6 @@
             <div class="col-md-2 text-end pt-4"><button class="btn btn-primary btn-sm w-100">Salvar</button></div>
         </form>
     </div>
-
     <div class="row">
         <div class="col-12 mb-4">
             <div class="card shadow-sm border-0">
@@ -55,7 +52,6 @@
                 </div>
             </div>
         </div>
-
         <div class="col-lg-6">
             <div class="card shadow-sm border-0 mb-4">
                 <div class="card-header bg-white fw-bold">Próximos Agendamentos</div>
@@ -75,7 +71,6 @@
                 </div>
             </div>
         </div>
-
         <div class="col-lg-6">
             <div class="card shadow-sm border-0">
                 <div class="card-header bg-white fw-bold">Serviços</div>

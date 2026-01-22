@@ -14,9 +14,8 @@ stripe
 
 PROCFILE = r'''web: gunicorn app:app'''
 
-# --- APP.PY (SaaS Completo + Rota Health) ---
+# --- APP.PY (Com Correção de Remetente e Porta 587) ---
 APP_PY = r'''import os
-import re
 import threading
 import time as time_module
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
@@ -30,29 +29,32 @@ from sqlalchemy import inspect
 import stripe
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'chave-secreta-v17-master'
+app.config['SECRET_KEY'] = 'chave-v23-email-blindado'
 basedir = os.path.abspath(os.path.dirname(__file__))
 
-# --- BANCO DE DADOS ---
+# --- BANCO ---
 database_url = os.environ.get('DATABASE_URL')
 if database_url and database_url.startswith("postgres://"):
     database_url = database_url.replace("postgres://", "postgresql://", 1)
 app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'sqlite:///' + os.path.join(basedir, 'agendamento.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# --- CONFIGURAÇÃO DE EMAIL (Reconfigure aqui após instalar) ---
+# --- EMAIL (CONFIGURAÇÃO PADRÃO GMAIL - 587 TLS) ---
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
 app.config['MAIL_PORT'] = 587
 app.config['MAIL_USE_TLS'] = True
-app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME') 
-app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD') 
-app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_USERNAME')
+app.config['MAIL_USE_SSL'] = False
+# Pega do Render ou usa string vazia
+app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME', '')
+app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD', '')
+app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_USERNAME', '')
+app.config['MAIL_DEBUG'] = True 
 
 mail = Mail(app)
 
-# --- CONFIGURAÇÃO STRIPE (Reconfigure aqui após instalar) ---
-stripe.api_key = os.environ.get('STRIPE_API_KEY', 'sk_test_...') # <--- SUA CHAVE SK AQUI
-STRIPE_PRICE_ID = os.environ.get('STRIPE_PRICE_ID', 'price_...') # <--- SEU ID DE PREÇO AQUI
+# --- STRIPE ---
+stripe.api_key = os.environ.get('STRIPE_API_KEY')
+STRIPE_PRICE_ID = os.environ.get('STRIPE_PRICE_ID')
 
 # --- UPLOAD ---
 UPLOAD_FOLDER = os.path.join(basedir, 'static', 'uploads')
@@ -65,7 +67,7 @@ if not os.path.exists(UPLOAD_FOLDER):
 db = SQLAlchemy(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
-login_manager.login_message = 'Faça login para continuar.'
+login_manager.login_message = 'Faça login.'
 
 # --- AUXILIARES ---
 def get_now_brazil():
@@ -74,20 +76,50 @@ def get_now_brazil():
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
+# --- ENVIO DE EMAIL SEGURO ---
 def send_async_email(app, msg):
     with app.app_context():
         try:
             mail.send(msg)
-            print(f"\n✅ [EMAIL ENVIADO] Para: {msg.recipients}\n")
+            print(f"\n✅ [EMAIL ENVIADO COM SUCESSO] Para: {msg.recipients}\n")
         except Exception as e:
-            print(f"\n❌ [ERRO EMAIL] {e}\n")
+            print(f"\n❌ [FALHA NO ENVIO] {str(e)}\n")
 
 def send_email(subject, recipient, body):
-    if not app.config['MAIL_USERNAME']:
-        print(f"\n⚠️ [EMAIL SIMULADO] Para: {recipient} | Assunto: {subject}\nCorpo: {body}\n")
+    sender = app.config.get('MAIL_USERNAME')
+    password = app.config.get('MAIL_PASSWORD')
+
+    # Validação antes de tentar enviar
+    if not sender or not password:
+        print(f"\n⚠️ [EMAIL SIMULADO - FALTAM CREDENCIAIS] Para: {recipient}")
         return
-    msg = Message(subject, recipients=[recipient], body=body)
-    threading.Thread(target=send_async_email, args=(app, msg)).start()
+
+    try:
+        # Cria a mensagem passando SENDER explicitamente para evitar KeyError
+        msg = Message(subject, sender=sender, recipients=[recipient], body=body)
+        
+        # Envia em Thread separada
+        threading.Thread(target=send_async_email, args=(app, msg)).start()
+    except Exception as e:
+        print(f"Erro ao preparar email: {e}")
+
+# --- ROTA DE TESTE DE EMAIL (DEBUG) ---
+@app.route('/teste-email')
+def teste_email():
+    """Rota para testar configuração SMTP direto no navegador"""
+    user = app.config.get('MAIL_USERNAME')
+    pwd = app.config.get('MAIL_PASSWORD')
+    
+    if not user or not pwd:
+        return "<h1>ERRO:</h1> <p>Variáveis MAIL_USERNAME ou MAIL_PASSWORD não configuradas no Render.</p>"
+    
+    try:
+        msg = Message("Teste Agenda Fácil V23", sender=user, recipients=[user])
+        msg.body = "Se você recebeu isso, o sistema de e-mail está funcionando 100%!"
+        mail.send(msg)
+        return f"<h1>SUCESSO!</h1> <p>E-mail enviado para {user}. Verifique sua caixa de entrada (e spam).</p>"
+    except Exception as e:
+        return f"<h1>ERRO NO ENVIO:</h1> <p>{str(e)}</p>"
 
 # --- MODELOS ---
 class Establishment(db.Model):
@@ -98,10 +130,7 @@ class Establishment(db.Model):
     contact_phone = db.Column(db.String(20), nullable=True)
     contact_email = db.Column(db.String(120), nullable=True)
     logo_filename = db.Column(db.String(100), nullable=True)
-    
-    # CONTROLE DE PAGAMENTO
     is_active = db.Column(db.Boolean, default=False) 
-    
     schedules = db.relationship('DaySchedule', backref='establishment', lazy=True, cascade="all, delete-orphan")
     admins = db.relationship('Admin', backref='establishment', lazy=True)
     services = db.relationship('Service', backref='establishment', lazy=True)
@@ -153,13 +182,12 @@ def load_user(user_id): return Admin.query.get(int(user_id))
 
 # --- WORKER ---
 def notification_worker():
-    print("--- Notificações Ativas (Fuso BR) ---")
+    print("--- Sistema de Notificações Iniciado ---")
     while True:
         try:
             with app.app_context():
                 inspector = inspect(db.engine)
                 if not inspector.has_table("appointments"): time_module.sleep(5); continue
-                
                 now = get_now_brazil()
                 upcoming = Appointment.query.filter(Appointment.notified == False, Appointment.appointment_date == now.date()).all()
                 for appt in upcoming:
@@ -173,48 +201,45 @@ def notification_worker():
         except: pass
         time_module.sleep(60)
 
-# --- ROTA LEVE PARA MONITORAMENTO (NOVO) ---
 @app.route('/health')
-def health_check():
-    return "OK", 200
+def health(): return "OK", 200
 
 # --- ROTAS DE PAGAMENTO ---
 @app.route('/pagamento')
 @login_required
 def payment():
-    if current_user.establishment.is_active:
-        return redirect(url_for('admin_dashboard'))
+    if current_user.establishment.is_active: return redirect(url_for('admin_dashboard'))
+    if not stripe.api_key: flash('Erro: Chave Stripe não configurada.', 'danger'); return redirect(url_for('login'))
     try:
-        domain_url = request.host_url
-        checkout_session = stripe.checkout.Session.create(
+        domain = request.host_url
+        session = stripe.checkout.Session.create(
             payment_method_types=['card'],
             line_items=[{'price': STRIPE_PRICE_ID, 'quantity': 1}],
             mode='subscription',
-            success_url=domain_url + 'pagamento/sucesso',
-            cancel_url=domain_url + 'pagamento/cancelado',
+            success_url=domain + 'pagamento/sucesso',
+            cancel_url=domain + 'pagamento/cancelado',
             customer_email=current_user.establishment.contact_email,
         )
-        return redirect(checkout_session.url, code=303)
+        return redirect(session.url, code=303)
     except Exception as e:
-        flash(f'Erro Stripe (Configure as chaves): {str(e)}', 'danger')
+        flash(f'Erro Stripe: {str(e)}', 'danger')
         return render_template('login.html')
 
 @app.route('/pagamento/sucesso')
 @login_required
 def payment_success():
-    est = current_user.establishment
-    est.is_active = True
+    current_user.establishment.is_active = True
     db.session.commit()
-    flash('Assinatura Ativa! Bem-vindo.', 'success')
+    flash('Assinatura Ativa!', 'success')
     return redirect(url_for('admin_dashboard'))
 
 @app.route('/pagamento/cancelado')
 @login_required
 def payment_cancel():
-    flash('Pagamento pendente.', 'warning')
+    flash('Pagamento cancelado.', 'warning')
     return redirect(url_for('login'))
 
-# --- ROTAS NORMAIS ---
+# --- ROTAS PRINCIPAIS ---
 @app.route('/')
 def index(): return render_template('index.html')
 
@@ -224,7 +249,6 @@ def register_business():
     if request.method == 'POST':
         username = request.form.get('username')
         is_master = (username == 'admin_demo') 
-        
         est = Establishment(
             name=request.form.get('business_name'),
             url_prefix=request.form.get('url_prefix').lower().strip(),
@@ -232,21 +256,15 @@ def register_business():
             contact_email=request.form.get('contact_email'),
             is_active=is_master 
         )
-        db.session.add(est)
-        db.session.commit()
+        db.session.add(est); db.session.commit()
         for i in range(7): db.session.add(DaySchedule(establishment_id=est.id, day_index=i, is_active=(i < 5), work_start=time(9,0), work_end=time(18,0)))
         adm = Admin(username=username, establishment_id=est.id)
         adm.set_password(request.form.get('password'))
-        db.session.add(adm)
-        db.session.commit()
+        db.session.add(adm); db.session.commit()
         
         login_user(adm)
-        if is_master:
-            flash('⚡ Conta Mestre Ativada!', 'success')
-            return redirect(url_for('admin_dashboard'))
-        else:
-            return redirect(url_for('payment'))
-            
+        if is_master: return redirect(url_for('admin_dashboard'))
+        return redirect(url_for('payment'))
     return render_template('register.html')
 
 @app.route('/b/<url_prefix>')
@@ -270,12 +288,11 @@ def create_appointment(url_prefix):
     t = datetime.strptime(request.form.get('appointment_time'), '%H:%M').time()
     
     if datetime.combine(d, t) < get_now_brazil():
-        flash('Horário inválido (passado).', 'danger')
+        flash('Horário inválido.', 'danger')
         return redirect(url_for('schedule_service', url_prefix=url_prefix, service_id=request.form.get('service_id')))
     
     appt = Appointment(client_name=request.form.get('client_name'), client_phone=request.form.get('client_phone'), client_email=request.form.get('client_email'), service_id=request.form.get('service_id'), appointment_date=d, appointment_time=t, establishment_id=est.id)
-    db.session.add(appt)
-    db.session.commit()
+    db.session.add(appt); db.session.commit()
     
     send_email(f"Confirmado: {est.name}", appt.client_email, f"Agendado para {d.strftime('%d/%m')} às {t.strftime('%H:%M')}")
     if est.contact_email: send_email(f"Novo Cliente: {appt.client_name}", est.contact_email, f"Novo agendamento: {d.strftime('%d/%m')} às {t.strftime('%H:%M')}")
@@ -371,23 +388,17 @@ def get_available_times():
     est = svc.establishment
     day_sched = DaySchedule.query.filter_by(establishment_id=est.id, day_index=sel_date.weekday()).first()
     if not day_sched or not day_sched.is_active: return jsonify([])
-    
     appts = Appointment.query.filter_by(appointment_date=sel_date, establishment_id=est.id).all()
     busy = []
     if day_sched.lunch_start and day_sched.lunch_end: busy.append((datetime.combine(sel_date, day_sched.lunch_start), datetime.combine(sel_date, day_sched.lunch_end)))
     for a in appts: busy.append((datetime.combine(sel_date, a.appointment_time), datetime.combine(sel_date, a.appointment_time) + timedelta(minutes=a.service_info.duration)))
-    
     avail = []
     curr = datetime.combine(sel_date, day_sched.work_start)
     limit = datetime.combine(sel_date, day_sched.work_end)
-    now = get_now_brazil() # Fuso BR
-    
+    now = get_now_brazil()
     while curr + timedelta(minutes=svc.duration) <= limit:
         end = curr + timedelta(minutes=svc.duration)
-        if sel_date == now.date() and curr < now: 
-            curr += timedelta(minutes=15)
-            continue
-            
+        if sel_date == now.date() and curr < now: curr += timedelta(minutes=15); continue
         collision = False
         for bs, be in busy:
             if max(curr, bs) < min(end, be): collision = True; break
@@ -401,123 +412,35 @@ if __name__ == '__main__':
     app.run(debug=True)
 '''
 
-# --- TEMPLATES RESTAURADOS (COPY V10 + DARK THEME V10) ---
-
+# --- TEMPLATES (COPY V10 + DARK THEME) ---
 INDEX_HTML = r'''{% extends 'layout.html' %}
 {% block title %}Agenda Fácil - A Plataforma do Profissional{% endblock %}
 {% block content %}
 <div class="tailwind-scope font-sans">
-    <!-- HERO SECTION -->
     <section class="bg-gradient-to-b from-white to-gray-50 overflow-hidden pt-16 pb-20">
         <div class="max-w-7xl mx-auto px-6 lg:px-8 grid lg:grid-cols-2 gap-12 items-center">
-            <!-- Texto Hero -->
             <div class="text-center lg:text-left">
-                <div class="inline-block bg-blue-100 text-blue-700 text-xs font-bold px-3 py-1 rounded-full mb-6">
-                    🚀 Sistema de Gestão Completo
-                </div>
-                <h1 class="text-5xl lg:text-6xl font-extrabold tracking-tight text-gray-900 leading-tight mb-6">
-                    Transforme agendamentos em <span class="text-blue-600">mais lucro</span> e tempo livre.
-                </h1>
-                <p class="text-lg text-gray-600 mb-8 leading-relaxed max-w-lg mx-auto lg:mx-0">
-                    A ferramenta definitiva para barbearias, salões e clínicas. Tenha um link profissional, receba agendamentos 24h e elimine a troca de mensagens no WhatsApp.
-                </p>
+                <div class="inline-block bg-blue-100 text-blue-700 text-xs font-bold px-3 py-1 rounded-full mb-6">🚀 Sistema de Gestão Completo</div>
+                <h1 class="text-5xl lg:text-6xl font-extrabold tracking-tight text-gray-900 leading-tight mb-6">Transforme agendamentos em <span class="text-blue-600">mais lucro</span>.</h1>
+                <p class="text-lg text-gray-600 mb-8 leading-relaxed max-w-lg mx-auto lg:mx-0">Barbearias, salões e clínicas. Tenha um link profissional, receba agendamentos 24h e seja notificado por e-mail.</p>
                 <div class="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
-                    <a href="{{ url_for('register_business') }}" class="bg-blue-600 text-white px-8 py-4 rounded-xl font-bold text-lg hover:bg-blue-700 transition shadow-lg hover:shadow-xl transform hover:-translate-y-1">
-                        Começar Agora
-                    </a>
-                    <a href="{{ url_for('login') }}" class="px-8 py-4 rounded-xl font-bold text-gray-700 hover:bg-gray-200 transition border border-gray-300">
-                        Já sou Cliente
-                    </a>
+                    <a href="{{ url_for('register_business') }}" class="bg-blue-600 text-white px-8 py-4 rounded-xl font-bold text-lg hover:bg-blue-700 transition shadow-lg">Começar Agora</a>
+                    <a href="{{ url_for('login') }}" class="px-8 py-4 rounded-xl font-bold text-gray-700 hover:bg-gray-200 transition border border-gray-300">Já sou Cliente</a>
                 </div>
-                <p class="mt-4 text-xs text-gray-500">Gestão simplificada para o seu crescimento.</p>
             </div>
-
-            <!-- Imagem do Painel (Notebook) -->
             <div class="relative mt-12 lg:mt-0 perspective-1000">
                 <div class="relative bg-gray-900 rounded-2xl p-2 shadow-2xl transform rotate-y-12 transition hover:rotate-y-0 duration-700">
-                    <div class="absolute top-0 left-1/2 -translate-x-1/2 w-20 h-1 bg-gray-800 rounded-b-md z-20"></div>
                     <div class="relative rounded-xl overflow-hidden bg-white aspect-video group">
-                        <img src="{{ url_for('static', filename='painel.png') }}" 
-                             alt="Painel Administrativo" 
-                             class="w-full h-full object-cover transition duration-500 group-hover:scale-105"
-                             onerror="this.onerror=null; this.src='https://placehold.co/1280x800/E2E8F0/475569?text=Insira+painel.png+na+pasta+static';">
-                        
-                        <!-- Overlay de reflexo -->
-                        <div class="absolute inset-0 bg-gradient-to-tr from-white/10 to-transparent pointer-events-none"></div>
+                        <img src="{{ url_for('static', filename='painel.png') }}" class="w-full h-full object-cover" onerror="this.onerror=null; this.src='https://placehold.co/1280x800/E2E8F0/475569?text=Insira+painel.png';">
                     </div>
                 </div>
-                <!-- Sombra decorativa -->
-                <div class="absolute -bottom-10 -right-10 w-72 h-72 bg-blue-400/20 rounded-full blur-3xl -z-10"></div>
             </div>
-        </div>
-    </section>
-
-    <!-- SEÇÃO PARA QUEM É -->
-    <section class="py-20 bg-white">
-        <div class="max-w-7xl mx-auto px-6 text-center">
-            <h2 class="text-3xl font-bold text-gray-900 mb-12">Ideal para profissionais exigentes</h2>
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-8">
-                <div class="p-6 rounded-2xl bg-gray-50 hover:bg-blue-50 transition border border-gray-100 hover:border-blue-200">
-                    <div class="text-4xl mb-4">💈</div>
-                    <h3 class="font-bold text-gray-900">Barbearias</h3>
-                </div>
-                <div class="p-6 rounded-2xl bg-gray-50 hover:bg-pink-50 transition border border-gray-100 hover:border-pink-200">
-                    <div class="text-4xl mb-4">💇‍♀️</div>
-                    <h3 class="font-bold text-gray-900">Salões</h3>
-                </div>
-                <div class="p-6 rounded-2xl bg-gray-50 hover:bg-green-50 transition border border-gray-100 hover:border-green-200">
-                    <div class="text-4xl mb-4">💆‍♂️</div>
-                    <h3 class="font-bold text-gray-900">Clínicas</h3>
-                </div>
-                <div class="p-6 rounded-2xl bg-gray-50 hover:bg-purple-50 transition border border-gray-100 hover:border-purple-200">
-                    <div class="text-4xl mb-4">💅</div>
-                    <h3 class="font-bold text-gray-900">Estética</h3>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- BENEFÍCIOS -->
-    <section class="py-20 bg-gray-900 text-white">
-        <div class="max-w-7xl mx-auto px-6">
-            <div class="text-center mb-16">
-                <h2 class="text-3xl lg:text-4xl font-bold mb-4">Tudo o que você precisa para crescer</h2>
-                <p class="text-gray-400">Funcionalidades pensadas para simplificar sua rotina.</p>
-            </div>
-            
-            <div class="grid md:grid-cols-3 gap-8">
-                <div class="bg-gray-800 p-8 rounded-2xl border border-gray-700 hover:border-blue-500 transition group">
-                    <div class="w-12 h-12 bg-blue-500/20 rounded-lg flex items-center justify-center mb-6 text-blue-400 group-hover:bg-blue-500 group-hover:text-white transition"><i class="bi bi-link-45deg text-2xl"></i></div>
-                    <h3 class="text-xl font-bold mb-3">Link Personalizado</h3>
-                    <p class="text-gray-400 text-sm leading-relaxed">Pare de perguntar "qual horário você quer?". Envie seu link e deixe o cliente escolher.</p>
-                </div>
-                <div class="bg-gray-800 p-8 rounded-2xl border border-gray-700 hover:border-green-500 transition group">
-                    <div class="w-12 h-12 bg-green-500/20 rounded-lg flex items-center justify-center mb-6 text-green-400 group-hover:bg-green-500 group-hover:text-white transition"><i class="bi bi-clock-history text-2xl"></i></div>
-                    <h3 class="text-xl font-bold mb-3">Agenda 24 horas</h3>
-                    <p class="text-gray-400 text-sm leading-relaxed">Seu negócio aberto mesmo quando você está dormindo. Preencha horários vazios automaticamente.</p>
-                </div>
-                <div class="bg-gray-800 p-8 rounded-2xl border border-gray-700 hover:border-purple-500 transition group">
-                    <div class="w-12 h-12 bg-purple-500/20 rounded-lg flex items-center justify-center mb-6 text-purple-400 group-hover:bg-purple-500 group-hover:text-white transition"><i class="bi bi-calendar-check text-2xl"></i></div>
-                    <h3 class="text-xl font-bold mb-3">Controle Total</h3>
-                    <p class="text-gray-400 text-sm leading-relaxed">Defina horários de almoço, dias de folga e duração de cada serviço. Você no comando da sua agenda.</p>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- CTA FINAL -->
-    <section class="py-24 bg-blue-600 text-center">
-        <div class="max-w-4xl mx-auto px-6">
-            <h2 class="text-3xl lg:text-4xl font-bold text-white mb-8">Pronto para profissionalizar seu negócio?</h2>
-            <a href="{{ url_for('register_business') }}" class="inline-block bg-white text-blue-600 px-10 py-4 rounded-full font-bold text-lg hover:bg-gray-100 transition shadow-lg">Criar Minha Conta Agora</a>
-            <p class="mt-6 text-blue-200 text-sm">Configuração em menos de 2 minutos.</p>
         </div>
     </section>
 </div>
 {% endblock %}
 '''
 
-# --- OUTROS TEMPLATES ---
 LAYOUT_HTML = r'''<!DOCTYPE html>
 <html lang="pt-br">
 <head>
@@ -528,12 +451,7 @@ LAYOUT_HTML = r'''<!DOCTYPE html>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <style>
-        body { font-family: 'Inter', sans-serif; background-color: #f8f9fa; min-height: 100vh; display: flex; flex-direction: column; }
-        .tailwind-scope { font-family: 'Inter', sans-serif; }
-        a { text-decoration: none; }
-        main { flex: 1; }
-    </style>
+    <style>body{font-family:'Inter',sans-serif;background-color:#f8f9fa} .tailwind-scope{font-family:'Inter',sans-serif} a{text-decoration:none} main{flex:1} body{min-height:100vh;display:flex;flex-direction:column}</style>
 </head>
 <body>
     <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm sticky-top">
@@ -625,11 +543,9 @@ ADMIN_HTML = r'''{% extends 'layout.html' %}
             <div><h1 class="h3 mb-0">Painel: {{ establishment.name }}</h1><a href="{{ url_for('establishment_services', url_prefix=establishment.url_prefix) }}" target="_blank" class="text-decoration-none small">Ver Página <i class="bi bi-box-arrow-up-right"></i></a></div>
         </div>
     </div>
-    
     {% if today_count > 0 %}
     <div class="alert alert-info d-flex align-items-center mb-4 shadow-sm" role="alert"><i class="bi bi-bell-fill me-2 fs-4"></i><div><strong>Atenção!</strong> Você tem <strong>{{ today_count }}</strong> agendamento(s) para hoje.</div></div>
     {% endif %}
-    
     <div class="card shadow-sm border-0 mb-4 p-3 bg-light">
         <form action="{{ url_for('update_settings') }}" method="POST" enctype="multipart/form-data" class="row align-items-center g-2">
             <input type="hidden" name="form_type" value="contact"> 
@@ -639,7 +555,6 @@ ADMIN_HTML = r'''{% extends 'layout.html' %}
             <div class="col-md-2 text-end pt-4"><button class="btn btn-primary btn-sm w-100">Salvar</button></div>
         </form>
     </div>
-
     <div class="row">
         <div class="col-12 mb-4">
             <div class="card shadow-sm border-0">
@@ -671,7 +586,6 @@ ADMIN_HTML = r'''{% extends 'layout.html' %}
                 </div>
             </div>
         </div>
-
         <div class="col-lg-6">
             <div class="card shadow-sm border-0 mb-4">
                 <div class="card-header bg-white fw-bold">Próximos Agendamentos</div>
@@ -691,7 +605,6 @@ ADMIN_HTML = r'''{% extends 'layout.html' %}
                 </div>
             </div>
         </div>
-
         <div class="col-lg-6">
             <div class="card shadow-sm border-0">
                 <div class="card-header bg-white fw-bold">Serviços</div>
@@ -804,7 +717,6 @@ document.getElementById('date').addEventListener('change', async (e) => {
 {% endblock %}
 '''
 
-# --- ERROR PAGE ---
 ERROR_INACTIVE_HTML = r'''{% extends 'layout.html' %}
 {% block content %}
 <div class="container py-5 text-center">
@@ -850,12 +762,10 @@ def atualizar_sistema():
         subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"])
         print("[SUCESSO] Dependências instaladas!")
     except Exception as e:
-        print(f"[ERRO] Não foi possível instalar automaticamente: {e}")
-        print("Tente rodar manualmente: pip install -r requirements.txt")
+        print(f"[ERRO] Instale manualmente: pip install -r requirements.txt")
 
-    print("\n[SUCESSO] Sistema V17 Final instalado!")
-    print("LEMBRETE: Abra o 'app.py' e coloque suas chaves do Stripe e E-mail novamente.")
-    print("Depois execute: python app.py")
+    print("\n[SUCESSO] Sistema V23 (Blindado) instalado!")
+    print("Agora acesse /teste-email para validar!")
 
 if __name__ == "__main__":
     atualizar_sistema()

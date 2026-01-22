@@ -1,5 +1,4 @@
 import os
-import re
 import threading
 import time as time_module
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
@@ -13,30 +12,32 @@ from sqlalchemy import inspect
 import stripe
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'chave-secreta-v17-master'
+app.config['SECRET_KEY'] = 'chave-v23-email-blindado'
 basedir = os.path.abspath(os.path.dirname(__file__))
 
-# --- BANCO DE DADOS ---
+# --- BANCO ---
 database_url = os.environ.get('DATABASE_URL')
 if database_url and database_url.startswith("postgres://"):
     database_url = database_url.replace("postgres://", "postgresql://", 1)
 app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'sqlite:///' + os.path.join(basedir, 'agendamento.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# --- CONFIGURAÇÃO DE EMAIL (CORREÇÃO PARA RENDER: SSL + PORTA 465) ---
-app.config['MAIL_SERVER'] = os.environ.get('MAIL_SERVER', 'smtp.gmail.com')
-app.config['MAIL_PORT'] = int(os.environ.get('MAIL_PORT', 465)) # Mudei para 465
-app.config['MAIL_USE_TLS'] = False # Desliga TLS
-app.config['MAIL_USE_SSL'] = True  # Liga SSL (Obrigatório para porta 465)
-app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME')
-app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD')
-app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_USERNAME')
+# --- EMAIL (CONFIGURAÇÃO PADRÃO GMAIL - 587 TLS) ---
+app.config['MAIL_SERVER'] = 'smtp.gmail.com'
+app.config['MAIL_PORT'] = 587
+app.config['MAIL_USE_TLS'] = True
+app.config['MAIL_USE_SSL'] = False
+# Pega do Render ou usa string vazia
+app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME', '')
+app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD', '')
+app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_USERNAME', '')
+app.config['MAIL_DEBUG'] = True 
 
 mail = Mail(app)
 
-# --- CONFIGURAÇÃO STRIPE (Reconfigure aqui após instalar) ---
-stripe.api_key = os.environ.get('STRIPE_API_KEY', 'sk_test_...') # <--- SUA CHAVE SK AQUI
-STRIPE_PRICE_ID = os.environ.get('STRIPE_PRICE_ID', 'price_...') # <--- SEU ID DE PREÇO AQUI
+# --- STRIPE ---
+stripe.api_key = os.environ.get('STRIPE_API_KEY')
+STRIPE_PRICE_ID = os.environ.get('STRIPE_PRICE_ID')
 
 # --- UPLOAD ---
 UPLOAD_FOLDER = os.path.join(basedir, 'static', 'uploads')
@@ -49,7 +50,7 @@ if not os.path.exists(UPLOAD_FOLDER):
 db = SQLAlchemy(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
-login_manager.login_message = 'Faça login para continuar.'
+login_manager.login_message = 'Faça login.'
 
 # --- AUXILIARES ---
 def get_now_brazil():
@@ -58,20 +59,50 @@ def get_now_brazil():
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
+# --- ENVIO DE EMAIL SEGURO ---
 def send_async_email(app, msg):
     with app.app_context():
         try:
             mail.send(msg)
-            print(f"\n✅ [EMAIL ENVIADO] Para: {msg.recipients}\n")
+            print(f"\n✅ [EMAIL ENVIADO COM SUCESSO] Para: {msg.recipients}\n")
         except Exception as e:
-            print(f"\n❌ [ERRO EMAIL] {e}\n")
+            print(f"\n❌ [FALHA NO ENVIO] {str(e)}\n")
 
 def send_email(subject, recipient, body):
-    if not app.config['MAIL_USERNAME']:
-        print(f"\n⚠️ [EMAIL SIMULADO] Para: {recipient} | Assunto: {subject}\nCorpo: {body}\n")
+    sender = app.config.get('MAIL_USERNAME')
+    password = app.config.get('MAIL_PASSWORD')
+
+    # Validação antes de tentar enviar
+    if not sender or not password:
+        print(f"\n⚠️ [EMAIL SIMULADO - FALTAM CREDENCIAIS] Para: {recipient}")
         return
-    msg = Message(subject, recipients=[recipient], body=body)
-    threading.Thread(target=send_async_email, args=(app, msg)).start()
+
+    try:
+        # Cria a mensagem passando SENDER explicitamente para evitar KeyError
+        msg = Message(subject, sender=sender, recipients=[recipient], body=body)
+        
+        # Envia em Thread separada
+        threading.Thread(target=send_async_email, args=(app, msg)).start()
+    except Exception as e:
+        print(f"Erro ao preparar email: {e}")
+
+# --- ROTA DE TESTE DE EMAIL (DEBUG) ---
+@app.route('/teste-email')
+def teste_email():
+    """Rota para testar configuração SMTP direto no navegador"""
+    user = app.config.get('MAIL_USERNAME')
+    pwd = app.config.get('MAIL_PASSWORD')
+    
+    if not user or not pwd:
+        return "<h1>ERRO:</h1> <p>Variáveis MAIL_USERNAME ou MAIL_PASSWORD não configuradas no Render.</p>"
+    
+    try:
+        msg = Message("Teste Agenda Fácil V23", sender=user, recipients=[user])
+        msg.body = "Se você recebeu isso, o sistema de e-mail está funcionando 100%!"
+        mail.send(msg)
+        return f"<h1>SUCESSO!</h1> <p>E-mail enviado para {user}. Verifique sua caixa de entrada (e spam).</p>"
+    except Exception as e:
+        return f"<h1>ERRO NO ENVIO:</h1> <p>{str(e)}</p>"
 
 # --- MODELOS ---
 class Establishment(db.Model):
@@ -82,10 +113,7 @@ class Establishment(db.Model):
     contact_phone = db.Column(db.String(20), nullable=True)
     contact_email = db.Column(db.String(120), nullable=True)
     logo_filename = db.Column(db.String(100), nullable=True)
-    
-    # CONTROLE DE PAGAMENTO
     is_active = db.Column(db.Boolean, default=False) 
-    
     schedules = db.relationship('DaySchedule', backref='establishment', lazy=True, cascade="all, delete-orphan")
     admins = db.relationship('Admin', backref='establishment', lazy=True)
     services = db.relationship('Service', backref='establishment', lazy=True)
@@ -137,13 +165,12 @@ def load_user(user_id): return Admin.query.get(int(user_id))
 
 # --- WORKER ---
 def notification_worker():
-    print("--- Notificações Ativas (Fuso BR) ---")
+    print("--- Sistema de Notificações Iniciado ---")
     while True:
         try:
             with app.app_context():
                 inspector = inspect(db.engine)
                 if not inspector.has_table("appointments"): time_module.sleep(5); continue
-                
                 now = get_now_brazil()
                 upcoming = Appointment.query.filter(Appointment.notified == False, Appointment.appointment_date == now.date()).all()
                 for appt in upcoming:
@@ -157,53 +184,45 @@ def notification_worker():
         except: pass
         time_module.sleep(60)
 
-# --- ROTA LEVE PARA MONITORAMENTO (NOVO) ---
 @app.route('/health')
-def health_check():
-    return "OK", 200
+def health(): return "OK", 200
 
 # --- ROTAS DE PAGAMENTO ---
 @app.route('/pagamento')
 @login_required
 def payment():
-    if current_user.establishment.is_active:
-        return redirect(url_for('admin_dashboard'))
+    if current_user.establishment.is_active: return redirect(url_for('admin_dashboard'))
+    if not stripe.api_key: flash('Erro: Chave Stripe não configurada.', 'danger'); return redirect(url_for('login'))
     try:
-        domain_url = request.host_url
-        checkout_session = stripe.checkout.Session.create(
+        domain = request.host_url
+        session = stripe.checkout.Session.create(
             payment_method_types=['card'],
             line_items=[{'price': STRIPE_PRICE_ID, 'quantity': 1}],
             mode='subscription',
-            success_url=domain_url + 'pagamento/sucesso',
-            cancel_url=domain_url + 'pagamento/cancelado',
+            success_url=domain + 'pagamento/sucesso',
+            cancel_url=domain + 'pagamento/cancelado',
             customer_email=current_user.establishment.contact_email,
         )
-        return redirect(checkout_session.url, code=303)
+        return redirect(session.url, code=303)
     except Exception as e:
-        flash(f'Erro Stripe (Configure as chaves): {str(e)}', 'danger')
+        flash(f'Erro Stripe: {str(e)}', 'danger')
         return render_template('login.html')
 
 @app.route('/pagamento/sucesso')
 @login_required
 def payment_success():
-    est = current_user.establishment
-    est.is_active = True
+    current_user.establishment.is_active = True
     db.session.commit()
-    flash('Assinatura Ativa! Bem-vindo.', 'success')
+    flash('Assinatura Ativa!', 'success')
     return redirect(url_for('admin_dashboard'))
 
 @app.route('/pagamento/cancelado')
 @login_required
 def payment_cancel():
-    flash('Pagamento pendente.', 'warning')
+    flash('Pagamento cancelado.', 'warning')
     return redirect(url_for('login'))
 
-# --- ROTA HEALTH CHECK (MANTÉM O RENDER ACORDADO) ---
-@app.route('/health')
-def health():
-    return "OK", 200
-
-# --- ROTAS NORMAIS ---
+# --- ROTAS PRINCIPAIS ---
 @app.route('/')
 def index(): return render_template('index.html')
 
@@ -213,7 +232,6 @@ def register_business():
     if request.method == 'POST':
         username = request.form.get('username')
         is_master = (username == 'admin_demo') 
-        
         est = Establishment(
             name=request.form.get('business_name'),
             url_prefix=request.form.get('url_prefix').lower().strip(),
@@ -221,21 +239,15 @@ def register_business():
             contact_email=request.form.get('contact_email'),
             is_active=is_master 
         )
-        db.session.add(est)
-        db.session.commit()
+        db.session.add(est); db.session.commit()
         for i in range(7): db.session.add(DaySchedule(establishment_id=est.id, day_index=i, is_active=(i < 5), work_start=time(9,0), work_end=time(18,0)))
         adm = Admin(username=username, establishment_id=est.id)
         adm.set_password(request.form.get('password'))
-        db.session.add(adm)
-        db.session.commit()
+        db.session.add(adm); db.session.commit()
         
         login_user(adm)
-        if is_master:
-            flash('⚡ Conta Mestre Ativada!', 'success')
-            return redirect(url_for('admin_dashboard'))
-        else:
-            return redirect(url_for('payment'))
-            
+        if is_master: return redirect(url_for('admin_dashboard'))
+        return redirect(url_for('payment'))
     return render_template('register.html')
 
 @app.route('/b/<url_prefix>')
@@ -259,12 +271,11 @@ def create_appointment(url_prefix):
     t = datetime.strptime(request.form.get('appointment_time'), '%H:%M').time()
     
     if datetime.combine(d, t) < get_now_brazil():
-        flash('Horário inválido (passado).', 'danger')
+        flash('Horário inválido.', 'danger')
         return redirect(url_for('schedule_service', url_prefix=url_prefix, service_id=request.form.get('service_id')))
     
     appt = Appointment(client_name=request.form.get('client_name'), client_phone=request.form.get('client_phone'), client_email=request.form.get('client_email'), service_id=request.form.get('service_id'), appointment_date=d, appointment_time=t, establishment_id=est.id)
-    db.session.add(appt)
-    db.session.commit()
+    db.session.add(appt); db.session.commit()
     
     send_email(f"Confirmado: {est.name}", appt.client_email, f"Agendado para {d.strftime('%d/%m')} às {t.strftime('%H:%M')}")
     if est.contact_email: send_email(f"Novo Cliente: {appt.client_name}", est.contact_email, f"Novo agendamento: {d.strftime('%d/%m')} às {t.strftime('%H:%M')}")
@@ -360,23 +371,17 @@ def get_available_times():
     est = svc.establishment
     day_sched = DaySchedule.query.filter_by(establishment_id=est.id, day_index=sel_date.weekday()).first()
     if not day_sched or not day_sched.is_active: return jsonify([])
-    
     appts = Appointment.query.filter_by(appointment_date=sel_date, establishment_id=est.id).all()
     busy = []
     if day_sched.lunch_start and day_sched.lunch_end: busy.append((datetime.combine(sel_date, day_sched.lunch_start), datetime.combine(sel_date, day_sched.lunch_end)))
     for a in appts: busy.append((datetime.combine(sel_date, a.appointment_time), datetime.combine(sel_date, a.appointment_time) + timedelta(minutes=a.service_info.duration)))
-    
     avail = []
     curr = datetime.combine(sel_date, day_sched.work_start)
     limit = datetime.combine(sel_date, day_sched.work_end)
-    now = get_now_brazil() # Fuso BR
-    
+    now = get_now_brazil()
     while curr + timedelta(minutes=svc.duration) <= limit:
         end = curr + timedelta(minutes=svc.duration)
-        if sel_date == now.date() and curr < now: 
-            curr += timedelta(minutes=15)
-            continue
-            
+        if sel_date == now.date() and curr < now: curr += timedelta(minutes=15); continue
         collision = False
         for bs, be in busy:
             if max(curr, bs) < min(end, be): collision = True; break
