@@ -12,7 +12,7 @@ from sqlalchemy import inspect
 import stripe
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'chave-v23-email-blindado'
+app.config['SECRET_KEY'] = 'chave-v24-final-fix'
 basedir = os.path.abspath(os.path.dirname(__file__))
 
 # --- BANCO ---
@@ -22,20 +22,20 @@ if database_url and database_url.startswith("postgres://"):
 app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'sqlite:///' + os.path.join(basedir, 'agendamento.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# --- EMAIL (CONFIGURAÇÃO GMAIL - 587 TLS) ---
-# Usamos smtp.gmail.com ou smtp.googlemail.com
-app.config['MAIL_SERVER'] = os.environ.get('MAIL_SERVER', 'smtp.gmail.com')
-app.config['MAIL_PORT'] = int(os.environ.get('MAIL_PORT', 587))
-# Conversão segura de booleano
-app.config['MAIL_USE_TLS'] = os.environ.get('MAIL_USE_TLS', 'True').lower() in ['true', 'on', '1']
-app.config['MAIL_USE_SSL'] = os.environ.get('MAIL_USE_SSL', 'False').lower() in ['true', 'on', '1']
-app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME', '')
-app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD', '')
-app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_USERNAME', '')
+# --- EMAIL (CONFIGURAÇÃO GMAIL TRAVADA) ---
+# Forçamos essas configurações para evitar erros de ambiente no Render
+app.config['MAIL_SERVER'] = 'smtp.gmail.com'
+app.config['MAIL_PORT'] = 587
+app.config['MAIL_USE_TLS'] = True
+app.config['MAIL_USE_SSL'] = False
 app.config['MAIL_DEBUG'] = True 
 app.config['MAIL_MAX_EMAILS'] = None
-# Timeout para não travar o worker do Gunicorn (ex: 10 segundos)
 app.config['MAIL_ASCII_ATTACHMENTS'] = False
+
+# Credenciais vêm do ambiente (Segurança)
+app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME')
+app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD')
+app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_USERNAME')
 
 mail = Mail(app)
 
@@ -68,48 +68,50 @@ def send_async_email(app, msg):
     with app.app_context():
         try:
             mail.send(msg)
-            print(f"\n✅ [EMAIL ENVIADO COM SUCESSO] Para: {msg.recipients}\n")
+            print(f"\n✅ [EMAIL SUCESSO] Enviado para: {msg.recipients}\n")
         except Exception as e:
-            print(f"\n❌ [FALHA NO ENVIO] {str(e)}\n")
+            print(f"\n❌ [EMAIL ERRO] {e}\n")
 
 def send_email(subject, recipient, body):
-    sender = app.config.get('MAIL_USERNAME')
-    password = app.config.get('MAIL_PASSWORD')
-
-    # Validação antes de tentar enviar
-    if not sender or not password:
-        print(f"\n⚠️ [EMAIL SIMULADO - FALTAM CREDENCIAIS] Para: {recipient}")
-        return
-
-    try:
-        # Cria a mensagem passando SENDER explicitamente para evitar KeyError
-        msg = Message(subject, sender=sender, recipients=[recipient], body=body)
-        
-        # Envia em Thread separada para não bloquear a requisição
-        threading.Thread(target=send_async_email, args=(app, msg)).start()
-    except Exception as e:
-        print(f"Erro ao preparar email: {e}")
-
-# --- ROTA DE TESTE DE EMAIL (DEBUG) ---
-@app.route('/teste-email')
-def teste_email():
-    """Rota para testar configuração SMTP direto no navegador"""
+    # Verifica credenciais antes
     user = app.config.get('MAIL_USERNAME')
     pwd = app.config.get('MAIL_PASSWORD')
     
     if not user or not pwd:
-        return "<h1>ERRO:</h1> <p>Variáveis MAIL_USERNAME ou MAIL_PASSWORD não configuradas no Render.</p>"
-    
-    try:
-        msg = Message("Teste Agenda Fácil V23", sender=user, recipients=[user])
-        msg.body = "Se você recebeu isso, o sistema de e-mail está funcionando 100%!"
-        # Envio síncrono aqui para ver o erro na tela se falhar
-        mail.send(msg)
-        return f"<h1>SUCESSO!</h1> <p>E-mail enviado para {user}. Verifique sua caixa de entrada (e spam).</p>"
-    except Exception as e:
-        return f"<h1>ERRO NO ENVIO:</h1> <p>{str(e)}</p>"
+        print(f"\n⚠️ [EMAIL SIMULADO] Falta configuração. Para: {recipient}\n")
+        return
 
-# --- MODELOS ---
+    # Garante remetente
+    sender = user
+    msg = Message(subject, sender=sender, recipients=[recipient], body=body)
+    
+    # Thread para não travar
+    threading.Thread(target=send_async_email, args=(app, msg)).start()
+
+# --- ROTA DE TESTE (COM TIMEOUT MANUAL) ---
+@app.route('/teste-email')
+def teste_email():
+    user = app.config.get('MAIL_USERNAME')
+    pwd = app.config.get('MAIL_PASSWORD')
+    
+    if not user or not pwd:
+        return "ERRO: Variáveis MAIL_USERNAME ou MAIL_PASSWORD faltando no Render."
+
+    try:
+        # Envio direto para testar conexão
+        msg = Message("Teste V24", sender=user, recipients=[user])
+        msg.body = "Se chegou, o SMTP do Gmail está funcionando!"
+        mail.send(msg)
+        return f"SUCESSO! E-mail enviado para {user}."
+    except Exception as e:
+        # Captura erro sem matar o worker
+        return f"<h1>ERRO NO ENVIO:</h1><p>{str(e)}</p>"
+
+# --- ROTA HEALTH ---
+@app.route('/health')
+def health(): return "OK", 200
+
+# --- MODELOS (MANTIDOS) ---
 class Establishment(db.Model):
     __tablename__ = 'establishments'
     id = db.Column(db.Integer, primary_key=True)
@@ -170,7 +172,7 @@ def load_user(user_id): return Admin.query.get(int(user_id))
 
 # --- WORKER ---
 def notification_worker():
-    print("--- Sistema de Notificações Iniciado ---")
+    print("--- Notificações Ativas ---")
     while True:
         try:
             with app.app_context():
@@ -189,15 +191,12 @@ def notification_worker():
         except: pass
         time_module.sleep(60)
 
-@app.route('/health')
-def health(): return "OK", 200
-
 # --- ROTAS DE PAGAMENTO ---
 @app.route('/pagamento')
 @login_required
 def payment():
     if current_user.establishment.is_active: return redirect(url_for('admin_dashboard'))
-    if not stripe.api_key: flash('Erro: Chave Stripe não configurada.', 'danger'); return redirect(url_for('login'))
+    if not stripe.api_key: flash('Erro Config: Stripe Key', 'danger'); return redirect(url_for('login'))
     try:
         domain = request.host_url
         session = stripe.checkout.Session.create(
@@ -224,7 +223,7 @@ def payment_success():
 @app.route('/pagamento/cancelado')
 @login_required
 def payment_cancel():
-    flash('Pagamento cancelado.', 'warning')
+    flash('Pagamento pendente.', 'warning')
     return redirect(url_for('login'))
 
 # --- ROTAS PRINCIPAIS ---
@@ -249,7 +248,6 @@ def register_business():
         adm = Admin(username=username, establishment_id=est.id)
         adm.set_password(request.form.get('password'))
         db.session.add(adm); db.session.commit()
-        
         login_user(adm)
         if is_master: return redirect(url_for('admin_dashboard'))
         return redirect(url_for('payment'))
@@ -274,17 +272,14 @@ def create_appointment(url_prefix):
     est = Establishment.query.filter_by(url_prefix=url_prefix).first_or_404()
     d = datetime.strptime(request.form.get('appointment_date'), '%Y-%m-%d').date()
     t = datetime.strptime(request.form.get('appointment_time'), '%H:%M').time()
-    
     if datetime.combine(d, t) < get_now_brazil():
         flash('Horário inválido.', 'danger')
         return redirect(url_for('schedule_service', url_prefix=url_prefix, service_id=request.form.get('service_id')))
-    
     appt = Appointment(client_name=request.form.get('client_name'), client_phone=request.form.get('client_phone'), client_email=request.form.get('client_email'), service_id=request.form.get('service_id'), appointment_date=d, appointment_time=t, establishment_id=est.id)
     db.session.add(appt); db.session.commit()
     
-    send_email(f"Confirmado: {est.name}", appt.client_email, f"Agendado para {d.strftime('%d/%m')} às {t.strftime('%H:%M')}")
+    send_email(f"Confirmado: {est.name}", appt.client_email, f"Agendado: {d.strftime('%d/%m')} às {t.strftime('%H:%M')}")
     if est.contact_email: send_email(f"Novo Cliente: {appt.client_name}", est.contact_email, f"Novo agendamento: {d.strftime('%d/%m')} às {t.strftime('%H:%M')}")
-    
     flash('Confirmado! Verifique seu e-mail.', 'success')
     return redirect(url_for('establishment_services', url_prefix=url_prefix))
 
