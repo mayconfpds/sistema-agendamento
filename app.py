@@ -3,22 +3,18 @@ import re
 import threading
 import time as time_module
 import socket
-import smtplib
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
-from flask_mail import Mail, Message
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from datetime import datetime, time, timedelta
 from sqlalchemy import inspect
 import stripe
-
-# --- TIMEOUT GLOBAL (Evita travamentos longos) ---
-socket.setdefaulttimeout(20)
+import resend
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'chave-v26-ssl-force'
+app.config['SECRET_KEY'] = 'chave-v28-api-resend'
 basedir = os.path.abspath(os.path.dirname(__file__))
 
 # --- BANCO ---
@@ -28,18 +24,9 @@ if database_url and database_url.startswith("postgres://"):
 app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'sqlite:///' + os.path.join(basedir, 'agendamento.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# --- EMAIL (GMAIL 465 SSL HARDCODED) ---
-# Forçamos isso para ignorar configurações erradas do ambiente
-app.config['MAIL_SERVER'] = 'smtp.gmail.com'
-app.config['MAIL_PORT'] = 465
-app.config['MAIL_USE_TLS'] = False
-app.config['MAIL_USE_SSL'] = True
-app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME')
-app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD')
-app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_USERNAME')
-app.config['MAIL_DEBUG'] = True 
-
-mail = Mail(app)
+# --- CONFIGURAÇÃO RESEND (API DE EMAIL) ---
+# Substitui o SMTP antigo. Muito mais rápido e não bloqueia no Render.
+resend.api_key = os.environ.get('RESEND_API_KEY')
 
 # --- STRIPE ---
 stripe.api_key = os.environ.get('STRIPE_API_KEY')
@@ -65,63 +52,50 @@ def get_now_brazil():
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-# --- ENVIO ASSÍNCRONO ---
-def send_async_email(app, msg):
-    with app.app_context():
-        try:
-            mail.send(msg)
-            print(f"\n✅ [EMAIL SUCESSO] Para: {msg.recipients}\n")
-        except Exception as e:
-            print(f"\n❌ [EMAIL FALHA] {str(e)}\n")
-
+# --- ENVIO DE EMAIL VIA API (RESEND) ---
 def send_email(subject, recipient, body):
-    sender = app.config.get('MAIL_USERNAME')
-    if not sender:
-        print(f"\n⚠️ [EMAIL SIMULADO] Sem credenciais.\n")
+    """Envia e-mail usando a API do Resend (Porta 443 - Não bloqueia)."""
+    
+    if not resend.api_key:
+        print(f"\n⚠️ [EMAIL SIMULADO - FALTAM CHAVES] Para: {recipient}\n")
         return
-    
-    try:
-        msg = Message(subject, sender=sender, recipients=[recipient], body=body)
-        threading.Thread(target=send_async_email, args=(app, msg)).start()
-    except Exception as e:
-        print(f"Erro thread email: {e}")
 
-# --- ROTA DE DIAGNÓSTICO SMTP (SSL 465) ---
+    # No plano grátis do Resend, o remetente TEM que ser este:
+    sender_email = "onboarding@resend.dev"
+    
+    # Thread para não travar o site enquanto a API responde
+    def _send():
+        try:
+            r = resend.Emails.send({
+                "from": f"Agenda Fácil <{sender_email}>",
+                "to": recipient,
+                "subject": subject,
+                "html": f"<p>{body.replace(chr(10), '<br>')}</p>" # Converte quebra de linha para HTML
+            })
+            print(f"\n✅ [RESEND API SUCESSO] ID: {r.get('id')} | Para: {recipient}\n")
+        except Exception as e:
+            print(f"\n❌ [RESEND ERRO] {str(e)}\n")
+
+    threading.Thread(target=_send).start()
+
+# --- ROTA DE DIAGNÓSTICO (TESTE API) ---
 @app.route('/teste-email')
-def teste_email_diagnostico():
-    host = 'smtp.gmail.com'
-    port = 465
-    user = app.config.get('MAIL_USERNAME')
-    pwd = app.config.get('MAIL_PASSWORD')
+def teste_email_api():
+    if not resend.api_key:
+        return "ERRO: Variável RESEND_API_KEY não configurada no Render."
     
-    log = [f"<b>Diagnóstico V26 (SSL 465)</b>", f"Alvo: {host}:{port}"]
-    
-    if not user or not pwd:
-        return "Erro: Variáveis MAIL_USERNAME ou MAIL_PASSWORD faltando."
-
     try:
-        log.append("1. Conectando via SMTP_SSL...")
-        server = smtplib.SMTP_SSL(host, port, timeout=15)
-        log.append("✅ Conexão SSL estabelecida!")
-        
-        server.ehlo()
-        
-        log.append(f"2. Login como {user}...")
-        server.login(user, pwd)
-        log.append("✅ Autenticação aceita!")
-        
-        log.append("3. Enviando teste...")
-        msg = f"Subject: Teste V26 SSL\n\nEmail enviado via porta 465 com sucesso."
-        server.sendmail(user, user, msg)
-        log.append("✅ E-mail enviado!")
-        
-        server.quit()
-        return "<br>".join(log) + "<br><br><h2 style='color:green'>SUCESSO TOTAL!</h2>"
-        
+        # Envio síncrono para ver o resultado na tela
+        r = resend.Emails.send({
+            "from": "onboarding@resend.dev",
+            "to": "delivered@resend.dev", # Email de teste do próprio Resend (sempre funciona)
+            "subject": "Teste de Conexão V28",
+            "html": "<strong>A API do Resend está conectada com sucesso!</strong>"
+        })
+        return f"<h1>SUCESSO!</h1><p>ID do envio: {r.get('id')}</p><p>A conexão com a API funcionou.</p>"
     except Exception as e:
-        return "<br>".join(log) + f"<br><br><h2 style='color:red'>FALHA: {str(e)}</h2>"
+        return f"<h1>ERRO API:</h1><p>{str(e)}</p>"
 
-# --- ROTA HEALTH ---
 @app.route('/health')
 def health(): return "OK", 200
 
@@ -294,6 +268,7 @@ def create_appointment(url_prefix):
     
     send_email(f"Confirmado: {est.name}", appt.client_email, f"Agendado para {d.strftime('%d/%m')} às {t.strftime('%H:%M')}")
     if est.contact_email: send_email(f"Novo Cliente: {appt.client_name}", est.contact_email, f"Novo agendamento: {d.strftime('%d/%m')} às {t.strftime('%H:%M')}")
+    
     flash('Confirmado! Verifique seu e-mail.', 'success')
     return redirect(url_for('establishment_services', url_prefix=url_prefix))
 
