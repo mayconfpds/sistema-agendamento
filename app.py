@@ -1,6 +1,9 @@
 import os
+import re
 import threading
 import time as time_module
+import socket
+import smtplib
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
@@ -11,8 +14,12 @@ from datetime import datetime, time, timedelta
 from sqlalchemy import inspect
 import stripe
 
+# --- CONFIGURAÇÃO DE REDE (EVITA TRAVAMENTO DO RENDER) ---
+# Define um timeout global de 15 segundos para conexões externas
+socket.setdefaulttimeout(15)
+
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'chave-v24-final-fix'
+app.config['SECRET_KEY'] = 'chave-v25-network-fix'
 basedir = os.path.abspath(os.path.dirname(__file__))
 
 # --- BANCO ---
@@ -22,20 +29,15 @@ if database_url and database_url.startswith("postgres://"):
 app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'sqlite:///' + os.path.join(basedir, 'agendamento.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# --- EMAIL (CONFIGURAÇÃO GMAIL TRAVADA) ---
-# Forçamos essas configurações para evitar erros de ambiente no Render
+# --- EMAIL (PADRÃO ROBUSTO 587) ---
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
 app.config['MAIL_PORT'] = 587
 app.config['MAIL_USE_TLS'] = True
 app.config['MAIL_USE_SSL'] = False
-app.config['MAIL_DEBUG'] = True 
-app.config['MAIL_MAX_EMAILS'] = None
-app.config['MAIL_ASCII_ATTACHMENTS'] = False
-
-# Credenciais vêm do ambiente (Segurança)
 app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME')
 app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD')
 app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_USERNAME')
+app.config['MAIL_DEBUG'] = True 
 
 mail = Mail(app)
 
@@ -63,55 +65,84 @@ def get_now_brazil():
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-# --- ENVIO DE EMAIL SEGURO ---
+# --- ENVIO ASSÍNCRONO SEGURO ---
 def send_async_email(app, msg):
     with app.app_context():
         try:
             mail.send(msg)
-            print(f"\n✅ [EMAIL SUCESSO] Enviado para: {msg.recipients}\n")
+            print(f"\n✅ [EMAIL SUCESSO] Para: {msg.recipients}\n")
         except Exception as e:
-            print(f"\n❌ [EMAIL ERRO] {e}\n")
+            # Captura erro mas não derruba o worker
+            print(f"\n❌ [EMAIL FALHA] {str(e)}\n")
 
 def send_email(subject, recipient, body):
-    # Verifica credenciais antes
-    user = app.config.get('MAIL_USERNAME')
-    pwd = app.config.get('MAIL_PASSWORD')
-    
-    if not user or not pwd:
-        print(f"\n⚠️ [EMAIL SIMULADO] Falta configuração. Para: {recipient}\n")
+    sender = app.config.get('MAIL_USERNAME')
+    if not sender:
+        print(f"\n⚠️ [EMAIL SIMULADO] Sem credenciais. Para: {recipient}\n")
         return
-
-    # Garante remetente
-    sender = user
-    msg = Message(subject, sender=sender, recipients=[recipient], body=body)
     
-    # Thread para não travar
-    threading.Thread(target=send_async_email, args=(app, msg)).start()
+    try:
+        msg = Message(subject, sender=sender, recipients=[recipient], body=body)
+        threading.Thread(target=send_async_email, args=(app, msg)).start()
+    except Exception as e:
+        print(f"Erro ao preparar thread de email: {e}")
 
-# --- ROTA DE TESTE (COM TIMEOUT MANUAL) ---
+# --- ROTA DE DIAGNÓSTICO SMTP (NÃO USA FLASK-MAIL) ---
 @app.route('/teste-email')
-def teste_email():
+def teste_email_diagnostico():
+    """
+    Testa a conexão SMTP manualmente para identificar onde está o bloqueio.
+    Retorna um relatório na tela em vez de travar o servidor.
+    """
+    host = 'smtp.gmail.com'
+    port = 587
     user = app.config.get('MAIL_USERNAME')
     pwd = app.config.get('MAIL_PASSWORD')
     
+    log = []
+    log.append(f"<b>Iniciando Diagnóstico de Rede V25...</b>")
+    log.append(f"Alvo: {host}:{port}")
+    
     if not user or not pwd:
-        return "ERRO: Variáveis MAIL_USERNAME ou MAIL_PASSWORD faltando no Render."
+        return "Erro: Variáveis de ambiente MAIL_USERNAME ou MAIL_PASSWORD não encontradas."
 
     try:
-        # Envio direto para testar conexão
-        msg = Message("Teste V24", sender=user, recipients=[user])
-        msg.body = "Se chegou, o SMTP do Gmail está funcionando!"
-        mail.send(msg)
-        return f"SUCESSO! E-mail enviado para {user}."
+        # 1. Teste de Conexão TCP
+        log.append("1. Tentando conectar ao servidor (TCP)...")
+        server = smtplib.SMTP(host, port, timeout=10)
+        log.append("✅ Conectado com sucesso!")
+        
+        # 2. EHLO
+        server.ehlo()
+        
+        # 3. STARTTLS
+        log.append("2. Iniciando criptografia TLS...")
+        server.starttls()
+        server.ehlo()
+        log.append("✅ TLS Ativado!")
+        
+        # 4. Login
+        log.append(f"3. Tentando login como: {user}...")
+        server.login(user, pwd)
+        log.append("✅ Login aceito! Senha correta.")
+        
+        # 5. Envio
+        log.append("4. Enviando e-mail de teste...")
+        msg = f"Subject: Teste V25\n\nDiagnostico de rede com sucesso."
+        server.sendmail(user, user, msg)
+        log.append("✅ E-mail enviado!")
+        
+        server.quit()
+        return "<br>".join(log) + "<br><br><h2 style='color:green'>SISTEMA DE E-MAIL FUNCIONAL!</h2>"
+        
+    except socket.timeout:
+        return "<br>".join(log) + "<br><br><h2 style='color:red'>ERRO: TIMEOUT</h2><p>O Render não conseguiu alcançar o Gmail. Pode ser bloqueio de porta 587.</p>"
+    except smtplib.SMTPAuthenticationError:
+        return "<br>".join(log) + "<br><br><h2 style='color:red'>ERRO: AUTENTICAÇÃO</h2><p>Usuário ou Senha de App incorretos.</p>"
     except Exception as e:
-        # Captura erro sem matar o worker
-        return f"<h1>ERRO NO ENVIO:</h1><p>{str(e)}</p>"
+        return "<br>".join(log) + f"<br><br><h2 style='color:red'>ERRO GENÉRICO: {str(e)}</h2>"
 
-# --- ROTA HEALTH ---
-@app.route('/health')
-def health(): return "OK", 200
-
-# --- MODELOS (MANTIDOS) ---
+# --- MODELOS ---
 class Establishment(db.Model):
     __tablename__ = 'establishments'
     id = db.Column(db.Integer, primary_key=True)
@@ -172,7 +203,7 @@ def load_user(user_id): return Admin.query.get(int(user_id))
 
 # --- WORKER ---
 def notification_worker():
-    print("--- Notificações Ativas ---")
+    print("--- Worker Iniciado ---")
     while True:
         try:
             with app.app_context():
@@ -191,12 +222,15 @@ def notification_worker():
         except: pass
         time_module.sleep(60)
 
+@app.route('/health')
+def health(): return "OK", 200
+
 # --- ROTAS DE PAGAMENTO ---
 @app.route('/pagamento')
 @login_required
 def payment():
     if current_user.establishment.is_active: return redirect(url_for('admin_dashboard'))
-    if not stripe.api_key: flash('Erro Config: Stripe Key', 'danger'); return redirect(url_for('login'))
+    if not stripe.api_key: flash('Erro: Chave Stripe não configurada.', 'danger'); return redirect(url_for('login'))
     try:
         domain = request.host_url
         session = stripe.checkout.Session.create(
@@ -223,7 +257,7 @@ def payment_success():
 @app.route('/pagamento/cancelado')
 @login_required
 def payment_cancel():
-    flash('Pagamento pendente.', 'warning')
+    flash('Pagamento cancelado.', 'warning')
     return redirect(url_for('login'))
 
 # --- ROTAS PRINCIPAIS ---
@@ -278,7 +312,7 @@ def create_appointment(url_prefix):
     appt = Appointment(client_name=request.form.get('client_name'), client_phone=request.form.get('client_phone'), client_email=request.form.get('client_email'), service_id=request.form.get('service_id'), appointment_date=d, appointment_time=t, establishment_id=est.id)
     db.session.add(appt); db.session.commit()
     
-    send_email(f"Confirmado: {est.name}", appt.client_email, f"Agendado: {d.strftime('%d/%m')} às {t.strftime('%H:%M')}")
+    send_email(f"Confirmado: {est.name}", appt.client_email, f"Agendado para {d.strftime('%d/%m')} às {t.strftime('%H:%M')}")
     if est.contact_email: send_email(f"Novo Cliente: {appt.client_name}", est.contact_email, f"Novo agendamento: {d.strftime('%d/%m')} às {t.strftime('%H:%M')}")
     flash('Confirmado! Verifique seu e-mail.', 'success')
     return redirect(url_for('establishment_services', url_prefix=url_prefix))
