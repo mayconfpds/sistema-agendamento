@@ -4,4 +4,4 @@ Flask-Login
 Werkzeug
 gunicorn
 stripe
-resend
+requests

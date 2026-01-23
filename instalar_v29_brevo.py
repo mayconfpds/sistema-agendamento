@@ -2,36 +2,37 @@ import os
 import sys
 import subprocess
 
-# --- DEPENDÊNCIAS (Troquei Flask-Mail por Resend) ---
+# --- DEPENDÊNCIAS ---
+# Removemos bibliotecas de email antigas e usamos 'requests' para API direta
 REQUIREMENTS_TXT = r'''Flask
 Flask-SQLAlchemy
 Flask-Login
 Werkzeug
 gunicorn
 stripe
-resend
+requests
 '''
 
 PROCFILE = r'''web: gunicorn app:app'''
 
-# --- APP.PY (Integração Resend API) ---
+# --- APP.PY (Com Brevo API e Lógica de Tempo Corrigida) ---
 APP_PY = r'''import os
-import re
 import threading
 import time as time_module
 import socket
+import requests
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-from werkzeug.utils import secure_filename
 from datetime import datetime, time, timedelta
 from sqlalchemy import inspect
 import stripe
-import resend
+
+socket.setdefaulttimeout(10)
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'chave-v28-api-resend'
+app.config['SECRET_KEY'] = 'chave-v29-brevo-api'
 basedir = os.path.abspath(os.path.dirname(__file__))
 
 # --- BANCO ---
@@ -41,9 +42,11 @@ if database_url and database_url.startswith("postgres://"):
 app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'sqlite:///' + os.path.join(basedir, 'agendamento.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# --- CONFIGURAÇÃO RESEND (API DE EMAIL) ---
-# Substitui o SMTP antigo. Muito mais rápido e não bloqueia no Render.
-resend.api_key = os.environ.get('RESEND_API_KEY')
+# --- CONFIGURAÇÃO BREVO (API) ---
+BREVO_API_KEY = os.environ.get('BREVO_API_KEY')
+# Defina um remetente padrão validado na Brevo
+BREVO_SENDER_EMAIL = os.environ.get('BREVO_SENDER_EMAIL', 'seu_email_login@gmail.com') 
+BREVO_SENDER_NAME = "Agenda Facil"
 
 # --- STRIPE ---
 stripe.api_key = os.environ.get('STRIPE_API_KEY')
@@ -51,11 +54,10 @@ STRIPE_PRICE_ID = os.environ.get('STRIPE_PRICE_ID')
 
 # --- UPLOAD ---
 UPLOAD_FOLDER = os.path.join(basedir, 'static', 'uploads')
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 if not os.path.exists(UPLOAD_FOLDER):
     try: os.makedirs(UPLOAD_FOLDER)
     except OSError: pass
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 db = SQLAlchemy(app)
 login_manager = LoginManager(app)
@@ -66,52 +68,60 @@ login_manager.login_message = 'Faça login.'
 def get_now_brazil():
     return datetime.utcnow() - timedelta(hours=3)
 
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
-# --- ENVIO DE EMAIL VIA API (RESEND) ---
+# --- ENVIO DE EMAIL VIA BREVO API (UNIVERSAL) ---
 def send_email(subject, recipient, body):
-    """Envia e-mail usando a API do Resend (Porta 443 - Não bloqueia)."""
-    
-    if not resend.api_key:
-        print(f"\n⚠️ [EMAIL SIMULADO - FALTAM CHAVES] Para: {recipient}\n")
+    if not BREVO_API_KEY:
+        print(f"\n⚠️ [EMAIL VIRTUAL] Sem chave API. Para: {recipient}")
         return
 
-    # No plano grátis do Resend, o remetente TEM que ser este:
-    sender_email = "onboarding@resend.dev"
-    
-    # Thread para não travar o site enquanto a API responde
-    def _send():
+    def _send_thread():
+        url = "https://api.brevo.com/v3/smtp/email"
+        headers = {
+            "accept": "application/json",
+            "api-key": BREVO_API_KEY,
+            "content-type": "application/json"
+        }
+        # Formata o corpo para HTML básico (quebras de linha)
+        html_body = f"<html><body><p>{body.replace(chr(10), '<br>')}</p></body></html>"
+        
+        payload = {
+            "sender": {"name": BREVO_SENDER_NAME, "email": BREVO_SENDER_EMAIL},
+            "to": [{"email": recipient}],
+            "subject": subject,
+            "htmlContent": html_body
+        }
+        
         try:
-            r = resend.Emails.send({
-                "from": f"Agenda Fácil <{sender_email}>",
-                "to": recipient,
-                "subject": subject,
-                "html": f"<p>{body.replace(chr(10), '<br>')}</p>" # Converte quebra de linha para HTML
-            })
-            print(f"\n✅ [RESEND API SUCESSO] ID: {r.get('id')} | Para: {recipient}\n")
+            response = requests.post(url, json=payload, headers=headers)
+            if response.status_code in [200, 201, 202]:
+                print(f"\n✅ [BREVO SUCESSO] Enviado para {recipient}")
+            else:
+                print(f"\n❌ [BREVO ERRO] {response.status_code} - {response.text}")
         except Exception as e:
-            print(f"\n❌ [RESEND ERRO] {str(e)}\n")
+            print(f"\n❌ [ERRO CONEXÃO BREVO] {e}")
 
-    threading.Thread(target=_send).start()
+    threading.Thread(target=_send_thread).start()
 
-# --- ROTA DE DIAGNÓSTICO (TESTE API) ---
+# --- ROTA DE DIAGNÓSTICO ---
 @app.route('/teste-email')
-def teste_email_api():
-    if not resend.api_key:
-        return "ERRO: Variável RESEND_API_KEY não configurada no Render."
+def teste_email_brevo():
+    if not BREVO_API_KEY: return "ERRO: Variável BREVO_API_KEY não configurada no Render."
     
+    # Envia para o próprio remetente para testar
+    dest = BREVO_SENDER_EMAIL 
+    url = "https://api.brevo.com/v3/smtp/email"
+    headers = {"api-key": BREVO_API_KEY, "content-type": "application/json"}
+    payload = {
+        "sender": {"name": "Teste Sistema", "email": BREVO_SENDER_EMAIL},
+        "to": [{"email": dest}],
+        "subject": "Teste de Conexão V29",
+        "htmlContent": "<h1>Funciona!</h1><p>A API da Brevo está conectada.</p>"
+    }
     try:
-        # Envio síncrono para ver o resultado na tela
-        r = resend.Emails.send({
-            "from": "onboarding@resend.dev",
-            "to": "delivered@resend.dev", # Email de teste do próprio Resend (sempre funciona)
-            "subject": "Teste de Conexão V28",
-            "html": "<strong>A API do Resend está conectada com sucesso!</strong>"
-        })
-        return f"<h1>SUCESSO!</h1><p>ID do envio: {r.get('id')}</p><p>A conexão com a API funcionou.</p>"
+        r = requests.post(url, json=payload, headers=headers)
+        return f"Status: {r.status_code} <br> Resposta: {r.text}"
     except Exception as e:
-        return f"<h1>ERRO API:</h1><p>{str(e)}</p>"
+        return f"Erro Python: {str(e)}"
 
 @app.route('/health')
 def health(): return "OK", 200
@@ -175,33 +185,54 @@ class Appointment(db.Model):
 @login_manager.user_loader
 def load_user(user_id): return Admin.query.get(int(user_id))
 
-# --- WORKER ---
+# --- WORKER DE NOTIFICAÇÕES (CORRIGIDO) ---
 def notification_worker():
-    print("--- Worker Iniciado ---")
+    print("--- Robô de Notificações Iniciado (Loop Infinito) ---")
     while True:
         try:
             with app.app_context():
                 inspector = inspect(db.engine)
-                if not inspector.has_table("appointments"): time_module.sleep(5); continue
+                if not inspector.has_table("appointments"): 
+                    time_module.sleep(5)
+                    continue
+                
+                # CORREÇÃO: Pega TODOS os não notificados, independente da data
+                # Isso resolve o problema de agendamentos próximos à meia-noite
+                upcoming = Appointment.query.filter(Appointment.notified == False).all()
+                
                 now = get_now_brazil()
-                upcoming = Appointment.query.filter(Appointment.notified == False, Appointment.appointment_date == now.date()).all()
+                
                 for appt in upcoming:
                     appt_dt = datetime.combine(appt.appointment_date, appt.appointment_time)
-                    if timedelta(minutes=55) <= (appt_dt - now) <= timedelta(minutes=65):
+                    time_diff = appt_dt - now
+                    minutes_diff = time_diff.total_seconds() / 60
+                    
+                    # Se faltar entre 50 e 70 minutos (Janela de segurança)
+                    if 50 <= minutes_diff <= 70:
+                        print(f"⏰ Hora do Lembrete! Cliente: {appt.client_name} (Faltam {int(minutes_diff)} min)")
+                        
                         subj = f"Lembrete: {appt.establishment.name}"
-                        body = f"Olá {appt.client_name}, seu horário é hoje às {appt.appointment_time.strftime('%H:%M')}."
+                        body = f"Olá {appt.client_name},\n\nSeu horário é hoje às {appt.appointment_time.strftime('%H:%M')}.\n\nNão se atrase!"
+                        
                         send_email(subj, appt.client_email, body)
+                        
+                        # Também avisa o profissional se tiver email
+                        if appt.establishment.contact_email:
+                             send_email("Lembrete Profissional", appt.establishment.contact_email, f"Cliente {appt.client_name} chega em 1 hora.")
+
                         appt.notified = True
                         db.session.commit()
-        except: pass
-        time_module.sleep(60)
+        except Exception as e:
+            print(f"Erro no Worker: {e}")
+        
+        time_module.sleep(60) # Dorme 60s
 
 # --- ROTAS DE PAGAMENTO ---
 @app.route('/pagamento')
 @login_required
 def payment():
     if current_user.establishment.is_active: return redirect(url_for('admin_dashboard'))
-    if not stripe.api_key: flash('Erro: Chave Stripe não configurada.', 'danger'); return redirect(url_for('login'))
+    if not stripe.api_key: flash('Erro Config: Chave Stripe ausente.', 'danger'); return redirect(url_for('login'))
     try:
         domain = request.host_url
         session = stripe.checkout.Session.create(
@@ -253,6 +284,7 @@ def register_business():
         adm = Admin(username=username, establishment_id=est.id)
         adm.set_password(request.form.get('password'))
         db.session.add(adm); db.session.commit()
+        
         login_user(adm)
         if is_master: return redirect(url_for('admin_dashboard'))
         return redirect(url_for('payment'))
@@ -286,7 +318,7 @@ def create_appointment(url_prefix):
     send_email(f"Confirmado: {est.name}", appt.client_email, f"Agendado para {d.strftime('%d/%m')} às {t.strftime('%H:%M')}")
     if est.contact_email: send_email(f"Novo Cliente: {appt.client_name}", est.contact_email, f"Novo agendamento: {d.strftime('%d/%m')} às {t.strftime('%H:%M')}")
     
-    flash('Confirmado! Verifique seu e-mail.', 'success')
+    flash('Confirmado! Se não receber o e-mail, verifique o spam.', 'success')
     return redirect(url_for('establishment_services', url_prefix=url_prefix))
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -401,9 +433,7 @@ if __name__ == '__main__':
     app.run(debug=True)
 '''
 
-# --- TEMPLATES IGUAIS AOS ANTERIORES (OMITIDOS PARA ECONOMIZAR ESPAÇO) ---
-# O script abaixo vai garantir que eles sejam criados corretamente
-# ...
+# --- TEMPLATES MANTIDOS ---
 INDEX_HTML = r'''{% extends 'layout.html' %}
 {% block title %}Agenda Fácil - A Plataforma do Profissional{% endblock %}
 {% block content %}
@@ -755,6 +785,7 @@ def atualizar_sistema():
     if not os.path.exists('templates'): os.makedirs('templates')
     uploads_path = os.path.join('static', 'uploads')
     if not os.path.exists(uploads_path): os.makedirs(uploads_path)
+    
     if os.path.exists('agendamento.db'):
         try: os.remove('agendamento.db')
         except: pass
@@ -785,8 +816,8 @@ def atualizar_sistema():
     except Exception as e:
         print(f"[ERRO] Instale manualmente: pip install -r requirements.txt")
 
-    print("\n[SUCESSO] Sistema V28 Resend instalado!")
-    print("Agora adicione a variável RESEND_API_KEY no Render e remova as do Gmail.")
+    print("\n[SUCESSO] Sistema V29 (Brevo API) instalado!")
+    print("Agora configure a variável BREVO_API_KEY no Render e remova as do Gmail.")
     print("Execute: python app.py")
 
 if __name__ == "__main__":
