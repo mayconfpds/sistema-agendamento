@@ -1,0 +1,28 @@
+{% extends 'layout.html' %}
+{% block title %}Sucesso{% endblock %}
+{% block content %}
+<div class="container py-5 text-center">
+    <div class="card shadow-lg border-0 rounded-4 p-5 max-w-lg mx-auto">
+        <div class="mb-4 text-success display-1"><i class="bi bi-check-circle-fill"></i></div>
+        <h2 class="fw-bold text-gray-800">Agendamento Confirmado!</h2>
+        <p class="text-muted mb-4">Enviamos um e-mail de confirmação para você.</p>
+        
+        <div class="bg-light p-3 rounded-3 mb-4 text-start">
+            <p class="mb-1"><strong>Serviço:</strong> {{ appointment.service_info.name }}</p>
+            <p class="mb-1"><strong>Data:</strong> {{ appointment.appointment_date.strftime('%d/%m/%Y') }}</p>
+            <p class="mb-0"><strong>Horário:</strong> {{ appointment.appointment_time.strftime('%H:%M') }}</p>
+        </div>
+
+        {% if zap_link != "#" %}
+        <a href="{{ zap_link }}" target="_blank" class="btn btn-success w-100 py-3 fw-bold rounded-pill mb-2">
+            <i class="bi bi-whatsapp"></i> Confirmar no WhatsApp do Profissional
+        </a>
+        <small class="text-muted d-block">Clique acima para enviar uma mensagem direta.</small>
+        {% endif %}
+        
+        <div class="mt-4">
+            <a href="{{ url_for('establishment_services', url_prefix=appointment.establishment.url_prefix) }}" class="text-decoration-none">Voltar ao Início</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

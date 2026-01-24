@@ -7,6 +7,7 @@ from flask import Flask, render_template, request, redirect, url_for, flash, jso
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.utils import secure_filename
 from datetime import datetime, time, timedelta
 from sqlalchemy import inspect
 import stripe
@@ -15,7 +16,7 @@ import stripe
 socket.setdefaulttimeout(15)
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'chave-v32-brevo-notification-fix'
+app.config['SECRET_KEY'] = 'chave-v33-final-master'
 basedir = os.path.abspath(os.path.dirname(__file__))
 
 # --- BANCO ---
@@ -35,10 +36,9 @@ BREVO_SENDER_NAME = "Agenda Facil"
 stripe.api_key = os.environ.get('STRIPE_API_KEY')
 STRIPE_PRICE_ID = os.environ.get('STRIPE_PRICE_ID')
 
-# --- UPLOAD (CORREÇÃO) ---
+# --- UPLOAD ---
 UPLOAD_FOLDER = os.path.join(basedir, 'static', 'uploads')
-# A linha abaixo é a que estava faltando:
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'} # Correção V33
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 if not os.path.exists(UPLOAD_FOLDER):
@@ -52,7 +52,6 @@ login_manager.login_message = 'Faça login.'
 
 # --- AUXILIARES ---
 def get_now_brazil():
-    # Retorna hora atual -3h (Brasil)
     return datetime.utcnow() - timedelta(hours=3)
 
 def allowed_file(filename):
@@ -159,64 +158,41 @@ class Appointment(db.Model):
 @login_manager.user_loader
 def load_user(user_id): return Admin.query.get(int(user_id))
 
-# --- WORKER DE NOTIFICAÇÕES (ATIVO NO GUNICORN) ---
+# --- WORKER DE NOTIFICAÇÕES (1H ANTES - API HTTP) ---
 def notification_worker():
-    print(">>> ROBÔ DE NOTIFICAÇÃO LIGADO! Verificando agenda... <<<")
+    print("--- Robô de Notificações Iniciado (Fuso BR) ---")
     while True:
         try:
-            # Cria um contexto de aplicação manual para o thread
             with app.app_context():
-                # Garante que as tabelas existem antes de consultar
                 inspector = inspect(db.engine)
                 if not inspector.has_table("appointments"): 
-                    print("... Aguardando criação do banco ...")
-                    time_module.sleep(10)
-                    continue
+                    time_module.sleep(5); continue
                 
-                # Busca agendamentos pendentes de notificação
                 upcoming = Appointment.query.filter(Appointment.notified == False).all()
                 now = get_now_brazil()
                 
-                # print(f"--- Ciclo do Robô: {now.strftime('%H:%M:%S')} | Pendentes: {len(upcoming)} ---")
-
                 for appt in upcoming:
                     appt_dt = datetime.combine(appt.appointment_date, appt.appointment_time)
                     time_diff = appt_dt - now
-                    minutes = time_diff.total_seconds() / 60
+                    minutes_diff = time_diff.total_seconds() / 60
                     
-                    # Janela: Entre 50 e 70 minutos antes
-                    if 50 <= minutes <= 70:
-                        print(f"⏰ DISPARANDO para {appt.client_name} (Faltam {int(minutes)} min)")
+                    if 50 <= minutes_diff <= 70:
+                        print(f"⏰ Enviando lembrete para {appt.client_name}")
                         
                         subj = f"Lembrete: {appt.establishment.name}"
-                        body = f"Olá {appt.client_name},\n\nSeu horário é hoje às {appt.appointment_time.strftime('%H:%M')}."
+                        body = f"Olá {appt.client_name},\n\nEste é um lembrete do seu agendamento hoje às {appt.appointment_time.strftime('%H:%M')}."
                         
                         send_email(subj, appt.client_email, body)
                         
                         if appt.establishment.contact_email:
-                             send_email("Alerta Profissional", appt.establishment.contact_email, f"Cliente {appt.client_name} em 1h.")
+                             send_email("Alerta de Agenda", appt.establishment.contact_email, f"Cliente {appt.client_name} agendado para daqui a 1 hora.")
                         
                         appt.notified = True
                         db.session.commit()
         except Exception as e:
-            print(f"Erro Crítico no Robô: {e}")
+            print(f"Erro Worker: {e}")
         
-        time_module.sleep(60) # Verifica a cada 1 minuto
-
-# --- INICIALIZAÇÃO CORRETA PARA RENDER/GUNICORN ---
-# Executa a criação do banco e inicia o thread DO LADO DE FORA do if main
-# para garantir que o Gunicorn execute.
-with app.app_context():
-    try:
-        db.create_all()
-        # Inicia o robô apenas se não estiver rodando o script de instalação (evita duplicidade local)
-        if not os.environ.get('WERKZEUG_RUN_MAIN') == 'true': 
-             # Daemon=True faz o robô morrer quando o site morrer
-             t = threading.Thread(target=notification_worker, daemon=True)
-             t.start()
-    except Exception as e:
-        print(f"Erro na inicialização: {e}")
-
+        time_module.sleep(60)
 
 # --- ROTAS DE PAGAMENTO ---
 @app.route('/pagamento')
@@ -230,13 +206,12 @@ def payment():
             payment_method_types=['card'],
             line_items=[{'price': STRIPE_PRICE_ID, 'quantity': 1}],
             mode='subscription',
-            allow_promotion_codes=True, # <--- ADICIONE ESTA LINHA AQUI
+            allow_promotion_codes=True, # Correção V33: Cupons Ativados
             success_url=domain + 'pagamento/sucesso',
             cancel_url=domain + 'pagamento/cancelado',
             customer_email=current_user.establishment.contact_email,
         )
-
-        return redirect(session.url, code=303)
+        return redirect(checkout_session.url, code=303)
     except Exception as e:
         flash(f'Erro Stripe: {str(e)}', 'danger')
         return render_template('login.html')
@@ -244,7 +219,8 @@ def payment():
 @app.route('/pagamento/sucesso')
 @login_required
 def payment_success():
-    current_user.establishment.is_active = True
+    est = current_user.establishment
+    est.is_active = True
     db.session.commit()
     flash('Assinatura Ativa!', 'success')
     return redirect(url_for('admin_dashboard'))
@@ -310,12 +286,13 @@ def create_appointment(url_prefix):
     appt = Appointment(client_name=request.form.get('client_name'), client_phone=request.form.get('client_phone'), client_email=request.form.get('client_email'), service_id=request.form.get('service_id'), appointment_date=d, appointment_time=t, establishment_id=est.id)
     db.session.add(appt); db.session.commit()
     
-    # Envia email de confirmação
     send_email(f"Confirmado: {est.name}", appt.client_email, f"Agendado para {d.strftime('%d/%m')} às {t.strftime('%H:%M')}")
     if est.contact_email: send_email(f"Novo Cliente: {appt.client_name}", est.contact_email, f"Novo agendamento: {d.strftime('%d/%m')} às {t.strftime('%H:%M')}")
     
-    flash('Confirmado! Verifique seu e-mail.', 'success')
-    return redirect(url_for('establishment_services', url_prefix=url_prefix))
+    zap_msg = f"Olá, confirmo agendamento: {d.strftime('%d/%m')} às {t.strftime('%H:%M')}."
+    zap_link = f"https://wa.me/55{est.contact_phone}?text={zap_msg}" if est.contact_phone else "#"
+    
+    return render_template('success_appointment.html', appointment=appt, zap_link=zap_link)
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -424,5 +401,8 @@ def get_available_times():
     return jsonify(avail)
 
 if __name__ == '__main__':
-    # Local only (Render uses gunicorn)
+    with app.app_context():
+        db.create_all()
+        if not os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
+            threading.Thread(target=notification_worker, daemon=True).start()
     app.run(debug=True)

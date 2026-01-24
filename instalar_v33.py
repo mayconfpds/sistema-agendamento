@@ -14,7 +14,7 @@ requests
 
 PROCFILE = r'''web: gunicorn app:app'''
 
-# --- APP.PY (Com Robô de Notificação Corrigido para Gunicorn) ---
+# --- APP.PY COMPLETO ---
 APP_PY = r'''import os
 import threading
 import time as time_module
@@ -24,6 +24,7 @@ from flask import Flask, render_template, request, redirect, url_for, flash, jso
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.utils import secure_filename
 from datetime import datetime, time, timedelta
 from sqlalchemy import inspect
 import stripe
@@ -32,7 +33,7 @@ import stripe
 socket.setdefaulttimeout(15)
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'chave-v32-brevo-notification-fix'
+app.config['SECRET_KEY'] = 'chave-v33-final-master'
 basedir = os.path.abspath(os.path.dirname(__file__))
 
 # --- BANCO ---
@@ -54,10 +55,12 @@ STRIPE_PRICE_ID = os.environ.get('STRIPE_PRICE_ID')
 
 # --- UPLOAD ---
 UPLOAD_FOLDER = os.path.join(basedir, 'static', 'uploads')
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'} # Correção V33
+
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 if not os.path.exists(UPLOAD_FOLDER):
     try: os.makedirs(UPLOAD_FOLDER)
     except OSError: pass
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 db = SQLAlchemy(app)
 login_manager = LoginManager(app)
@@ -66,7 +69,6 @@ login_manager.login_message = 'Faça login.'
 
 # --- AUXILIARES ---
 def get_now_brazil():
-    # Retorna hora atual -3h (Brasil)
     return datetime.utcnow() - timedelta(hours=3)
 
 def allowed_file(filename):
@@ -173,64 +175,41 @@ class Appointment(db.Model):
 @login_manager.user_loader
 def load_user(user_id): return Admin.query.get(int(user_id))
 
-# --- WORKER DE NOTIFICAÇÕES (ATIVO NO GUNICORN) ---
+# --- WORKER DE NOTIFICAÇÕES (1H ANTES - API HTTP) ---
 def notification_worker():
-    print(">>> ROBÔ DE NOTIFICAÇÃO LIGADO! Verificando agenda... <<<")
+    print("--- Robô de Notificações Iniciado (Fuso BR) ---")
     while True:
         try:
-            # Cria um contexto de aplicação manual para o thread
             with app.app_context():
-                # Garante que as tabelas existem antes de consultar
                 inspector = inspect(db.engine)
                 if not inspector.has_table("appointments"): 
-                    print("... Aguardando criação do banco ...")
-                    time_module.sleep(10)
-                    continue
+                    time_module.sleep(5); continue
                 
-                # Busca agendamentos pendentes de notificação
                 upcoming = Appointment.query.filter(Appointment.notified == False).all()
                 now = get_now_brazil()
                 
-                # print(f"--- Ciclo do Robô: {now.strftime('%H:%M:%S')} | Pendentes: {len(upcoming)} ---")
-
                 for appt in upcoming:
                     appt_dt = datetime.combine(appt.appointment_date, appt.appointment_time)
                     time_diff = appt_dt - now
-                    minutes = time_diff.total_seconds() / 60
+                    minutes_diff = time_diff.total_seconds() / 60
                     
-                    # Janela: Entre 50 e 70 minutos antes
-                    if 50 <= minutes <= 70:
-                        print(f"⏰ DISPARANDO para {appt.client_name} (Faltam {int(minutes)} min)")
+                    if 50 <= minutes_diff <= 70:
+                        print(f"⏰ Enviando lembrete para {appt.client_name}")
                         
                         subj = f"Lembrete: {appt.establishment.name}"
-                        body = f"Olá {appt.client_name},\n\nSeu horário é hoje às {appt.appointment_time.strftime('%H:%M')}."
+                        body = f"Olá {appt.client_name},\n\nEste é um lembrete do seu agendamento hoje às {appt.appointment_time.strftime('%H:%M')}."
                         
                         send_email(subj, appt.client_email, body)
                         
                         if appt.establishment.contact_email:
-                             send_email("Alerta Profissional", appt.establishment.contact_email, f"Cliente {appt.client_name} em 1h.")
+                             send_email("Alerta de Agenda", appt.establishment.contact_email, f"Cliente {appt.client_name} agendado para daqui a 1 hora.")
                         
                         appt.notified = True
                         db.session.commit()
         except Exception as e:
-            print(f"Erro Crítico no Robô: {e}")
+            print(f"Erro Worker: {e}")
         
-        time_module.sleep(60) # Verifica a cada 1 minuto
-
-# --- INICIALIZAÇÃO CORRETA PARA RENDER/GUNICORN ---
-# Executa a criação do banco e inicia o thread DO LADO DE FORA do if main
-# para garantir que o Gunicorn execute.
-with app.app_context():
-    try:
-        db.create_all()
-        # Inicia o robô apenas se não estiver rodando o script de instalação (evita duplicidade local)
-        if not os.environ.get('WERKZEUG_RUN_MAIN') == 'true': 
-             # Daemon=True faz o robô morrer quando o site morrer
-             t = threading.Thread(target=notification_worker, daemon=True)
-             t.start()
-    except Exception as e:
-        print(f"Erro na inicialização: {e}")
-
+        time_module.sleep(60)
 
 # --- ROTAS DE PAGAMENTO ---
 @app.route('/pagamento')
@@ -240,15 +219,16 @@ def payment():
     if not stripe.api_key: flash('Erro Config: Chave Stripe ausente.', 'danger'); return redirect(url_for('login'))
     try:
         domain = request.host_url
-        session = stripe.checkout.Session.create(
+        checkout_session = stripe.checkout.Session.create(
             payment_method_types=['card'],
             line_items=[{'price': STRIPE_PRICE_ID, 'quantity': 1}],
             mode='subscription',
+            allow_promotion_codes=True, # Correção V33: Cupons Ativados
             success_url=domain + 'pagamento/sucesso',
             cancel_url=domain + 'pagamento/cancelado',
             customer_email=current_user.establishment.contact_email,
         )
-        return redirect(session.url, code=303)
+        return redirect(checkout_session.url, code=303)
     except Exception as e:
         flash(f'Erro Stripe: {str(e)}', 'danger')
         return render_template('login.html')
@@ -256,7 +236,8 @@ def payment():
 @app.route('/pagamento/sucesso')
 @login_required
 def payment_success():
-    current_user.establishment.is_active = True
+    est = current_user.establishment
+    est.is_active = True
     db.session.commit()
     flash('Assinatura Ativa!', 'success')
     return redirect(url_for('admin_dashboard'))
@@ -322,12 +303,13 @@ def create_appointment(url_prefix):
     appt = Appointment(client_name=request.form.get('client_name'), client_phone=request.form.get('client_phone'), client_email=request.form.get('client_email'), service_id=request.form.get('service_id'), appointment_date=d, appointment_time=t, establishment_id=est.id)
     db.session.add(appt); db.session.commit()
     
-    # Envia email de confirmação
     send_email(f"Confirmado: {est.name}", appt.client_email, f"Agendado para {d.strftime('%d/%m')} às {t.strftime('%H:%M')}")
     if est.contact_email: send_email(f"Novo Cliente: {appt.client_name}", est.contact_email, f"Novo agendamento: {d.strftime('%d/%m')} às {t.strftime('%H:%M')}")
     
-    flash('Confirmado! Verifique seu e-mail.', 'success')
-    return redirect(url_for('establishment_services', url_prefix=url_prefix))
+    zap_msg = f"Olá, confirmo agendamento: {d.strftime('%d/%m')} às {t.strftime('%H:%M')}."
+    zap_link = f"https://wa.me/55{est.contact_phone}?text={zap_msg}" if est.contact_phone else "#"
+    
+    return render_template('success_appointment.html', appointment=appt, zap_link=zap_link)
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -436,11 +418,15 @@ def get_available_times():
     return jsonify(avail)
 
 if __name__ == '__main__':
-    # Local only (Render uses gunicorn)
+    with app.app_context():
+        db.create_all()
+        if not os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
+            threading.Thread(target=notification_worker, daemon=True).start()
     app.run(debug=True)
 '''
 
-# --- INDEX HTML (COM PREÇO NA COPY) ---
+# --- TEMPLATES (Com Preços e Copy Ajustada) ---
+
 INDEX_HTML = r'''{% extends 'layout.html' %}
 {% block title %}Agenda Fácil - A Plataforma do Profissional{% endblock %}
 {% block content %}
@@ -480,13 +466,8 @@ INDEX_HTML = r'''{% extends 'layout.html' %}
                              alt="Painel Administrativo" 
                              class="w-full h-full object-cover transition duration-500 group-hover:scale-105"
                              onerror="this.onerror=null; this.src='https://placehold.co/1280x800/E2E8F0/475569?text=Insira+painel.png+na+pasta+static';">
-                        
-                        <!-- Overlay de reflexo -->
-                        <div class="absolute inset-0 bg-gradient-to-tr from-white/10 to-transparent pointer-events-none"></div>
                     </div>
                 </div>
-                <!-- Sombra decorativa -->
-                <div class="absolute -bottom-10 -right-10 w-72 h-72 bg-blue-400/20 rounded-full blur-3xl -z-10"></div>
             </div>
         </div>
     </section>
@@ -521,41 +502,23 @@ INDEX_HTML = r'''{% extends 'layout.html' %}
         <div class="max-w-7xl mx-auto px-6">
             <div class="text-center mb-16">
                 <h2 class="text-3xl lg:text-4xl font-bold mb-4">Tudo o que você precisa para crescer</h2>
-                <p class="text-gray-400">Funcionalidades pensadas para simplificar sua rotina.</p>
             </div>
             
             <div class="grid md:grid-cols-3 gap-8">
-                <!-- Card 1 -->
                 <div class="bg-gray-800 p-8 rounded-2xl border border-gray-700 hover:border-blue-500 transition group">
-                    <div class="w-12 h-12 bg-blue-500/20 rounded-lg flex items-center justify-center mb-6 text-blue-400 group-hover:bg-blue-500 group-hover:text-white transition">
-                        <i class="bi bi-link-45deg text-2xl"></i>
-                    </div>
+                    <div class="w-12 h-12 bg-blue-500/20 rounded-lg flex items-center justify-center mb-6 text-blue-400 group-hover:bg-blue-500 group-hover:text-white transition"><i class="bi bi-link-45deg text-2xl"></i></div>
                     <h3 class="text-xl font-bold mb-3">Link Personalizado</h3>
-                    <p class="text-gray-400 text-sm leading-relaxed">
-                        Pare de perguntar "qual horário você quer?". Envie seu link (agendafacil/b/voce) e deixe o cliente escolher.
-                    </p>
+                    <p class="text-gray-400 text-sm leading-relaxed">Pare de perguntar "qual horário você quer?". Envie seu link (agendafacil/b/voce) e deixe o cliente escolher.</p>
                 </div>
-
-                <!-- Card 2 -->
                 <div class="bg-gray-800 p-8 rounded-2xl border border-gray-700 hover:border-green-500 transition group">
-                    <div class="w-12 h-12 bg-green-500/20 rounded-lg flex items-center justify-center mb-6 text-green-400 group-hover:bg-green-500 group-hover:text-white transition">
-                        <i class="bi bi-clock-history text-2xl"></i>
-                    </div>
+                    <div class="w-12 h-12 bg-green-500/20 rounded-lg flex items-center justify-center mb-6 text-green-400 group-hover:bg-green-500 group-hover:text-white transition"><i class="bi bi-clock-history text-2xl"></i></div>
                     <h3 class="text-xl font-bold mb-3">Agenda 24 horas</h3>
-                    <p class="text-gray-400 text-sm leading-relaxed">
-                        Seu negócio aberto mesmo quando você está dormindo. Preencha horários vazios automaticamente.
-                    </p>
+                    <p class="text-gray-400 text-sm leading-relaxed">Seu negócio aberto mesmo quando você está dormindo. Preencha horários vazios automaticamente.</p>
                 </div>
-
-                <!-- Card 3 -->
                 <div class="bg-gray-800 p-8 rounded-2xl border border-gray-700 hover:border-purple-500 transition group">
-                    <div class="w-12 h-12 bg-purple-500/20 rounded-lg flex items-center justify-center mb-6 text-purple-400 group-hover:bg-purple-500 group-hover:text-white transition">
-                        <i class="bi bi-calendar-check text-2xl"></i>
-                    </div>
+                    <div class="w-12 h-12 bg-purple-500/20 rounded-lg flex items-center justify-center mb-6 text-purple-400 group-hover:bg-purple-500 group-hover:text-white transition"><i class="bi bi-calendar-check text-2xl"></i></div>
                     <h3 class="text-xl font-bold mb-3">Controle Total</h3>
-                    <p class="text-gray-400 text-sm leading-relaxed">
-                        Defina horários de almoço, dias de folga e duração de cada serviço. Você no comando da sua agenda.
-                    </p>
+                    <p class="text-gray-400 text-sm leading-relaxed">Defina horários de almoço, dias de folga e duração de cada serviço. Você no comando da sua agenda.</p>
                 </div>
             </div>
         </div>
@@ -575,7 +538,6 @@ INDEX_HTML = r'''{% extends 'layout.html' %}
 {% endblock %}
 '''
 
-# --- OUTROS TEMPLATES IGUAIS V31 ---
 LAYOUT_HTML = r'''<!DOCTYPE html>
 <html lang="pt-br">
 <head>
@@ -592,7 +554,6 @@ LAYOUT_HTML = r'''<!DOCTYPE html>
     <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm sticky-top">
         <div class="container">
             <a class="navbar-brand fw-bold" href="{{ url_for('index') }}"><i class="bi bi-calendar-check text-primary"></i> Agenda Fácil</a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav"><span class="navbar-toggler-icon"></span></button>
             <div class="collapse navbar-collapse" id="nav">
                 <ul class="navbar-nav ms-auto align-items-center">
                     {% if current_user.is_authenticated %}
@@ -612,7 +573,11 @@ LAYOUT_HTML = r'''<!DOCTYPE html>
         {% endwith %}
         {% block content %}{% endblock %}
     </main>
-    <footer class="bg-white border-top pt-4 pb-3 mt-auto"><div class="container text-center"><p class="text-muted small mb-0">© 2025 Agenda Fácil.</p></div></footer>
+    <footer class="bg-white border-top pt-8 pb-8 mt-auto">
+        <div class="container text-center">
+            <p class="text-gray-500 text-sm mb-2">© 2025 Agenda Fácil SaaS. Todos os direitos reservados.</p>
+        </div>
+    </footer>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     {% block scripts %}{% endblock %}
 </body>
@@ -853,6 +818,37 @@ document.getElementById('date').addEventListener('change', async (e) => {
 {% endblock %}
 '''
 
+# --- NOVA TELA DE SUCESSO (COM BOTÃO ZAP) ---
+SUCCESS_APPOINTMENT_HTML = r'''{% extends 'layout.html' %}
+{% block title %}Sucesso{% endblock %}
+{% block content %}
+<div class="container py-5 text-center">
+    <div class="card shadow-lg border-0 rounded-4 p-5 max-w-lg mx-auto">
+        <div class="mb-4 text-success display-1"><i class="bi bi-check-circle-fill"></i></div>
+        <h2 class="fw-bold text-gray-800">Agendamento Confirmado!</h2>
+        <p class="text-muted mb-4">Enviamos um e-mail de confirmação para você.</p>
+        
+        <div class="bg-light p-3 rounded-3 mb-4 text-start">
+            <p class="mb-1"><strong>Serviço:</strong> {{ appointment.service_info.name }}</p>
+            <p class="mb-1"><strong>Data:</strong> {{ appointment.appointment_date.strftime('%d/%m/%Y') }}</p>
+            <p class="mb-0"><strong>Horário:</strong> {{ appointment.appointment_time.strftime('%H:%M') }}</p>
+        </div>
+
+        {% if zap_link != "#" %}
+        <a href="{{ zap_link }}" target="_blank" class="btn btn-success w-100 py-3 fw-bold rounded-pill mb-2">
+            <i class="bi bi-whatsapp"></i> Confirmar no WhatsApp do Profissional
+        </a>
+        <small class="text-muted d-block">Clique acima para enviar uma mensagem direta.</small>
+        {% endif %}
+        
+        <div class="mt-4">
+            <a href="{{ url_for('establishment_services', url_prefix=appointment.establishment.url_prefix) }}" class="text-decoration-none">Voltar ao Início</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+'''
+
 ERROR_INACTIVE_HTML = r'''{% extends 'layout.html' %}
 {% block content %}
 <div class="container py-5 text-center">
@@ -869,6 +865,7 @@ def atualizar_sistema():
     if not os.path.exists('templates'): os.makedirs('templates')
     uploads_path = os.path.join('static', 'uploads')
     if not os.path.exists(uploads_path): os.makedirs(uploads_path)
+    
     if os.path.exists('agendamento.db'):
         try: os.remove('agendamento.db')
         except: pass
@@ -884,6 +881,7 @@ def atualizar_sistema():
         'templates/admin.html': ADMIN_HTML,
         'templates/lista_servicos.html': LISTA_SERVICOS_HTML,
         'templates/agendamento.html': AGENDAMENTO_HTML,
+        'templates/success_appointment.html': SUCCESS_APPOINTMENT_HTML,
         'templates/error_inactive.html': ERROR_INACTIVE_HTML
     }
 
@@ -899,7 +897,7 @@ def atualizar_sistema():
     except Exception as e:
         print(f"[ERRO] Instale manualmente: pip install -r requirements.txt")
 
-    print("\n[SUCESSO] Sistema V32 instalado!")
+    print("\n[SUCESSO] Sistema V33 Final instalado!")
     print("Execute: python app.py")
 
 if __name__ == "__main__":
