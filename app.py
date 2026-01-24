@@ -11,10 +11,11 @@ from datetime import datetime, time, timedelta
 from sqlalchemy import inspect
 import stripe
 
-socket.setdefaulttimeout(10)
+# Timeout de segurança
+socket.setdefaulttimeout(15)
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'chave-v31-final-gold'
+app.config['SECRET_KEY'] = 'chave-v32-brevo-notification-fix'
 basedir = os.path.abspath(os.path.dirname(__file__))
 
 # --- BANCO ---
@@ -48,7 +49,11 @@ login_manager.login_message = 'Faça login.'
 
 # --- AUXILIARES ---
 def get_now_brazil():
+    # Retorna hora atual -3h (Brasil)
     return datetime.utcnow() - timedelta(hours=3)
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 # --- ENVIO DE EMAIL VIA BREVO API ---
 def send_email(subject, recipient, body):
@@ -86,34 +91,8 @@ def send_email(subject, recipient, body):
 # --- ROTA DE DIAGNÓSTICO ---
 @app.route('/teste-email')
 def teste_email_brevo():
-    key_status = "NÃO ENCONTRADA"
-    key_preview = "N/A"
-    warning = ""
-    
-    if BREVO_API_KEY:
-        key_status = "ENCONTRADA"
-        key_preview = f"{BREVO_API_KEY[:5]}... ({len(BREVO_API_KEY)} caracteres)"
-        if not BREVO_API_KEY.startswith('xkeysib-'):
-             warning = "<p style='color:red; font-weight:bold;'>⚠️ ALERTA: Chave parece ser SMTP (xsmt), não API (xkeysib).</p>"
-    
-    html_debug = f"<h3>Diagnóstico</h3><p>Chave: {key_status} ({key_preview})</p>{warning}<p>Remetente: {BREVO_SENDER_EMAIL}</p><hr>"
-    
-    if not BREVO_API_KEY: return html_debug + "ERRO: Configure BREVO_API_KEY."
-    
-    url = "https://api.brevo.com/v3/smtp/email"
-    headers = {"api-key": BREVO_API_KEY, "content-type": "application/json"}
-    payload = {
-        "sender": {"name": "Teste Sistema", "email": BREVO_SENDER_EMAIL},
-        "to": [{"email": BREVO_SENDER_EMAIL}],
-        "subject": "Teste de Conexão V31",
-        "htmlContent": "<h1>Funciona!</h1><p>API Brevo conectada.</p>"
-    }
-    
-    try:
-        r = requests.post(url, json=payload, headers=headers)
-        return html_debug + f"Status API: {r.status_code} <br> Resposta: {r.text}"
-    except Exception as e:
-        return html_debug + f"Erro Python: {str(e)}"
+    status_chave = "OK" if BREVO_API_KEY else "FALTANDO"
+    return f"Status Chave: {status_chave}<br>Remetente: {BREVO_SENDER_EMAIL}<br>Tente agendar algo para testar o worker."
 
 @app.route('/health')
 def health(): return "OK", 200
@@ -177,35 +156,64 @@ class Appointment(db.Model):
 @login_manager.user_loader
 def load_user(user_id): return Admin.query.get(int(user_id))
 
-# --- WORKER DE NOTIFICAÇÕES ---
+# --- WORKER DE NOTIFICAÇÕES (ATIVO NO GUNICORN) ---
 def notification_worker():
-    print("--- Robô de Notificações Iniciado ---")
+    print(">>> ROBÔ DE NOTIFICAÇÃO LIGADO! Verificando agenda... <<<")
     while True:
         try:
+            # Cria um contexto de aplicação manual para o thread
             with app.app_context():
+                # Garante que as tabelas existem antes de consultar
                 inspector = inspect(db.engine)
                 if not inspector.has_table("appointments"): 
-                    time_module.sleep(5); continue
+                    print("... Aguardando criação do banco ...")
+                    time_module.sleep(10)
+                    continue
                 
+                # Busca agendamentos pendentes de notificação
                 upcoming = Appointment.query.filter(Appointment.notified == False).all()
                 now = get_now_brazil()
                 
+                # print(f"--- Ciclo do Robô: {now.strftime('%H:%M:%S')} | Pendentes: {len(upcoming)} ---")
+
                 for appt in upcoming:
                     appt_dt = datetime.combine(appt.appointment_date, appt.appointment_time)
                     time_diff = appt_dt - now
-                    minutes_diff = time_diff.total_seconds() / 60
+                    minutes = time_diff.total_seconds() / 60
                     
-                    if 50 <= minutes_diff <= 70:
-                        print(f"⏰ Lembrete: {appt.client_name}")
+                    # Janela: Entre 50 e 70 minutos antes
+                    if 50 <= minutes <= 70:
+                        print(f"⏰ DISPARANDO para {appt.client_name} (Faltam {int(minutes)} min)")
+                        
                         subj = f"Lembrete: {appt.establishment.name}"
                         body = f"Olá {appt.client_name},\n\nSeu horário é hoje às {appt.appointment_time.strftime('%H:%M')}."
+                        
                         send_email(subj, appt.client_email, body)
+                        
                         if appt.establishment.contact_email:
-                             send_email("Lembrete Profissional", appt.establishment.contact_email, f"Cliente {appt.client_name} chega em 1 hora.")
+                             send_email("Alerta Profissional", appt.establishment.contact_email, f"Cliente {appt.client_name} em 1h.")
+                        
                         appt.notified = True
                         db.session.commit()
-        except Exception as e: print(f"Erro Worker: {e}")
-        time_module.sleep(60)
+        except Exception as e:
+            print(f"Erro Crítico no Robô: {e}")
+        
+        time_module.sleep(60) # Verifica a cada 1 minuto
+
+# --- INICIALIZAÇÃO CORRETA PARA RENDER/GUNICORN ---
+# Executa a criação do banco e inicia o thread DO LADO DE FORA do if main
+# para garantir que o Gunicorn execute.
+with app.app_context():
+    try:
+        db.create_all()
+        # Inicia o robô apenas se não estiver rodando o script de instalação (evita duplicidade local)
+        if not os.environ.get('WERKZEUG_RUN_MAIN') == 'true': 
+             # Daemon=True faz o robô morrer quando o site morrer
+             t = threading.Thread(target=notification_worker, daemon=True)
+             t.start()
+    except Exception as e:
+        print(f"Erro na inicialização: {e}")
+
 
 # --- ROTAS DE PAGAMENTO ---
 @app.route('/pagamento')
@@ -225,13 +233,13 @@ def payment():
         )
         return redirect(session.url, code=303)
     except Exception as e:
-        flash(f'Erro Stripe: {str(e)}', 'danger'); return render_template('login.html')
+        flash(f'Erro Stripe: {str(e)}', 'danger')
+        return render_template('login.html')
 
 @app.route('/pagamento/sucesso')
 @login_required
 def payment_success():
-    est = current_user.establishment
-    est.is_active = True
+    current_user.establishment.is_active = True
     db.session.commit()
     flash('Assinatura Ativa!', 'success')
     return redirect(url_for('admin_dashboard'))
@@ -239,7 +247,8 @@ def payment_success():
 @app.route('/pagamento/cancelado')
 @login_required
 def payment_cancel():
-    flash('Pagamento cancelado.', 'warning'); return redirect(url_for('login'))
+    flash('Pagamento cancelado.', 'warning')
+    return redirect(url_for('login'))
 
 # --- ROTAS PRINCIPAIS ---
 @app.route('/')
@@ -288,12 +297,15 @@ def create_appointment(url_prefix):
     est = Establishment.query.filter_by(url_prefix=url_prefix).first_or_404()
     d = datetime.strptime(request.form.get('appointment_date'), '%Y-%m-%d').date()
     t = datetime.strptime(request.form.get('appointment_time'), '%H:%M').time()
+    
     if datetime.combine(d, t) < get_now_brazil():
         flash('Horário inválido.', 'danger')
         return redirect(url_for('schedule_service', url_prefix=url_prefix, service_id=request.form.get('service_id')))
+    
     appt = Appointment(client_name=request.form.get('client_name'), client_phone=request.form.get('client_phone'), client_email=request.form.get('client_email'), service_id=request.form.get('service_id'), appointment_date=d, appointment_time=t, establishment_id=est.id)
     db.session.add(appt); db.session.commit()
     
+    # Envia email de confirmação
     send_email(f"Confirmado: {est.name}", appt.client_email, f"Agendado para {d.strftime('%d/%m')} às {t.strftime('%H:%M')}")
     if est.contact_email: send_email(f"Novo Cliente: {appt.client_name}", est.contact_email, f"Novo agendamento: {d.strftime('%d/%m')} às {t.strftime('%H:%M')}")
     
@@ -407,6 +419,5 @@ def get_available_times():
     return jsonify(avail)
 
 if __name__ == '__main__':
-    with app.app_context(): db.create_all()
-    if not app.debug or os.environ.get('WERKZEUG_RUN_MAIN') == 'true': threading.Thread(target=notification_worker, daemon=True).start()
+    # Local only (Render uses gunicorn)
     app.run(debug=True)
