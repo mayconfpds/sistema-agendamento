@@ -90,16 +90,21 @@ def send_email(subject, recipient, body):
 def teste_email_brevo():
     key_status = "NÃO ENCONTRADA"
     key_preview = "N/A"
+    warning = ""
     
     if BREVO_API_KEY:
         key_status = "ENCONTRADA"
-        # Mostra os 4 primeiros caracteres e o tamanho total para conferir
-        key_preview = f"{BREVO_API_KEY[:4]}... ({len(BREVO_API_KEY)} caracteres)"
+        key_preview = f"{BREVO_API_KEY[:5]}... ({len(BREVO_API_KEY)} caracteres)"
+        
+        # VERIFICAÇÃO DE CHAVE ERRADA (SMTP vs API)
+        if not BREVO_API_KEY.startswith('xkeysib-'):
+             warning = "<p style='color:red; font-weight:bold; background: #ffeeee; padding: 10px; border-radius: 5px;'>⚠️ ALERTA DE CHAVE ERRADA:<br>Sua chave começa com algo diferente de 'xkeysib-'.<br>Você provavelmente pegou a Chave SMTP master. <br>Vá na aba 'API Keys' no painel da Brevo e gere uma nova chave.</p>"
     
     html_debug = f"""
     <h3>Diagnóstico de Chave</h3>
     <p>Status da Chave: <strong>{key_status}</strong></p>
     <p>Início da Chave: <strong>{key_preview}</strong></p>
+    {warning}
     <hr>
     """
     
