@@ -35,12 +35,15 @@ BREVO_SENDER_NAME = "Agenda Facil"
 stripe.api_key = os.environ.get('STRIPE_API_KEY')
 STRIPE_PRICE_ID = os.environ.get('STRIPE_PRICE_ID')
 
-# --- UPLOAD ---
+# --- UPLOAD (CORREÇÃO) ---
 UPLOAD_FOLDER = os.path.join(basedir, 'static', 'uploads')
+# A linha abaixo é a que estava faltando:
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 if not os.path.exists(UPLOAD_FOLDER):
     try: os.makedirs(UPLOAD_FOLDER)
     except OSError: pass
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 db = SQLAlchemy(app)
 login_manager = LoginManager(app)
@@ -223,14 +226,16 @@ def payment():
     if not stripe.api_key: flash('Erro Config: Chave Stripe ausente.', 'danger'); return redirect(url_for('login'))
     try:
         domain = request.host_url
-        session = stripe.checkout.Session.create(
+        checkout_session = stripe.checkout.Session.create(
             payment_method_types=['card'],
             line_items=[{'price': STRIPE_PRICE_ID, 'quantity': 1}],
             mode='subscription',
+            allow_promotion_codes=True, # <--- ADICIONE ESTA LINHA AQUI
             success_url=domain + 'pagamento/sucesso',
             cancel_url=domain + 'pagamento/cancelado',
             customer_email=current_user.establishment.contact_email,
         )
+
         return redirect(session.url, code=303)
     except Exception as e:
         flash(f'Erro Stripe: {str(e)}', 'danger')
