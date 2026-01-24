@@ -1,13 +1,17 @@
 {% extends 'layout.html' %}
-{% block title %}Agenda Fácil - Plataforma Profissional{% endblock %}
+{% block title %}Agenda Fácil - A Plataforma do Profissional{% endblock %}
 {% block content %}
-<div class="tailwind-scope">
+<div class="tailwind-scope font-sans">
     <section class="bg-gradient-to-b from-white to-gray-50 overflow-hidden pt-16 pb-20">
         <div class="max-w-7xl mx-auto px-6 lg:px-8 grid lg:grid-cols-2 gap-12 items-center">
             <div class="text-center lg:text-left">
-                <div class="inline-block bg-blue-100 text-blue-700 text-xs font-bold px-3 py-1 rounded-full mb-6">🚀 Sistema Completo de Gestão</div>
+                <div class="inline-block bg-blue-100 text-blue-700 text-xs font-bold px-3 py-1 rounded-full mb-6">🚀 Sistema de Gestão Completo</div>
                 <h1 class="text-5xl lg:text-6xl font-extrabold tracking-tight text-gray-900 leading-tight mb-6">Transforme agendamentos em <span class="text-blue-600">mais lucro</span>.</h1>
-                <p class="text-lg text-gray-600 mb-8 leading-relaxed max-w-lg mx-auto lg:mx-0">Barbearias, salões e clínicas. Tenha um link profissional, receba agendamentos 24h e seja notificado por e-mail.</p>
+                <p class="text-lg text-gray-600 mb-8 leading-relaxed max-w-lg mx-auto lg:mx-0">
+                    A ferramenta definitiva para barbearias, salões e clínicas. 
+                    <br><span class="text-blue-600 font-bold">Apenas R$ 34,90/mês</span>.
+                    <br>Tenha um link profissional, receba agendamentos 24h e elimine a troca de mensagens no WhatsApp.
+                </p>
                 <div class="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
                     <a href="{{ url_for('register_business') }}" class="bg-blue-600 text-white px-8 py-4 rounded-xl font-bold text-lg hover:bg-blue-700 transition shadow-lg">Começar Agora</a>
                     <a href="{{ url_for('login') }}" class="px-8 py-4 rounded-xl font-bold text-gray-700 hover:bg-gray-200 transition border border-gray-300">Já sou Cliente</a>
@@ -16,8 +20,30 @@
             <div class="relative mt-12 lg:mt-0 perspective-1000">
                 <div class="relative bg-gray-900 rounded-2xl p-2 shadow-2xl transform rotate-y-12 transition hover:rotate-y-0 duration-700">
                     <div class="relative rounded-xl overflow-hidden bg-white aspect-video group">
-                        <img src="{{ url_for('static', filename='painel.png') }}" class="w-full h-full object-cover" onerror="this.onerror=null; this.src='https://placehold.co/1280x800/E2E8F0/475569?text=Insira+painel.png+na+pasta+static';">
+                        <img src="{{ url_for('static', filename='painel.png') }}" class="w-full h-full object-cover" onerror="this.onerror=null; this.src='https://placehold.co/1280x800/E2E8F0/475569?text=Insira+painel.png';">
                     </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    <section class="py-20 bg-gray-900 text-white">
+        <div class="max-w-7xl mx-auto px-6">
+            <div class="text-center mb-16"><h2 class="text-3xl lg:text-4xl font-bold mb-4">Tudo o que você precisa para crescer</h2></div>
+            <div class="grid md:grid-cols-3 gap-8">
+                <div class="bg-gray-800 p-8 rounded-2xl border border-gray-700 hover:border-blue-500 transition group">
+                    <div class="w-12 h-12 bg-blue-500/20 rounded-lg flex items-center justify-center mb-6 text-blue-400 group-hover:bg-blue-500 group-hover:text-white transition"><i class="bi bi-link-45deg text-2xl"></i></div>
+                    <h3 class="text-xl font-bold mb-3">Link Personalizado</h3>
+                    <p class="text-gray-400 text-sm leading-relaxed">Pare de perguntar "qual horário você quer?". Envie seu link e deixe o cliente escolher.</p>
+                </div>
+                <div class="bg-gray-800 p-8 rounded-2xl border border-gray-700 hover:border-green-500 transition group">
+                    <div class="w-12 h-12 bg-green-500/20 rounded-lg flex items-center justify-center mb-6 text-green-400 group-hover:bg-green-500 group-hover:text-white transition"><i class="bi bi-clock-history text-2xl"></i></div>
+                    <h3 class="text-xl font-bold mb-3">Agenda 24 horas</h3>
+                    <p class="text-gray-400 text-sm leading-relaxed">Seu negócio aberto mesmo quando você está dormindo.</p>
+                </div>
+                <div class="bg-gray-800 p-8 rounded-2xl border border-gray-700 hover:border-purple-500 transition group">
+                    <div class="w-12 h-12 bg-purple-500/20 rounded-lg flex items-center justify-center mb-6 text-purple-400 group-hover:bg-purple-500 group-hover:text-white transition"><i class="bi bi-calendar-check text-2xl"></i></div>
+                    <h3 class="text-xl font-bold mb-3">Controle Total</h3>
+                    <p class="text-gray-400 text-sm leading-relaxed">Defina horários de almoço, dias de folga e duração de cada serviço.</p>
                 </div>
             </div>
         </div>

@@ -14,7 +14,7 @@ requests
 
 PROCFILE = r'''web: gunicorn app:app'''
 
-# --- APP.PY (Com Diagnóstico de Chave e Strip) ---
+# --- APP.PY (Brevo + Diagnóstico + Lógica SaaS) ---
 APP_PY = r'''import os
 import threading
 import time as time_module
@@ -31,7 +31,7 @@ import stripe
 socket.setdefaulttimeout(10)
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'chave-v30-brevo-fix'
+app.config['SECRET_KEY'] = 'chave-v31-final-gold'
 basedir = os.path.abspath(os.path.dirname(__file__))
 
 # --- BANCO ---
@@ -42,10 +42,8 @@ app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'sqlite:///' + os.path.j
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # --- CONFIGURAÇÃO BREVO (API) ---
-# .strip() remove espaços em branco acidentais no inicio/fim
 raw_key = os.environ.get('BREVO_API_KEY', '')
 BREVO_API_KEY = raw_key.strip() if raw_key else None
-
 BREVO_SENDER_EMAIL = os.environ.get('BREVO_SENDER_EMAIL', 'seu_email_login@gmail.com') 
 BREVO_SENDER_NAME = "Agenda Facil"
 
@@ -102,7 +100,7 @@ def send_email(subject, recipient, body):
 
     threading.Thread(target=_send_thread).start()
 
-# --- ROTA DE DIAGNÓSTICO (COM DEBUG DE CHAVE) ---
+# --- ROTA DE DIAGNÓSTICO ---
 @app.route('/teste-email')
 def teste_email_brevo():
     key_status = "NÃO ENCONTRADA"
@@ -112,35 +110,25 @@ def teste_email_brevo():
     if BREVO_API_KEY:
         key_status = "ENCONTRADA"
         key_preview = f"{BREVO_API_KEY[:5]}... ({len(BREVO_API_KEY)} caracteres)"
-        
-        # VERIFICAÇÃO DE CHAVE ERRADA (SMTP vs API)
         if not BREVO_API_KEY.startswith('xkeysib-'):
-             warning = "<p style='color:red; font-weight:bold; background: #ffeeee; padding: 10px; border-radius: 5px;'>⚠️ ALERTA DE CHAVE ERRADA:<br>Sua chave começa com algo diferente de 'xkeysib-'.<br>Você provavelmente pegou a Chave SMTP master. <br>Vá na aba 'API Keys' no painel da Brevo e gere uma nova chave.</p>"
+             warning = "<p style='color:red; font-weight:bold;'>⚠️ ALERTA: Chave parece ser SMTP (xsmt), não API (xkeysib).</p>"
     
-    html_debug = f"""
-    <h3>Diagnóstico de Chave</h3>
-    <p>Status da Chave: <strong>{key_status}</strong></p>
-    <p>Início da Chave: <strong>{key_preview}</strong></p>
-    {warning}
-    <hr>
-    """
+    html_debug = f"<h3>Diagnóstico</h3><p>Chave: {key_status} ({key_preview})</p>{warning}<p>Remetente: {BREVO_SENDER_EMAIL}</p><hr>"
     
-    if not BREVO_API_KEY:
-        return html_debug + "ERRO CRÍTICO: Configure a variável BREVO_API_KEY no Render."
+    if not BREVO_API_KEY: return html_debug + "ERRO: Configure BREVO_API_KEY."
     
-    # Tenta enviar
     url = "https://api.brevo.com/v3/smtp/email"
     headers = {"api-key": BREVO_API_KEY, "content-type": "application/json"}
     payload = {
         "sender": {"name": "Teste Sistema", "email": BREVO_SENDER_EMAIL},
-        "to": [{"email": BREVO_SENDER_EMAIL}], # Manda para si mesmo
-        "subject": "Teste de Conexão V30",
-        "htmlContent": "<h1>Funciona!</h1><p>A API da Brevo está conectada.</p>"
+        "to": [{"email": BREVO_SENDER_EMAIL}],
+        "subject": "Teste de Conexão V31",
+        "htmlContent": "<h1>Funciona!</h1><p>API Brevo conectada.</p>"
     }
     
     try:
         r = requests.post(url, json=payload, headers=headers)
-        return html_debug + f"Status API: {r.status_code} <br> Resposta API: {r.text}"
+        return html_debug + f"Status API: {r.status_code} <br> Resposta: {r.text}"
     except Exception as e:
         return html_debug + f"Erro Python: {str(e)}"
 
@@ -206,16 +194,15 @@ class Appointment(db.Model):
 @login_manager.user_loader
 def load_user(user_id): return Admin.query.get(int(user_id))
 
-# --- WORKER DE NOTIFICAÇÕES (CORRIGIDO) ---
+# --- WORKER DE NOTIFICAÇÕES ---
 def notification_worker():
-    print("--- Robô de Notificações Iniciado (Loop Infinito) ---")
+    print("--- Robô de Notificações Iniciado ---")
     while True:
         try:
             with app.app_context():
                 inspector = inspect(db.engine)
                 if not inspector.has_table("appointments"): 
-                    time_module.sleep(5)
-                    continue
+                    time_module.sleep(5); continue
                 
                 upcoming = Appointment.query.filter(Appointment.notified == False).all()
                 now = get_now_brazil()
@@ -226,17 +213,15 @@ def notification_worker():
                     minutes_diff = time_diff.total_seconds() / 60
                     
                     if 50 <= minutes_diff <= 70:
-                        print(f"⏰ Hora do Lembrete! Cliente: {appt.client_name}")
+                        print(f"⏰ Lembrete: {appt.client_name}")
                         subj = f"Lembrete: {appt.establishment.name}"
-                        body = f"Olá {appt.client_name},\n\nSeu horário é hoje às {appt.appointment_time.strftime('%H:%M')}.\n\nNão se atrase!"
+                        body = f"Olá {appt.client_name},\n\nSeu horário é hoje às {appt.appointment_time.strftime('%H:%M')}."
                         send_email(subj, appt.client_email, body)
                         if appt.establishment.contact_email:
                              send_email("Lembrete Profissional", appt.establishment.contact_email, f"Cliente {appt.client_name} chega em 1 hora.")
                         appt.notified = True
                         db.session.commit()
-        except Exception as e:
-            print(f"Erro no Worker: {e}")
-        
+        except Exception as e: print(f"Erro Worker: {e}")
         time_module.sleep(60)
 
 # --- ROTAS DE PAGAMENTO ---
@@ -257,13 +242,13 @@ def payment():
         )
         return redirect(session.url, code=303)
     except Exception as e:
-        flash(f'Erro Stripe: {str(e)}', 'danger')
-        return render_template('login.html')
+        flash(f'Erro Stripe: {str(e)}', 'danger'); return render_template('login.html')
 
 @app.route('/pagamento/sucesso')
 @login_required
 def payment_success():
-    current_user.establishment.is_active = True
+    est = current_user.establishment
+    est.is_active = True
     db.session.commit()
     flash('Assinatura Ativa!', 'success')
     return redirect(url_for('admin_dashboard'))
@@ -271,8 +256,7 @@ def payment_success():
 @app.route('/pagamento/cancelado')
 @login_required
 def payment_cancel():
-    flash('Pagamento cancelado.', 'warning')
-    return redirect(url_for('login'))
+    flash('Pagamento cancelado.', 'warning'); return redirect(url_for('login'))
 
 # --- ROTAS PRINCIPAIS ---
 @app.route('/')
@@ -330,7 +314,7 @@ def create_appointment(url_prefix):
     send_email(f"Confirmado: {est.name}", appt.client_email, f"Agendado para {d.strftime('%d/%m')} às {t.strftime('%H:%M')}")
     if est.contact_email: send_email(f"Novo Cliente: {appt.client_name}", est.contact_email, f"Novo agendamento: {d.strftime('%d/%m')} às {t.strftime('%H:%M')}")
     
-    flash('Confirmado! Se não receber o e-mail, verifique o spam.', 'success')
+    flash('Confirmado! Verifique seu e-mail.', 'success')
     return redirect(url_for('establishment_services', url_prefix=url_prefix))
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -445,7 +429,61 @@ if __name__ == '__main__':
     app.run(debug=True)
 '''
 
-# --- TEMPLATES ---
+# --- TEMPLATES (COPY V10 + PREÇO) ---
+
+INDEX_HTML = r'''{% extends 'layout.html' %}
+{% block title %}Agenda Fácil - A Plataforma do Profissional{% endblock %}
+{% block content %}
+<div class="tailwind-scope font-sans">
+    <section class="bg-gradient-to-b from-white to-gray-50 overflow-hidden pt-16 pb-20">
+        <div class="max-w-7xl mx-auto px-6 lg:px-8 grid lg:grid-cols-2 gap-12 items-center">
+            <div class="text-center lg:text-left">
+                <div class="inline-block bg-blue-100 text-blue-700 text-xs font-bold px-3 py-1 rounded-full mb-6">🚀 Sistema de Gestão Completo</div>
+                <h1 class="text-5xl lg:text-6xl font-extrabold tracking-tight text-gray-900 leading-tight mb-6">Transforme agendamentos em <span class="text-blue-600">mais lucro</span>.</h1>
+                <p class="text-lg text-gray-600 mb-8 leading-relaxed max-w-lg mx-auto lg:mx-0">
+                    A ferramenta definitiva para barbearias, salões e clínicas. 
+                    <br><span class="text-blue-600 font-bold">Apenas R$ 34,90/mês</span>.
+                    <br>Tenha um link profissional, receba agendamentos 24h e elimine a troca de mensagens no WhatsApp.
+                </p>
+                <div class="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
+                    <a href="{{ url_for('register_business') }}" class="bg-blue-600 text-white px-8 py-4 rounded-xl font-bold text-lg hover:bg-blue-700 transition shadow-lg">Começar Agora</a>
+                    <a href="{{ url_for('login') }}" class="px-8 py-4 rounded-xl font-bold text-gray-700 hover:bg-gray-200 transition border border-gray-300">Já sou Cliente</a>
+                </div>
+            </div>
+            <div class="relative mt-12 lg:mt-0 perspective-1000">
+                <div class="relative bg-gray-900 rounded-2xl p-2 shadow-2xl transform rotate-y-12 transition hover:rotate-y-0 duration-700">
+                    <div class="relative rounded-xl overflow-hidden bg-white aspect-video group">
+                        <img src="{{ url_for('static', filename='painel.png') }}" class="w-full h-full object-cover" onerror="this.onerror=null; this.src='https://placehold.co/1280x800/E2E8F0/475569?text=Insira+painel.png';">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    <section class="py-20 bg-gray-900 text-white">
+        <div class="max-w-7xl mx-auto px-6">
+            <div class="text-center mb-16"><h2 class="text-3xl lg:text-4xl font-bold mb-4">Tudo o que você precisa para crescer</h2></div>
+            <div class="grid md:grid-cols-3 gap-8">
+                <div class="bg-gray-800 p-8 rounded-2xl border border-gray-700 hover:border-blue-500 transition group">
+                    <div class="w-12 h-12 bg-blue-500/20 rounded-lg flex items-center justify-center mb-6 text-blue-400 group-hover:bg-blue-500 group-hover:text-white transition"><i class="bi bi-link-45deg text-2xl"></i></div>
+                    <h3 class="text-xl font-bold mb-3">Link Personalizado</h3>
+                    <p class="text-gray-400 text-sm leading-relaxed">Pare de perguntar "qual horário você quer?". Envie seu link e deixe o cliente escolher.</p>
+                </div>
+                <div class="bg-gray-800 p-8 rounded-2xl border border-gray-700 hover:border-green-500 transition group">
+                    <div class="w-12 h-12 bg-green-500/20 rounded-lg flex items-center justify-center mb-6 text-green-400 group-hover:bg-green-500 group-hover:text-white transition"><i class="bi bi-clock-history text-2xl"></i></div>
+                    <h3 class="text-xl font-bold mb-3">Agenda 24 horas</h3>
+                    <p class="text-gray-400 text-sm leading-relaxed">Seu negócio aberto mesmo quando você está dormindo.</p>
+                </div>
+                <div class="bg-gray-800 p-8 rounded-2xl border border-gray-700 hover:border-purple-500 transition group">
+                    <div class="w-12 h-12 bg-purple-500/20 rounded-lg flex items-center justify-center mb-6 text-purple-400 group-hover:bg-purple-500 group-hover:text-white transition"><i class="bi bi-calendar-check text-2xl"></i></div>
+                    <h3 class="text-xl font-bold mb-3">Controle Total</h3>
+                    <p class="text-gray-400 text-sm leading-relaxed">Defina horários de almoço, dias de folga e duração de cada serviço.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+</div>
+{% endblock %}
+'''
 
 LAYOUT_HTML = r'''<!DOCTYPE html>
 <html lang="pt-br">
@@ -457,12 +495,7 @@ LAYOUT_HTML = r'''<!DOCTYPE html>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <style>
-        body { font-family: 'Inter', sans-serif; background-color: #f8f9fa; min-height: 100vh; display: flex; flex-direction: column; }
-        .tailwind-scope { font-family: 'Inter', sans-serif; }
-        a { text-decoration: none; }
-        main { flex: 1; }
-    </style>
+    <style>body{font-family:'Inter',sans-serif;background-color:#f8f9fa} .tailwind-scope{font-family:'Inter',sans-serif} a{text-decoration:none} main{flex:1} body{min-height:100vh;display:flex;flex-direction:column}</style>
 </head>
 <body>
     <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm sticky-top">
@@ -482,14 +515,8 @@ LAYOUT_HTML = r'''<!DOCTYPE html>
         </div>
     </nav>
     <main class="container-fluid p-0">
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                <div class="container mt-3">
-                {% for category, message in messages %}
-                    <div class="alert alert-{{ category }} alert-dismissible fade show shadow-sm">{{ message }} <button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>
-                {% endfor %}
-                </div>
-            {% endif %}
+        {% with m = get_flashed_messages(with_categories=true) %}
+            {% if m %}<div class="container mt-3">{% for c, msg in m %}<div class="alert alert-{{ c }} alert-dismissible fade show shadow-sm">{{ msg }} <button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>{% endfor %}</div>{% endif %}
         {% endwith %}
         {% block content %}{% endblock %}
     </main>
@@ -500,41 +527,17 @@ LAYOUT_HTML = r'''<!DOCTYPE html>
 </html>
 '''
 
-INDEX_HTML = r'''{% extends 'layout.html' %}
-{% block title %}Agenda Fácil - Plataforma Profissional{% endblock %}
-{% block content %}
-<div class="tailwind-scope">
-    <section class="bg-gradient-to-b from-white to-gray-50 overflow-hidden pt-16 pb-20">
-        <div class="max-w-7xl mx-auto px-6 lg:px-8 grid lg:grid-cols-2 gap-12 items-center">
-            <div class="text-center lg:text-left">
-                <div class="inline-block bg-blue-100 text-blue-700 text-xs font-bold px-3 py-1 rounded-full mb-6">🚀 Sistema Completo de Gestão</div>
-                <h1 class="text-5xl lg:text-6xl font-extrabold tracking-tight text-gray-900 leading-tight mb-6">Transforme agendamentos em <span class="text-blue-600">mais lucro</span>.</h1>
-                <p class="text-lg text-gray-600 mb-8 leading-relaxed max-w-lg mx-auto lg:mx-0">Barbearias, salões e clínicas. Tenha um link profissional, receba agendamentos 24h e seja notificado por e-mail.</p>
-                <div class="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
-                    <a href="{{ url_for('register_business') }}" class="bg-blue-600 text-white px-8 py-4 rounded-xl font-bold text-lg hover:bg-blue-700 transition shadow-lg">Começar Agora</a>
-                    <a href="{{ url_for('login') }}" class="px-8 py-4 rounded-xl font-bold text-gray-700 hover:bg-gray-200 transition border border-gray-300">Já sou Cliente</a>
-                </div>
-            </div>
-            <div class="relative mt-12 lg:mt-0 perspective-1000">
-                <div class="relative bg-gray-900 rounded-2xl p-2 shadow-2xl transform rotate-y-12 transition hover:rotate-y-0 duration-700">
-                    <div class="relative rounded-xl overflow-hidden bg-white aspect-video group">
-                        <img src="{{ url_for('static', filename='painel.png') }}" class="w-full h-full object-cover" onerror="this.onerror=null; this.src='https://placehold.co/1280x800/E2E8F0/475569?text=Insira+painel.png+na+pasta+static';">
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-</div>
-{% endblock %}
-'''
-
 REGISTER_HTML = r'''{% extends 'layout.html' %}
 {% block title %}Criar Conta{% endblock %}
 {% block content %}
 <div class="row justify-content-center mt-5 mb-5">
     <div class="col-md-8 col-lg-6">
         <div class="card shadow-lg border-0 rounded-4 overflow-hidden">
-            <div class="card-header bg-blue-600 text-white text-center py-4"><h3 class="fw-bold mb-0">Comece Agora</h3><p class="text-blue-100 text-sm mb-0">Crie sua conta em segundos</p></div>
+            <div class="card-header bg-blue-600 text-white text-center py-4">
+                <h3 class="fw-bold mb-0">Assine Agora</h3>
+                <p class="text-blue-100 text-lg mb-0 fw-bold">Apenas R$ 34,90/mês</p>
+                <p class="text-blue-200 text-sm mb-0">Cancele quando quiser</p>
+            </div>
             <div class="card-body p-4 p-md-5 bg-white">
                 <form method="POST" action="{{ url_for('register_business') }}">
                     <h5 class="mb-3 text-primary fw-bold small text-uppercase ls-1">Dados do Negócio</h5>
@@ -549,7 +552,7 @@ REGISTER_HTML = r'''{% extends 'layout.html' %}
                         <div class="col-md-6 mb-3"><label class="form-label small fw-bold">Usuário</label><input type="text" class="form-control" name="username" required></div>
                         <div class="col-md-6 mb-3"><label class="form-label small fw-bold">Senha</label><input type="password" class="form-control" name="password" required></div>
                     </div>
-                    <button class="btn btn-primary w-100 py-3 fw-bold rounded-3 shadow-sm mt-2">Criar Minha Conta</button>
+                    <button class="btn btn-primary w-100 py-3 fw-bold rounded-3 shadow-sm mt-2">Ir para Pagamento</button>
                 </form>
             </div>
         </div>
@@ -570,7 +573,7 @@ LOGIN_HTML = r'''{% extends 'layout.html' %}
                 <div class="mb-4"><label class="form-label small fw-bold">Senha</label><input type="password" class="form-control form-control-lg" name="password" required></div>
                 <button class="btn btn-dark w-100 py-3 fw-bold rounded-3">Entrar</button>
             </form>
-            <div class="text-center mt-4 border-top pt-3"><a href="{{ url_for('register_business') }}" class="text-decoration-none small text-muted">Não tem conta? <span class="text-blue-600 fw-bold">Cadastre-se</span></a></div>
+            <div class="text-center mt-4 border-top pt-3"><a href="{{ url_for('register_business') }}" class="text-decoration-none small text-muted">Não tem conta? <span class="text-blue-600 fw-bold">Assine já</span></a></div>
         </div>
     </div>
 </div>
@@ -809,7 +812,8 @@ def atualizar_sistema():
     except Exception as e:
         print(f"[ERRO] Instale manualmente: pip install -r requirements.txt")
 
-    print("\n[SUCESSO] Sistema V30 (Brevo + Diagnóstico) instalado!")
+    print("\n[SUCESSO] Sistema V31 Final instalado!")
+    print("LEMBRETE: Configure a chave correta da BREVO no Render!")
     print("Execute: python app.py")
 
 if __name__ == "__main__":

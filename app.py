@@ -14,7 +14,7 @@ import stripe
 socket.setdefaulttimeout(10)
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'chave-v30-brevo-fix'
+app.config['SECRET_KEY'] = 'chave-v31-final-gold'
 basedir = os.path.abspath(os.path.dirname(__file__))
 
 # --- BANCO ---
@@ -25,10 +25,8 @@ app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'sqlite:///' + os.path.j
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # --- CONFIGURAÇÃO BREVO (API) ---
-# .strip() remove espaços em branco acidentais no inicio/fim
 raw_key = os.environ.get('BREVO_API_KEY', '')
 BREVO_API_KEY = raw_key.strip() if raw_key else None
-
 BREVO_SENDER_EMAIL = os.environ.get('BREVO_SENDER_EMAIL', 'seu_email_login@gmail.com') 
 BREVO_SENDER_NAME = "Agenda Facil"
 
@@ -85,7 +83,7 @@ def send_email(subject, recipient, body):
 
     threading.Thread(target=_send_thread).start()
 
-# --- ROTA DE DIAGNÓSTICO (COM DEBUG DE CHAVE) ---
+# --- ROTA DE DIAGNÓSTICO ---
 @app.route('/teste-email')
 def teste_email_brevo():
     key_status = "NÃO ENCONTRADA"
@@ -95,35 +93,25 @@ def teste_email_brevo():
     if BREVO_API_KEY:
         key_status = "ENCONTRADA"
         key_preview = f"{BREVO_API_KEY[:5]}... ({len(BREVO_API_KEY)} caracteres)"
-        
-        # VERIFICAÇÃO DE CHAVE ERRADA (SMTP vs API)
         if not BREVO_API_KEY.startswith('xkeysib-'):
-             warning = "<p style='color:red; font-weight:bold; background: #ffeeee; padding: 10px; border-radius: 5px;'>⚠️ ALERTA DE CHAVE ERRADA:<br>Sua chave começa com algo diferente de 'xkeysib-'.<br>Você provavelmente pegou a Chave SMTP master. <br>Vá na aba 'API Keys' no painel da Brevo e gere uma nova chave.</p>"
+             warning = "<p style='color:red; font-weight:bold;'>⚠️ ALERTA: Chave parece ser SMTP (xsmt), não API (xkeysib).</p>"
     
-    html_debug = f"""
-    <h3>Diagnóstico de Chave</h3>
-    <p>Status da Chave: <strong>{key_status}</strong></p>
-    <p>Início da Chave: <strong>{key_preview}</strong></p>
-    {warning}
-    <hr>
-    """
+    html_debug = f"<h3>Diagnóstico</h3><p>Chave: {key_status} ({key_preview})</p>{warning}<p>Remetente: {BREVO_SENDER_EMAIL}</p><hr>"
     
-    if not BREVO_API_KEY:
-        return html_debug + "ERRO CRÍTICO: Configure a variável BREVO_API_KEY no Render."
+    if not BREVO_API_KEY: return html_debug + "ERRO: Configure BREVO_API_KEY."
     
-    # Tenta enviar
     url = "https://api.brevo.com/v3/smtp/email"
     headers = {"api-key": BREVO_API_KEY, "content-type": "application/json"}
     payload = {
         "sender": {"name": "Teste Sistema", "email": BREVO_SENDER_EMAIL},
-        "to": [{"email": BREVO_SENDER_EMAIL}], # Manda para si mesmo
-        "subject": "Teste de Conexão V30",
-        "htmlContent": "<h1>Funciona!</h1><p>A API da Brevo está conectada.</p>"
+        "to": [{"email": BREVO_SENDER_EMAIL}],
+        "subject": "Teste de Conexão V31",
+        "htmlContent": "<h1>Funciona!</h1><p>API Brevo conectada.</p>"
     }
     
     try:
         r = requests.post(url, json=payload, headers=headers)
-        return html_debug + f"Status API: {r.status_code} <br> Resposta API: {r.text}"
+        return html_debug + f"Status API: {r.status_code} <br> Resposta: {r.text}"
     except Exception as e:
         return html_debug + f"Erro Python: {str(e)}"
 
@@ -189,16 +177,15 @@ class Appointment(db.Model):
 @login_manager.user_loader
 def load_user(user_id): return Admin.query.get(int(user_id))
 
-# --- WORKER DE NOTIFICAÇÕES (CORRIGIDO) ---
+# --- WORKER DE NOTIFICAÇÕES ---
 def notification_worker():
-    print("--- Robô de Notificações Iniciado (Loop Infinito) ---")
+    print("--- Robô de Notificações Iniciado ---")
     while True:
         try:
             with app.app_context():
                 inspector = inspect(db.engine)
                 if not inspector.has_table("appointments"): 
-                    time_module.sleep(5)
-                    continue
+                    time_module.sleep(5); continue
                 
                 upcoming = Appointment.query.filter(Appointment.notified == False).all()
                 now = get_now_brazil()
@@ -209,17 +196,15 @@ def notification_worker():
                     minutes_diff = time_diff.total_seconds() / 60
                     
                     if 50 <= minutes_diff <= 70:
-                        print(f"⏰ Hora do Lembrete! Cliente: {appt.client_name}")
+                        print(f"⏰ Lembrete: {appt.client_name}")
                         subj = f"Lembrete: {appt.establishment.name}"
-                        body = f"Olá {appt.client_name},\n\nSeu horário é hoje às {appt.appointment_time.strftime('%H:%M')}.\n\nNão se atrase!"
+                        body = f"Olá {appt.client_name},\n\nSeu horário é hoje às {appt.appointment_time.strftime('%H:%M')}."
                         send_email(subj, appt.client_email, body)
                         if appt.establishment.contact_email:
                              send_email("Lembrete Profissional", appt.establishment.contact_email, f"Cliente {appt.client_name} chega em 1 hora.")
                         appt.notified = True
                         db.session.commit()
-        except Exception as e:
-            print(f"Erro no Worker: {e}")
-        
+        except Exception as e: print(f"Erro Worker: {e}")
         time_module.sleep(60)
 
 # --- ROTAS DE PAGAMENTO ---
@@ -240,13 +225,13 @@ def payment():
         )
         return redirect(session.url, code=303)
     except Exception as e:
-        flash(f'Erro Stripe: {str(e)}', 'danger')
-        return render_template('login.html')
+        flash(f'Erro Stripe: {str(e)}', 'danger'); return render_template('login.html')
 
 @app.route('/pagamento/sucesso')
 @login_required
 def payment_success():
-    current_user.establishment.is_active = True
+    est = current_user.establishment
+    est.is_active = True
     db.session.commit()
     flash('Assinatura Ativa!', 'success')
     return redirect(url_for('admin_dashboard'))
@@ -254,8 +239,7 @@ def payment_success():
 @app.route('/pagamento/cancelado')
 @login_required
 def payment_cancel():
-    flash('Pagamento cancelado.', 'warning')
-    return redirect(url_for('login'))
+    flash('Pagamento cancelado.', 'warning'); return redirect(url_for('login'))
 
 # --- ROTAS PRINCIPAIS ---
 @app.route('/')
@@ -313,7 +297,7 @@ def create_appointment(url_prefix):
     send_email(f"Confirmado: {est.name}", appt.client_email, f"Agendado para {d.strftime('%d/%m')} às {t.strftime('%H:%M')}")
     if est.contact_email: send_email(f"Novo Cliente: {appt.client_name}", est.contact_email, f"Novo agendamento: {d.strftime('%d/%m')} às {t.strftime('%H:%M')}")
     
-    flash('Confirmado! Se não receber o e-mail, verifique o spam.', 'success')
+    flash('Confirmado! Verifique seu e-mail.', 'success')
     return redirect(url_for('establishment_services', url_prefix=url_prefix))
 
 @app.route('/login', methods=['GET', 'POST'])
