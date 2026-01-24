@@ -3,7 +3,6 @@ import sys
 import subprocess
 
 # --- DEPENDÊNCIAS ---
-# Removemos bibliotecas de email antigas e usamos 'requests' para API direta
 REQUIREMENTS_TXT = r'''Flask
 Flask-SQLAlchemy
 Flask-Login
@@ -15,7 +14,7 @@ requests
 
 PROCFILE = r'''web: gunicorn app:app'''
 
-# --- APP.PY (Com Brevo API e Lógica de Tempo Corrigida) ---
+# --- APP.PY (Com Diagnóstico de Chave e Strip) ---
 APP_PY = r'''import os
 import threading
 import time as time_module
@@ -32,7 +31,7 @@ import stripe
 socket.setdefaulttimeout(10)
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'chave-v29-brevo-api'
+app.config['SECRET_KEY'] = 'chave-v30-brevo-fix'
 basedir = os.path.abspath(os.path.dirname(__file__))
 
 # --- BANCO ---
@@ -43,8 +42,10 @@ app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'sqlite:///' + os.path.j
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # --- CONFIGURAÇÃO BREVO (API) ---
-BREVO_API_KEY = os.environ.get('BREVO_API_KEY')
-# Defina um remetente padrão validado na Brevo
+# .strip() remove espaços em branco acidentais no inicio/fim
+raw_key = os.environ.get('BREVO_API_KEY', '')
+BREVO_API_KEY = raw_key.strip() if raw_key else None
+
 BREVO_SENDER_EMAIL = os.environ.get('BREVO_SENDER_EMAIL', 'seu_email_login@gmail.com') 
 BREVO_SENDER_NAME = "Agenda Facil"
 
@@ -68,7 +69,7 @@ login_manager.login_message = 'Faça login.'
 def get_now_brazil():
     return datetime.utcnow() - timedelta(hours=3)
 
-# --- ENVIO DE EMAIL VIA BREVO API (UNIVERSAL) ---
+# --- ENVIO DE EMAIL VIA BREVO API ---
 def send_email(subject, recipient, body):
     if not BREVO_API_KEY:
         print(f"\n⚠️ [EMAIL VIRTUAL] Sem chave API. Para: {recipient}")
@@ -81,7 +82,6 @@ def send_email(subject, recipient, body):
             "api-key": BREVO_API_KEY,
             "content-type": "application/json"
         }
-        # Formata o corpo para HTML básico (quebras de linha)
         html_body = f"<html><body><p>{body.replace(chr(10), '<br>')}</p></body></html>"
         
         payload = {
@@ -102,26 +102,42 @@ def send_email(subject, recipient, body):
 
     threading.Thread(target=_send_thread).start()
 
-# --- ROTA DE DIAGNÓSTICO ---
+# --- ROTA DE DIAGNÓSTICO (COM DEBUG DE CHAVE) ---
 @app.route('/teste-email')
 def teste_email_brevo():
-    if not BREVO_API_KEY: return "ERRO: Variável BREVO_API_KEY não configurada no Render."
+    key_status = "NÃO ENCONTRADA"
+    key_preview = "N/A"
     
-    # Envia para o próprio remetente para testar
-    dest = BREVO_SENDER_EMAIL 
+    if BREVO_API_KEY:
+        key_status = "ENCONTRADA"
+        # Mostra os 4 primeiros caracteres e o tamanho total para conferir
+        key_preview = f"{BREVO_API_KEY[:4]}... ({len(BREVO_API_KEY)} caracteres)"
+    
+    html_debug = f"""
+    <h3>Diagnóstico de Chave</h3>
+    <p>Status da Chave: <strong>{key_status}</strong></p>
+    <p>Início da Chave: <strong>{key_preview}</strong></p>
+    <hr>
+    """
+    
+    if not BREVO_API_KEY:
+        return html_debug + "ERRO CRÍTICO: Configure a variável BREVO_API_KEY no Render."
+    
+    # Tenta enviar
     url = "https://api.brevo.com/v3/smtp/email"
     headers = {"api-key": BREVO_API_KEY, "content-type": "application/json"}
     payload = {
         "sender": {"name": "Teste Sistema", "email": BREVO_SENDER_EMAIL},
-        "to": [{"email": dest}],
-        "subject": "Teste de Conexão V29",
+        "to": [{"email": BREVO_SENDER_EMAIL}], # Manda para si mesmo
+        "subject": "Teste de Conexão V30",
         "htmlContent": "<h1>Funciona!</h1><p>A API da Brevo está conectada.</p>"
     }
+    
     try:
         r = requests.post(url, json=payload, headers=headers)
-        return f"Status: {r.status_code} <br> Resposta: {r.text}"
+        return html_debug + f"Status API: {r.status_code} <br> Resposta API: {r.text}"
     except Exception as e:
-        return f"Erro Python: {str(e)}"
+        return html_debug + f"Erro Python: {str(e)}"
 
 @app.route('/health')
 def health(): return "OK", 200
@@ -196,10 +212,7 @@ def notification_worker():
                     time_module.sleep(5)
                     continue
                 
-                # CORREÇÃO: Pega TODOS os não notificados, independente da data
-                # Isso resolve o problema de agendamentos próximos à meia-noite
                 upcoming = Appointment.query.filter(Appointment.notified == False).all()
-                
                 now = get_now_brazil()
                 
                 for appt in upcoming:
@@ -207,25 +220,19 @@ def notification_worker():
                     time_diff = appt_dt - now
                     minutes_diff = time_diff.total_seconds() / 60
                     
-                    # Se faltar entre 50 e 70 minutos (Janela de segurança)
                     if 50 <= minutes_diff <= 70:
-                        print(f"⏰ Hora do Lembrete! Cliente: {appt.client_name} (Faltam {int(minutes_diff)} min)")
-                        
+                        print(f"⏰ Hora do Lembrete! Cliente: {appt.client_name}")
                         subj = f"Lembrete: {appt.establishment.name}"
                         body = f"Olá {appt.client_name},\n\nSeu horário é hoje às {appt.appointment_time.strftime('%H:%M')}.\n\nNão se atrase!"
-                        
                         send_email(subj, appt.client_email, body)
-                        
-                        # Também avisa o profissional se tiver email
                         if appt.establishment.contact_email:
                              send_email("Lembrete Profissional", appt.establishment.contact_email, f"Cliente {appt.client_name} chega em 1 hora.")
-
                         appt.notified = True
                         db.session.commit()
         except Exception as e:
             print(f"Erro no Worker: {e}")
         
-        time_module.sleep(60) # Dorme 60s
+        time_module.sleep(60)
 
 # --- ROTAS DE PAGAMENTO ---
 @app.route('/pagamento')
@@ -816,8 +823,7 @@ def atualizar_sistema():
     except Exception as e:
         print(f"[ERRO] Instale manualmente: pip install -r requirements.txt")
 
-    print("\n[SUCESSO] Sistema V29 (Brevo API) instalado!")
-    print("Agora configure a variável BREVO_API_KEY no Render e remova as do Gmail.")
+    print("\n[SUCESSO] Sistema V30 (Brevo + Diagnóstico) instalado!")
     print("Execute: python app.py")
 
 if __name__ == "__main__":
