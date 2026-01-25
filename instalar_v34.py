@@ -3,6 +3,7 @@ import sys
 import subprocess
 
 # --- DEPENDÊNCIAS ---
+# ADICIONADO: psycopg2-binary (Essencial para conectar no PostgreSQL do Render)
 REQUIREMENTS_TXT = r'''Flask
 Flask-SQLAlchemy
 Flask-Login
@@ -10,11 +11,12 @@ Werkzeug
 gunicorn
 stripe
 requests
+psycopg2-binary
 '''
 
 PROCFILE = r'''web: gunicorn app:app'''
 
-# --- APP.PY COMPLETO ---
+# --- APP.PY (Com Worker Automático e Banco Robusto) ---
 APP_PY = r'''import os
 import threading
 import time as time_module
@@ -33,30 +35,34 @@ import stripe
 socket.setdefaulttimeout(15)
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'chave-v33-final-master'
+app.config['SECRET_KEY'] = 'chave-v34-persistence-fix'
 basedir = os.path.abspath(os.path.dirname(__file__))
 
-# --- BANCO ---
+# --- BANCO DE DADOS (LÓGICA DE PERSISTÊNCIA) ---
+# Tenta pegar o PostgreSQL do Render. Se falhar, avisa no log.
 database_url = os.environ.get('DATABASE_URL')
 if database_url and database_url.startswith("postgres://"):
     database_url = database_url.replace("postgres://", "postgresql://", 1)
+
 app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'sqlite:///' + os.path.join(basedir, 'agendamento.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# --- CONFIGURAÇÃO BREVO (API) ---
+if not database_url:
+    print("⚠️ AVISO: Usando SQLite local. Dados serão perdidos ao reiniciar no Render.")
+else:
+    print("✅ Conectado ao PostgreSQL.")
+
+# --- CONFIGURAÇÕES ---
 raw_key = os.environ.get('BREVO_API_KEY', '')
 BREVO_API_KEY = raw_key.strip() if raw_key else None
-BREVO_SENDER_EMAIL = os.environ.get('BREVO_SENDER_EMAIL', 'seu_email_login@gmail.com') 
+BREVO_SENDER_EMAIL = os.environ.get('BREVO_SENDER_EMAIL', 'seu_email@gmail.com') 
 BREVO_SENDER_NAME = "Agenda Facil"
 
-# --- STRIPE ---
 stripe.api_key = os.environ.get('STRIPE_API_KEY')
 STRIPE_PRICE_ID = os.environ.get('STRIPE_PRICE_ID')
 
-# --- UPLOAD ---
 UPLOAD_FOLDER = os.path.join(basedir, 'static', 'uploads')
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'} # Correção V33
-
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 if not os.path.exists(UPLOAD_FOLDER):
     try: os.makedirs(UPLOAD_FOLDER)
@@ -74,7 +80,7 @@ def get_now_brazil():
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-# --- ENVIO DE EMAIL VIA BREVO API ---
+# --- ENVIO DE EMAIL (BREVO) ---
 def send_email(subject, recipient, body):
     if not BREVO_API_KEY:
         print(f"\n⚠️ [EMAIL VIRTUAL] Sem chave API. Para: {recipient}")
@@ -95,26 +101,14 @@ def send_email(subject, recipient, body):
             "subject": subject,
             "htmlContent": html_body
         }
-        
         try:
-            response = requests.post(url, json=payload, headers=headers)
-            if response.status_code in [200, 201, 202]:
-                print(f"\n✅ [BREVO SUCESSO] Enviado para {recipient}")
-            else:
-                print(f"\n❌ [BREVO ERRO] {response.status_code} - {response.text}")
+            r = requests.post(url, json=payload, headers=headers)
+            if r.status_code not in [200, 201, 202]:
+                print(f"\n❌ [BREVO ERRO] {r.text}")
         except Exception as e:
-            print(f"\n❌ [ERRO CONEXÃO BREVO] {e}")
+            print(f"\n❌ [ERRO CONEXÃO] {e}")
 
     threading.Thread(target=_send_thread).start()
-
-# --- ROTA DE DIAGNÓSTICO ---
-@app.route('/teste-email')
-def teste_email_brevo():
-    status_chave = "OK" if BREVO_API_KEY else "FALTANDO"
-    return f"Status Chave: {status_chave}<br>Remetente: {BREVO_SENDER_EMAIL}<br>Tente agendar algo para testar o worker."
-
-@app.route('/health')
-def health(): return "OK", 200
 
 # --- MODELOS ---
 class Establishment(db.Model):
@@ -175,34 +169,37 @@ class Appointment(db.Model):
 @login_manager.user_loader
 def load_user(user_id): return Admin.query.get(int(user_id))
 
-# --- WORKER DE NOTIFICAÇÕES (1H ANTES - API HTTP) ---
+# --- WORKER DE NOTIFICAÇÕES (LIGADO NO GUNICORN) ---
 def notification_worker():
-    print("--- Robô de Notificações Iniciado (Fuso BR) ---")
+    print(">>> Robô de Notificações INICIADO (Background) <<<")
     while True:
         try:
             with app.app_context():
+                # Garante que a tabela existe antes de consultar
                 inspector = inspect(db.engine)
                 if not inspector.has_table("appointments"): 
-                    time_module.sleep(5); continue
+                    time_module.sleep(10)
+                    continue
                 
+                # Busca TODOS os não notificados (mesmo de outros dias que podem ter ficado pendentes)
                 upcoming = Appointment.query.filter(Appointment.notified == False).all()
                 now = get_now_brazil()
                 
                 for appt in upcoming:
                     appt_dt = datetime.combine(appt.appointment_date, appt.appointment_time)
                     time_diff = appt_dt - now
-                    minutes_diff = time_diff.total_seconds() / 60
+                    minutes = time_diff.total_seconds() / 60
                     
-                    if 50 <= minutes_diff <= 70:
-                        print(f"⏰ Enviando lembrete para {appt.client_name}")
+                    # Janela: Entre 50 e 70 minutos antes
+                    if 50 <= minutes <= 70:
+                        print(f"⏰ Enviando e-mail para {appt.client_name} (Faltam {int(minutes)} min)")
                         
                         subj = f"Lembrete: {appt.establishment.name}"
-                        body = f"Olá {appt.client_name},\n\nEste é um lembrete do seu agendamento hoje às {appt.appointment_time.strftime('%H:%M')}."
-                        
+                        body = f"Olá {appt.client_name},\n\nLembrete do seu horário: {appt.appointment_time.strftime('%H:%M')}."
                         send_email(subj, appt.client_email, body)
                         
                         if appt.establishment.contact_email:
-                             send_email("Alerta de Agenda", appt.establishment.contact_email, f"Cliente {appt.client_name} agendado para daqui a 1 hora.")
+                             send_email("Alerta", appt.establishment.contact_email, f"Cliente {appt.client_name} em 1h.")
                         
                         appt.notified = True
                         db.session.commit()
@@ -211,44 +208,61 @@ def notification_worker():
         
         time_module.sleep(60)
 
-# --- ROTAS DE PAGAMENTO ---
+# --- INICIALIZAÇÃO UNIVERSAL ---
+# Este bloco roda tanto no 'flask run' quanto no 'gunicorn'
+# Garante que o banco existe e o worker inicia
+try:
+    with app.app_context():
+        db.create_all()
+except:
+    pass # Ignora erro se o banco ainda não estiver pronto na inicialização
+
+# Inicia thread do robô (apenas uma vez)
+if not os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
+    t = threading.Thread(target=notification_worker, daemon=True)
+    t.start()
+
+
+# --- ROTAS (IGUAIS V33) ---
+@app.route('/health')
+def health(): return "OK", 200
+
+@app.route('/teste-email')
+def teste_email_brevo():
+    status = "OK" if BREVO_API_KEY else "FALTANDO"
+    return f"Status Chave: {status}<br>Remetente: {BREVO_SENDER_EMAIL}"
+
 @app.route('/pagamento')
 @login_required
 def payment():
     if current_user.establishment.is_active: return redirect(url_for('admin_dashboard'))
-    if not stripe.api_key: flash('Erro Config: Chave Stripe ausente.', 'danger'); return redirect(url_for('login'))
+    if not stripe.api_key: flash('Erro Config.', 'danger'); return redirect(url_for('login'))
     try:
         domain = request.host_url
-        checkout_session = stripe.checkout.Session.create(
+        session = stripe.checkout.Session.create(
             payment_method_types=['card'],
             line_items=[{'price': STRIPE_PRICE_ID, 'quantity': 1}],
             mode='subscription',
-            allow_promotion_codes=True, # Correção V33: Cupons Ativados
+            allow_promotion_codes=True,
             success_url=domain + 'pagamento/sucesso',
             cancel_url=domain + 'pagamento/cancelado',
             customer_email=current_user.establishment.contact_email,
         )
-        return redirect(checkout_session.url, code=303)
+        return redirect(session.url, code=303)
     except Exception as e:
-        flash(f'Erro Stripe: {str(e)}', 'danger')
-        return render_template('login.html')
+        flash(f'Erro Stripe: {str(e)}', 'danger'); return render_template('login.html')
 
 @app.route('/pagamento/sucesso')
 @login_required
 def payment_success():
-    est = current_user.establishment
-    est.is_active = True
-    db.session.commit()
-    flash('Assinatura Ativa!', 'success')
-    return redirect(url_for('admin_dashboard'))
+    est = current_user.establishment; est.is_active = True; db.session.commit()
+    flash('Assinatura Ativa!', 'success'); return redirect(url_for('admin_dashboard'))
 
 @app.route('/pagamento/cancelado')
 @login_required
 def payment_cancel():
-    flash('Pagamento cancelado.', 'warning')
-    return redirect(url_for('login'))
+    flash('Cancelado.', 'warning'); return redirect(url_for('login'))
 
-# --- ROTAS PRINCIPAIS ---
 @app.route('/')
 def index(): return render_template('index.html')
 
@@ -270,7 +284,6 @@ def register_business():
         adm = Admin(username=username, establishment_id=est.id)
         adm.set_password(request.form.get('password'))
         db.session.add(adm); db.session.commit()
-        
         login_user(adm)
         if is_master: return redirect(url_for('admin_dashboard'))
         return redirect(url_for('payment'))
@@ -295,20 +308,16 @@ def create_appointment(url_prefix):
     est = Establishment.query.filter_by(url_prefix=url_prefix).first_or_404()
     d = datetime.strptime(request.form.get('appointment_date'), '%Y-%m-%d').date()
     t = datetime.strptime(request.form.get('appointment_time'), '%H:%M').time()
-    
     if datetime.combine(d, t) < get_now_brazil():
-        flash('Horário inválido.', 'danger')
-        return redirect(url_for('schedule_service', url_prefix=url_prefix, service_id=request.form.get('service_id')))
-    
+        flash('Horário inválido.', 'danger'); return redirect(url_for('schedule_service', url_prefix=url_prefix, service_id=request.form.get('service_id')))
     appt = Appointment(client_name=request.form.get('client_name'), client_phone=request.form.get('client_phone'), client_email=request.form.get('client_email'), service_id=request.form.get('service_id'), appointment_date=d, appointment_time=t, establishment_id=est.id)
     db.session.add(appt); db.session.commit()
     
     send_email(f"Confirmado: {est.name}", appt.client_email, f"Agendado para {d.strftime('%d/%m')} às {t.strftime('%H:%M')}")
-    if est.contact_email: send_email(f"Novo Cliente: {appt.client_name}", est.contact_email, f"Novo agendamento: {d.strftime('%d/%m')} às {t.strftime('%H:%M')}")
+    if est.contact_email: send_email(f"Novo Cliente: {appt.client_name}", est.contact_email, f"Novo agendamento.")
     
     zap_msg = f"Olá, confirmo agendamento: {d.strftime('%d/%m')} às {t.strftime('%H:%M')}."
     zap_link = f"https://wa.me/55{est.contact_phone}?text={zap_msg}" if est.contact_phone else "#"
-    
     return render_template('success_appointment.html', appointment=appt, zap_link=zap_link)
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -418,119 +427,64 @@ def get_available_times():
     return jsonify(avail)
 
 if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()
-        if not os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
-            threading.Thread(target=notification_worker, daemon=True).start()
+    with app.app_context(): db.create_all()
+    if not app.debug or os.environ.get('WERKZEUG_RUN_MAIN') == 'true': threading.Thread(target=notification_worker, daemon=True).start()
     app.run(debug=True)
 '''
 
-# --- TEMPLATES (Com Preços e Copy Ajustada) ---
-
+# --- TEMPLATES MANTIDOS ---
 INDEX_HTML = r'''{% extends 'layout.html' %}
 {% block title %}Agenda Fácil - A Plataforma do Profissional{% endblock %}
 {% block content %}
 <div class="tailwind-scope font-sans">
     <section class="bg-gradient-to-b from-white to-gray-50 overflow-hidden pt-16 pb-20">
         <div class="max-w-7xl mx-auto px-6 lg:px-8 grid lg:grid-cols-2 gap-12 items-center">
-            <!-- Texto Hero -->
             <div class="text-center lg:text-left">
-                <div class="inline-block bg-blue-100 text-blue-700 text-xs font-bold px-3 py-1 rounded-full mb-6">
-                    🚀 Sistema de Gestão Completo
-                </div>
-                <h1 class="text-5xl lg:text-6xl font-extrabold tracking-tight text-gray-900 leading-tight mb-6">
-                    Transforme agendamentos em <span class="text-blue-600">mais lucro</span> e tempo livre.
-                </h1>
-                <p class="text-lg text-gray-600 mb-8 leading-relaxed max-w-lg mx-auto lg:mx-0">
-                    A ferramenta definitiva para barbearias, salões e clínicas. 
-                    <br><span class="text-blue-600 font-bold text-2xl">Apenas R$ 34,90/mês</span>.
-                    <br>Tenha um link profissional, receba agendamentos 24h e elimine a troca de mensagens no WhatsApp.
-                </p>
+                <div class="inline-block bg-blue-100 text-blue-700 text-xs font-bold px-3 py-1 rounded-full mb-6">🚀 Sistema de Gestão Completo</div>
+                <h1 class="text-5xl lg:text-6xl font-extrabold tracking-tight text-gray-900 leading-tight mb-6">Transforme agendamentos em <span class="text-blue-600">mais lucro</span>.</h1>
+                <p class="text-lg text-gray-600 mb-8 leading-relaxed max-w-lg mx-auto lg:mx-0">Barbearias, salões e clínicas. Tenha um link profissional, receba agendamentos 24h e seja notificado por e-mail.</p>
                 <div class="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
-                    <a href="{{ url_for('register_business') }}" class="bg-blue-600 text-white px-8 py-4 rounded-xl font-bold text-lg hover:bg-blue-700 transition shadow-lg hover:shadow-xl transform hover:-translate-y-1">
-                        Começar Agora
-                    </a>
-                    <a href="{{ url_for('login') }}" class="px-8 py-4 rounded-xl font-bold text-gray-700 hover:bg-gray-200 transition border border-gray-300">
-                        Já sou Cliente
-                    </a>
+                    <a href="{{ url_for('register_business') }}" class="bg-blue-600 text-white px-8 py-4 rounded-xl font-bold text-lg hover:bg-blue-700 transition shadow-lg">Começar Agora</a>
+                    <a href="{{ url_for('login') }}" class="px-8 py-4 rounded-xl font-bold text-gray-700 hover:bg-gray-200 transition border border-gray-300">Já sou Cliente</a>
                 </div>
-                <p class="mt-4 text-xs text-gray-500">Gestão simplificada para o seu crescimento.</p>
             </div>
-
-            <!-- Imagem do Painel (Notebook) -->
             <div class="relative mt-12 lg:mt-0 perspective-1000">
                 <div class="relative bg-gray-900 rounded-2xl p-2 shadow-2xl transform rotate-y-12 transition hover:rotate-y-0 duration-700">
-                    <div class="absolute top-0 left-1/2 -translate-x-1/2 w-20 h-1 bg-gray-800 rounded-b-md z-20"></div>
                     <div class="relative rounded-xl overflow-hidden bg-white aspect-video group">
-                        <img src="{{ url_for('static', filename='painel.png') }}" 
-                             alt="Painel Administrativo" 
-                             class="w-full h-full object-cover transition duration-500 group-hover:scale-105"
-                             onerror="this.onerror=null; this.src='https://placehold.co/1280x800/E2E8F0/475569?text=Insira+painel.png+na+pasta+static';">
+                        <img src="{{ url_for('static', filename='painel.png') }}" class="w-full h-full object-cover" onerror="this.onerror=null; this.src='https://placehold.co/1280x800/E2E8F0/475569?text=Insira+painel.png';">
                     </div>
                 </div>
             </div>
         </div>
     </section>
-
-    <!-- SEÇÃO PARA QUEM É -->
-    <section class="py-20 bg-white">
-        <div class="max-w-7xl mx-auto px-6 text-center">
-            <h2 class="text-3xl font-bold text-gray-900 mb-12">Ideal para profissionais exigentes</h2>
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-8">
-                <div class="p-6 rounded-2xl bg-gray-50 hover:bg-blue-50 transition border border-gray-100 hover:border-blue-200">
-                    <div class="text-4xl mb-4">💈</div>
-                    <h3 class="font-bold text-gray-900">Barbearias</h3>
-                </div>
-                <div class="p-6 rounded-2xl bg-gray-50 hover:bg-pink-50 transition border border-gray-100 hover:border-pink-200">
-                    <div class="text-4xl mb-4">💇‍♀️</div>
-                    <h3 class="font-bold text-gray-900">Salões</h3>
-                </div>
-                <div class="p-6 rounded-2xl bg-gray-50 hover:bg-green-50 transition border border-gray-100 hover:border-green-200">
-                    <div class="text-4xl mb-4">💆‍♂️</div>
-                    <h3 class="font-bold text-gray-900">Clínicas</h3>
-                </div>
-                <div class="p-6 rounded-2xl bg-gray-50 hover:bg-purple-50 transition border border-gray-100 hover:border-purple-200">
-                    <div class="text-4xl mb-4">💅</div>
-                    <h3 class="font-bold text-gray-900">Estética</h3>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- BENEFÍCIOS -->
+    
     <section class="py-20 bg-gray-900 text-white">
         <div class="max-w-7xl mx-auto px-6">
-            <div class="text-center mb-16">
-                <h2 class="text-3xl lg:text-4xl font-bold mb-4">Tudo o que você precisa para crescer</h2>
-            </div>
-            
+            <div class="text-center mb-16"><h2 class="text-3xl lg:text-4xl font-bold mb-4">Tudo o que você precisa para crescer</h2></div>
             <div class="grid md:grid-cols-3 gap-8">
                 <div class="bg-gray-800 p-8 rounded-2xl border border-gray-700 hover:border-blue-500 transition group">
                     <div class="w-12 h-12 bg-blue-500/20 rounded-lg flex items-center justify-center mb-6 text-blue-400 group-hover:bg-blue-500 group-hover:text-white transition"><i class="bi bi-link-45deg text-2xl"></i></div>
                     <h3 class="text-xl font-bold mb-3">Link Personalizado</h3>
-                    <p class="text-gray-400 text-sm leading-relaxed">Pare de perguntar "qual horário você quer?". Envie seu link (agendafacil/b/voce) e deixe o cliente escolher.</p>
+                    <p class="text-gray-400 text-sm leading-relaxed">Pare de perguntar "qual horário você quer?". Envie seu link e deixe o cliente escolher.</p>
                 </div>
                 <div class="bg-gray-800 p-8 rounded-2xl border border-gray-700 hover:border-green-500 transition group">
                     <div class="w-12 h-12 bg-green-500/20 rounded-lg flex items-center justify-center mb-6 text-green-400 group-hover:bg-green-500 group-hover:text-white transition"><i class="bi bi-clock-history text-2xl"></i></div>
                     <h3 class="text-xl font-bold mb-3">Agenda 24 horas</h3>
-                    <p class="text-gray-400 text-sm leading-relaxed">Seu negócio aberto mesmo quando você está dormindo. Preencha horários vazios automaticamente.</p>
+                    <p class="text-gray-400 text-sm leading-relaxed">Seu negócio aberto mesmo quando você está dormindo.</p>
                 </div>
                 <div class="bg-gray-800 p-8 rounded-2xl border border-gray-700 hover:border-purple-500 transition group">
                     <div class="w-12 h-12 bg-purple-500/20 rounded-lg flex items-center justify-center mb-6 text-purple-400 group-hover:bg-purple-500 group-hover:text-white transition"><i class="bi bi-calendar-check text-2xl"></i></div>
                     <h3 class="text-xl font-bold mb-3">Controle Total</h3>
-                    <p class="text-gray-400 text-sm leading-relaxed">Defina horários de almoço, dias de folga e duração de cada serviço. Você no comando da sua agenda.</p>
+                    <p class="text-gray-400 text-sm leading-relaxed">Defina horários de almoço, dias de folga e duração de cada serviço.</p>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- CTA FINAL -->
     <section class="py-24 bg-blue-600 text-center">
         <div class="max-w-4xl mx-auto px-6">
             <h2 class="text-3xl lg:text-4xl font-bold text-white mb-8">Pronto para profissionalizar seu negócio?</h2>
-            <a href="{{ url_for('register_business') }}" class="inline-block bg-white text-blue-600 px-10 py-4 rounded-full font-bold text-lg hover:bg-gray-100 transition shadow-lg">
-                Criar Minha Conta Agora
-            </a>
+            <a href="{{ url_for('register_business') }}" class="inline-block bg-white text-blue-600 px-10 py-4 rounded-full font-bold text-lg hover:bg-gray-100 transition shadow-lg">Criar Minha Conta Agora</a>
             <p class="mt-6 text-blue-200 text-sm">Configuração em menos de 2 minutos.</p>
         </div>
     </section>
@@ -573,11 +527,7 @@ LAYOUT_HTML = r'''<!DOCTYPE html>
         {% endwith %}
         {% block content %}{% endblock %}
     </main>
-    <footer class="bg-white border-top pt-8 pb-8 mt-auto">
-        <div class="container text-center">
-            <p class="text-gray-500 text-sm mb-2">© 2025 Agenda Fácil SaaS. Todos os direitos reservados.</p>
-        </div>
-    </footer>
+    <footer class="bg-white border-top pt-4 pb-3 mt-auto"><div class="container text-center"><p class="text-muted small mb-0">© 2025 Agenda Fácil.</p></div></footer>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     {% block scripts %}{% endblock %}
 </body>
@@ -897,8 +847,8 @@ def atualizar_sistema():
     except Exception as e:
         print(f"[ERRO] Instale manualmente: pip install -r requirements.txt")
 
-    print("\n[SUCESSO] Sistema V33 Final instalado!")
-    print("Execute: python app.py")
+    print("\n[SUCESSO] Sistema V34 (Persistência) instalado!")
+    print("IMPORTANTE: Configure a variável DATABASE_URL no Render (use PostgreSQL).")
 
 if __name__ == "__main__":
     atualizar_sistema()

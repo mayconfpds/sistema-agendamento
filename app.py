@@ -16,30 +16,34 @@ import stripe
 socket.setdefaulttimeout(15)
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'chave-v33-final-master'
+app.config['SECRET_KEY'] = 'chave-v34-persistence-fix'
 basedir = os.path.abspath(os.path.dirname(__file__))
 
-# --- BANCO ---
+# --- BANCO DE DADOS (LÓGICA DE PERSISTÊNCIA) ---
+# Tenta pegar o PostgreSQL do Render. Se falhar, avisa no log.
 database_url = os.environ.get('DATABASE_URL')
 if database_url and database_url.startswith("postgres://"):
     database_url = database_url.replace("postgres://", "postgresql://", 1)
+
 app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'sqlite:///' + os.path.join(basedir, 'agendamento.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# --- CONFIGURAÇÃO BREVO (API) ---
+if not database_url:
+    print("⚠️ AVISO: Usando SQLite local. Dados serão perdidos ao reiniciar no Render.")
+else:
+    print("✅ Conectado ao PostgreSQL.")
+
+# --- CONFIGURAÇÕES ---
 raw_key = os.environ.get('BREVO_API_KEY', '')
 BREVO_API_KEY = raw_key.strip() if raw_key else None
-BREVO_SENDER_EMAIL = os.environ.get('BREVO_SENDER_EMAIL', 'seu_email_login@gmail.com') 
+BREVO_SENDER_EMAIL = os.environ.get('BREVO_SENDER_EMAIL', 'seu_email@gmail.com') 
 BREVO_SENDER_NAME = "Agenda Facil"
 
-# --- STRIPE ---
 stripe.api_key = os.environ.get('STRIPE_API_KEY')
 STRIPE_PRICE_ID = os.environ.get('STRIPE_PRICE_ID')
 
-# --- UPLOAD ---
 UPLOAD_FOLDER = os.path.join(basedir, 'static', 'uploads')
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'} # Correção V33
-
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 if not os.path.exists(UPLOAD_FOLDER):
     try: os.makedirs(UPLOAD_FOLDER)
@@ -57,7 +61,7 @@ def get_now_brazil():
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-# --- ENVIO DE EMAIL VIA BREVO API ---
+# --- ENVIO DE EMAIL (BREVO) ---
 def send_email(subject, recipient, body):
     if not BREVO_API_KEY:
         print(f"\n⚠️ [EMAIL VIRTUAL] Sem chave API. Para: {recipient}")
@@ -78,26 +82,14 @@ def send_email(subject, recipient, body):
             "subject": subject,
             "htmlContent": html_body
         }
-        
         try:
-            response = requests.post(url, json=payload, headers=headers)
-            if response.status_code in [200, 201, 202]:
-                print(f"\n✅ [BREVO SUCESSO] Enviado para {recipient}")
-            else:
-                print(f"\n❌ [BREVO ERRO] {response.status_code} - {response.text}")
+            r = requests.post(url, json=payload, headers=headers)
+            if r.status_code not in [200, 201, 202]:
+                print(f"\n❌ [BREVO ERRO] {r.text}")
         except Exception as e:
-            print(f"\n❌ [ERRO CONEXÃO BREVO] {e}")
+            print(f"\n❌ [ERRO CONEXÃO] {e}")
 
     threading.Thread(target=_send_thread).start()
-
-# --- ROTA DE DIAGNÓSTICO ---
-@app.route('/teste-email')
-def teste_email_brevo():
-    status_chave = "OK" if BREVO_API_KEY else "FALTANDO"
-    return f"Status Chave: {status_chave}<br>Remetente: {BREVO_SENDER_EMAIL}<br>Tente agendar algo para testar o worker."
-
-@app.route('/health')
-def health(): return "OK", 200
 
 # --- MODELOS ---
 class Establishment(db.Model):
@@ -158,34 +150,37 @@ class Appointment(db.Model):
 @login_manager.user_loader
 def load_user(user_id): return Admin.query.get(int(user_id))
 
-# --- WORKER DE NOTIFICAÇÕES (1H ANTES - API HTTP) ---
+# --- WORKER DE NOTIFICAÇÕES (LIGADO NO GUNICORN) ---
 def notification_worker():
-    print("--- Robô de Notificações Iniciado (Fuso BR) ---")
+    print(">>> Robô de Notificações INICIADO (Background) <<<")
     while True:
         try:
             with app.app_context():
+                # Garante que a tabela existe antes de consultar
                 inspector = inspect(db.engine)
                 if not inspector.has_table("appointments"): 
-                    time_module.sleep(5); continue
+                    time_module.sleep(10)
+                    continue
                 
+                # Busca TODOS os não notificados (mesmo de outros dias que podem ter ficado pendentes)
                 upcoming = Appointment.query.filter(Appointment.notified == False).all()
                 now = get_now_brazil()
                 
                 for appt in upcoming:
                     appt_dt = datetime.combine(appt.appointment_date, appt.appointment_time)
                     time_diff = appt_dt - now
-                    minutes_diff = time_diff.total_seconds() / 60
+                    minutes = time_diff.total_seconds() / 60
                     
-                    if 50 <= minutes_diff <= 70:
-                        print(f"⏰ Enviando lembrete para {appt.client_name}")
+                    # Janela: Entre 50 e 70 minutos antes
+                    if 50 <= minutes <= 70:
+                        print(f"⏰ Enviando e-mail para {appt.client_name} (Faltam {int(minutes)} min)")
                         
                         subj = f"Lembrete: {appt.establishment.name}"
-                        body = f"Olá {appt.client_name},\n\nEste é um lembrete do seu agendamento hoje às {appt.appointment_time.strftime('%H:%M')}."
-                        
+                        body = f"Olá {appt.client_name},\n\nLembrete do seu horário: {appt.appointment_time.strftime('%H:%M')}."
                         send_email(subj, appt.client_email, body)
                         
                         if appt.establishment.contact_email:
-                             send_email("Alerta de Agenda", appt.establishment.contact_email, f"Cliente {appt.client_name} agendado para daqui a 1 hora.")
+                             send_email("Alerta", appt.establishment.contact_email, f"Cliente {appt.client_name} em 1h.")
                         
                         appt.notified = True
                         db.session.commit()
@@ -194,44 +189,61 @@ def notification_worker():
         
         time_module.sleep(60)
 
-# --- ROTAS DE PAGAMENTO ---
+# --- INICIALIZAÇÃO UNIVERSAL ---
+# Este bloco roda tanto no 'flask run' quanto no 'gunicorn'
+# Garante que o banco existe e o worker inicia
+try:
+    with app.app_context():
+        db.create_all()
+except:
+    pass # Ignora erro se o banco ainda não estiver pronto na inicialização
+
+# Inicia thread do robô (apenas uma vez)
+if not os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
+    t = threading.Thread(target=notification_worker, daemon=True)
+    t.start()
+
+
+# --- ROTAS (IGUAIS V33) ---
+@app.route('/health')
+def health(): return "OK", 200
+
+@app.route('/teste-email')
+def teste_email_brevo():
+    status = "OK" if BREVO_API_KEY else "FALTANDO"
+    return f"Status Chave: {status}<br>Remetente: {BREVO_SENDER_EMAIL}"
+
 @app.route('/pagamento')
 @login_required
 def payment():
     if current_user.establishment.is_active: return redirect(url_for('admin_dashboard'))
-    if not stripe.api_key: flash('Erro Config: Chave Stripe ausente.', 'danger'); return redirect(url_for('login'))
+    if not stripe.api_key: flash('Erro Config.', 'danger'); return redirect(url_for('login'))
     try:
         domain = request.host_url
-        checkout_session = stripe.checkout.Session.create(
+        session = stripe.checkout.Session.create(
             payment_method_types=['card'],
             line_items=[{'price': STRIPE_PRICE_ID, 'quantity': 1}],
             mode='subscription',
-            allow_promotion_codes=True, # Correção V33: Cupons Ativados
+            allow_promotion_codes=True,
             success_url=domain + 'pagamento/sucesso',
             cancel_url=domain + 'pagamento/cancelado',
             customer_email=current_user.establishment.contact_email,
         )
-        return redirect(checkout_session.url, code=303)
+        return redirect(session.url, code=303)
     except Exception as e:
-        flash(f'Erro Stripe: {str(e)}', 'danger')
-        return render_template('login.html')
+        flash(f'Erro Stripe: {str(e)}', 'danger'); return render_template('login.html')
 
 @app.route('/pagamento/sucesso')
 @login_required
 def payment_success():
-    est = current_user.establishment
-    est.is_active = True
-    db.session.commit()
-    flash('Assinatura Ativa!', 'success')
-    return redirect(url_for('admin_dashboard'))
+    est = current_user.establishment; est.is_active = True; db.session.commit()
+    flash('Assinatura Ativa!', 'success'); return redirect(url_for('admin_dashboard'))
 
 @app.route('/pagamento/cancelado')
 @login_required
 def payment_cancel():
-    flash('Pagamento cancelado.', 'warning')
-    return redirect(url_for('login'))
+    flash('Cancelado.', 'warning'); return redirect(url_for('login'))
 
-# --- ROTAS PRINCIPAIS ---
 @app.route('/')
 def index(): return render_template('index.html')
 
@@ -253,7 +265,6 @@ def register_business():
         adm = Admin(username=username, establishment_id=est.id)
         adm.set_password(request.form.get('password'))
         db.session.add(adm); db.session.commit()
-        
         login_user(adm)
         if is_master: return redirect(url_for('admin_dashboard'))
         return redirect(url_for('payment'))
@@ -278,20 +289,16 @@ def create_appointment(url_prefix):
     est = Establishment.query.filter_by(url_prefix=url_prefix).first_or_404()
     d = datetime.strptime(request.form.get('appointment_date'), '%Y-%m-%d').date()
     t = datetime.strptime(request.form.get('appointment_time'), '%H:%M').time()
-    
     if datetime.combine(d, t) < get_now_brazil():
-        flash('Horário inválido.', 'danger')
-        return redirect(url_for('schedule_service', url_prefix=url_prefix, service_id=request.form.get('service_id')))
-    
+        flash('Horário inválido.', 'danger'); return redirect(url_for('schedule_service', url_prefix=url_prefix, service_id=request.form.get('service_id')))
     appt = Appointment(client_name=request.form.get('client_name'), client_phone=request.form.get('client_phone'), client_email=request.form.get('client_email'), service_id=request.form.get('service_id'), appointment_date=d, appointment_time=t, establishment_id=est.id)
     db.session.add(appt); db.session.commit()
     
     send_email(f"Confirmado: {est.name}", appt.client_email, f"Agendado para {d.strftime('%d/%m')} às {t.strftime('%H:%M')}")
-    if est.contact_email: send_email(f"Novo Cliente: {appt.client_name}", est.contact_email, f"Novo agendamento: {d.strftime('%d/%m')} às {t.strftime('%H:%M')}")
+    if est.contact_email: send_email(f"Novo Cliente: {appt.client_name}", est.contact_email, f"Novo agendamento.")
     
     zap_msg = f"Olá, confirmo agendamento: {d.strftime('%d/%m')} às {t.strftime('%H:%M')}."
     zap_link = f"https://wa.me/55{est.contact_phone}?text={zap_msg}" if est.contact_phone else "#"
-    
     return render_template('success_appointment.html', appointment=appt, zap_link=zap_link)
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -401,8 +408,6 @@ def get_available_times():
     return jsonify(avail)
 
 if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()
-        if not os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
-            threading.Thread(target=notification_worker, daemon=True).start()
+    with app.app_context(): db.create_all()
+    if not app.debug or os.environ.get('WERKZEUG_RUN_MAIN') == 'true': threading.Thread(target=notification_worker, daemon=True).start()
     app.run(debug=True)
