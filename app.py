@@ -16,20 +16,21 @@ import stripe
 socket.setdefaulttimeout(15)
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'chave-v35-final-persistence'
+app.config['SECRET_KEY'] = 'chave-v36-gold-restore'
 basedir = os.path.abspath(os.path.dirname(__file__))
 
-# --- BANCO DE DADOS (LÓGICA DE PERSISTÊNCIA) ---
-# Tenta pegar o PostgreSQL do Render.
+# --- BANCO DE DADOS (PERSISTÊNCIA POSTGRES) ---
 database_url = os.environ.get('DATABASE_URL')
-
-# Correção para SQLAlchemy (postgres:// -> postgresql://)
 if database_url and database_url.startswith("postgres://"):
     database_url = database_url.replace("postgres://", "postgresql://", 1)
 
-# Se não tiver URL externa, usa arquivo local (que reseta no Render)
 app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'sqlite:///' + os.path.join(basedir, 'agendamento.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+if not database_url:
+    print("⚠️ AVISO LOCAL: Usando SQLite. No Render, configure DATABASE_URL.")
+else:
+    print("✅ MODO PRODUÇÃO: Conectado ao PostgreSQL.")
 
 # --- CONFIGURAÇÕES ---
 raw_key = os.environ.get('BREVO_API_KEY', '')
@@ -148,19 +149,17 @@ class Appointment(db.Model):
 @login_manager.user_loader
 def load_user(user_id): return Admin.query.get(int(user_id))
 
-# --- WORKER DE NOTIFICAÇÕES (LIGADO NO GUNICORN) ---
+# --- WORKER DE NOTIFICAÇÕES ---
 def notification_worker():
     print(">>> Robô de Notificações INICIADO (Background) <<<")
     while True:
         try:
             with app.app_context():
-                # Garante que a tabela existe antes de consultar
                 inspector = inspect(db.engine)
                 if not inspector.has_table("appointments"): 
                     time_module.sleep(10)
                     continue
                 
-                # Busca TODOS os não notificados (mesmo de outros dias que podem ter ficado pendentes)
                 upcoming = Appointment.query.filter(Appointment.notified == False).all()
                 now = get_now_brazil()
                 
@@ -169,17 +168,13 @@ def notification_worker():
                     time_diff = appt_dt - now
                     minutes = time_diff.total_seconds() / 60
                     
-                    # Janela: Entre 50 e 70 minutos antes
                     if 50 <= minutes <= 70:
                         print(f"⏰ Enviando e-mail para {appt.client_name} (Faltam {int(minutes)} min)")
-                        
                         subj = f"Lembrete: {appt.establishment.name}"
                         body = f"Olá {appt.client_name},\n\nLembrete do seu horário: {appt.appointment_time.strftime('%H:%M')}."
                         send_email(subj, appt.client_email, body)
-                        
                         if appt.establishment.contact_email:
                              send_email("Alerta", appt.establishment.contact_email, f"Cliente {appt.client_name} em 1h.")
-                        
                         appt.notified = True
                         db.session.commit()
         except Exception as e:
@@ -188,23 +183,15 @@ def notification_worker():
         time_module.sleep(60)
 
 # --- INICIALIZAÇÃO UNIVERSAL ---
-# Executa a criação do banco e inicia o thread DO LADO DE FORA do if main
-# para garantir que o Gunicorn execute.
-with app.app_context():
-    try:
+try:
+    with app.app_context():
         db.create_all()
-        # Log para verificar qual banco está rodando
-        if 'sqlite' in app.config['SQLALCHEMY_DATABASE_URI']:
-            print("⚠️ ATENÇÃO: Rodando em SQLite Local (Dados não serão salvos ao reiniciar)")
-        else:
-            print("✅ Conectado ao PostgreSQL (Dados seguros)")
-            
-        # Inicia o robô apenas se não estiver rodando o script de instalação (evita duplicidade local)
-        if not os.environ.get('WERKZEUG_RUN_MAIN') == 'true': 
-             t = threading.Thread(target=notification_worker, daemon=True)
-             t.start()
-    except Exception as e:
-        print(f"Erro na inicialização: {e}")
+except:
+    pass 
+
+if not os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
+    t = threading.Thread(target=notification_worker, daemon=True)
+    t.start()
 
 
 # --- ROTAS DE PAGAMENTO ---
