@@ -16,8 +16,19 @@
         <form action="{{ url_for('update_settings') }}" method="POST" enctype="multipart/form-data" class="row align-items-center g-2">
             <input type="hidden" name="form_type" value="contact"> 
             <div class="col-md-3"><label class="small fw-bold">WhatsApp:</label><input type="text" name="contact_phone" class="form-control form-control-sm" value="{{ establishment.contact_phone or '' }}"></div>
-            <div class="col-md-4"><label class="small fw-bold">E-mail (Notificações):</label><input type="email" name="contact_email" class="form-control form-control-sm" value="{{ establishment.contact_email or '' }}"></div>
-            <div class="col-md-3"><label class="small fw-bold">Logo:</label><input type="file" name="logo" class="form-control form-control-sm" accept="image/*"></div>
+            <div class="col-md-3"><label class="small fw-bold">E-mail (Notificações):</label><input type="email" name="contact_email" class="form-control form-control-sm" value="{{ establishment.contact_email or '' }}"></div>
+            
+            <!-- CAMPO NOVO: CAPACIDADE -->
+            <div class="col-md-2">
+                <label class="small fw-bold">Profissionais:</label>
+                <select name="capacity" class="form-select form-select-sm">
+                    <option value="1" {% if establishment.capacity == 1 %}selected{% endif %}>1</option>
+                    <option value="2" {% if establishment.capacity == 2 %}selected{% endif %}>2</option>
+                    <option value="3" {% if establishment.capacity == 3 %}selected{% endif %}>3</option>
+                </select>
+            </div>
+            
+            <div class="col-md-2"><label class="small fw-bold">Logo:</label><input type="file" name="logo" class="form-control form-control-sm" accept="image/*"></div>
             <div class="col-md-2 text-end pt-4"><button class="btn btn-primary btn-sm w-100">Salvar</button></div>
         </form>
     </div>

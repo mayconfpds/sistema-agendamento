@@ -16,10 +16,10 @@ import stripe
 socket.setdefaulttimeout(15)
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'chave-v36-gold-restore'
+app.config['SECRET_KEY'] = 'chave-v37-capacity-master'
 basedir = os.path.abspath(os.path.dirname(__file__))
 
-# --- BANCO DE DADOS (PERSISTÊNCIA POSTGRES) ---
+# --- BANCO DE DADOS ---
 database_url = os.environ.get('DATABASE_URL')
 if database_url and database_url.startswith("postgres://"):
     database_url = database_url.replace("postgres://", "postgresql://", 1)
@@ -28,7 +28,7 @@ app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'sqlite:///' + os.path.j
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 if not database_url:
-    print("⚠️ AVISO LOCAL: Usando SQLite. No Render, configure DATABASE_URL.")
+    print("⚠️ AVISO LOCAL: Usando SQLite.")
 else:
     print("✅ MODO PRODUÇÃO: Conectado ao PostgreSQL.")
 
@@ -99,7 +99,11 @@ class Establishment(db.Model):
     contact_phone = db.Column(db.String(20), nullable=True)
     contact_email = db.Column(db.String(120), nullable=True)
     logo_filename = db.Column(db.String(100), nullable=True)
-    is_active = db.Column(db.Boolean, default=False) 
+    is_active = db.Column(db.Boolean, default=False)
+    
+    # NOVO: CAPACIDADE (QUANTOS PROFISSIONAIS)
+    capacity = db.Column(db.Integer, default=1, nullable=False)
+    
     schedules = db.relationship('DaySchedule', backref='establishment', lazy=True, cascade="all, delete-orphan")
     admins = db.relationship('Admin', backref='establishment', lazy=True)
     services = db.relationship('Service', backref='establishment', lazy=True)
@@ -179,27 +183,24 @@ def notification_worker():
                         db.session.commit()
         except Exception as e:
             print(f"Erro Worker: {e}")
-        
         time_module.sleep(60)
 
 # --- INICIALIZAÇÃO UNIVERSAL ---
 try:
     with app.app_context():
         db.create_all()
-except:
-    pass 
+except: pass 
 
 if not os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
     t = threading.Thread(target=notification_worker, daemon=True)
     t.start()
-
 
 # --- ROTAS DE PAGAMENTO ---
 @app.route('/pagamento')
 @login_required
 def payment():
     if current_user.establishment.is_active: return redirect(url_for('admin_dashboard'))
-    if not stripe.api_key: flash('Erro Config: Chave Stripe ausente.', 'danger'); return redirect(url_for('login'))
+    if not stripe.api_key: flash('Erro Config.', 'danger'); return redirect(url_for('login'))
     try:
         domain = request.host_url
         session = stripe.checkout.Session.create(
@@ -241,7 +242,8 @@ def register_business():
             url_prefix=request.form.get('url_prefix').lower().strip(),
             contact_phone=request.form.get('contact_phone'),
             contact_email=request.form.get('contact_email'),
-            is_active=is_master 
+            is_active=is_master,
+            capacity=1 # Padrão 1 profissional
         )
         db.session.add(est); db.session.commit()
         for i in range(7): db.session.add(DaySchedule(establishment_id=est.id, day_index=i, is_active=(i < 5), work_start=time(9,0), work_end=time(18,0)))
@@ -272,17 +274,37 @@ def create_appointment(url_prefix):
     est = Establishment.query.filter_by(url_prefix=url_prefix).first_or_404()
     d = datetime.strptime(request.form.get('appointment_date'), '%Y-%m-%d').date()
     t = datetime.strptime(request.form.get('appointment_time'), '%H:%M').time()
-    if datetime.combine(d, t) < get_now_brazil():
+    
+    # Validação Dupla de Disponibilidade (Evita conflito simultaneo)
+    # Re-verifica se o horário AINDA está livre antes de salvar
+    service = Service.query.get(request.form.get('service_id'))
+    appts = Appointment.query.filter_by(appointment_date=d, establishment_id=est.id).all()
+    start_dt = datetime.combine(d, t)
+    end_dt = start_dt + timedelta(minutes=service.duration)
+    
+    overlap_count = 0
+    for a in appts:
+        s = datetime.combine(d, a.appointment_time)
+        e = s + timedelta(minutes=a.service_info.duration)
+        # Se sobrepõe
+        if max(start_dt, s) < min(end_dt, e):
+            overlap_count += 1
+            
+    if overlap_count >= est.capacity:
+        flash('Ops! Esse horário acabou de ser ocupado. Tente outro.', 'danger')
+        return redirect(url_for('schedule_service', url_prefix=url_prefix, service_id=service.id))
+
+    if start_dt < get_now_brazil():
         flash('Horário inválido.', 'danger'); return redirect(url_for('schedule_service', url_prefix=url_prefix, service_id=request.form.get('service_id')))
+        
     appt = Appointment(client_name=request.form.get('client_name'), client_phone=request.form.get('client_phone'), client_email=request.form.get('client_email'), service_id=request.form.get('service_id'), appointment_date=d, appointment_time=t, establishment_id=est.id)
     db.session.add(appt); db.session.commit()
-    
-    zap_msg = f"Olá, confirmo agendamento: {d.strftime('%d/%m')} às {t.strftime('%H:%M')}."
-    zap_link = f"https://wa.me/55{est.contact_phone}?text={zap_msg}" if est.contact_phone else "#"
     
     send_email(f"Confirmado: {est.name}", appt.client_email, f"Agendado para {d.strftime('%d/%m')} às {t.strftime('%H:%M')}")
     if est.contact_email: send_email(f"Novo Cliente: {appt.client_name}", est.contact_email, f"Novo agendamento.")
     
+    zap_msg = f"Olá, confirmo agendamento: {d.strftime('%d/%m')} às {t.strftime('%H:%M')}."
+    zap_link = f"https://wa.me/55{est.contact_phone}?text={zap_msg}" if est.contact_phone else "#"
     return render_template('success_appointment.html', appointment=appt, zap_link=zap_link)
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -320,6 +342,14 @@ def update_settings():
     if ft == 'contact':
         est.contact_phone = request.form.get('contact_phone')
         est.contact_email = request.form.get('contact_email')
+        
+        # ATUALIZAÇÃO CAPACIDADE
+        try:
+            new_capacity = int(request.form.get('capacity', 1))
+            if 1 <= new_capacity <= 3:
+                est.capacity = new_capacity
+        except: pass
+
         if 'logo' in request.files:
             file = request.files['logo']
             if file and allowed_file(file.filename):
@@ -327,7 +357,7 @@ def update_settings():
                 uid = f"{est.id}_{int(time_module.time())}_{fname}"
                 file.save(os.path.join(app.config['UPLOAD_FOLDER'], uid))
                 est.logo_filename = uid
-        flash('Salvo!', 'success')
+        flash('Dados salvos!', 'success')
     elif ft == 'schedule':
         for sid in request.form.getlist('schedule_id'):
             ds = DaySchedule.query.get(sid)
@@ -338,7 +368,7 @@ def update_settings():
                 if ws and we: ds.work_start = datetime.strptime(ws, '%H:%M').time(); ds.work_end = datetime.strptime(we, '%H:%M').time()
                 if ls and le: ds.lunch_start = datetime.strptime(ls, '%H:%M').time(); ds.lunch_end = datetime.strptime(le, '%H:%M').time()
                 else: ds.lunch_start = None; ds.lunch_end = None
-        flash('Atualizado!', 'success')
+        flash('Horários atualizados!', 'success')
     db.session.commit()
     return redirect(url_for('admin_dashboard'))
 
@@ -373,22 +403,53 @@ def get_available_times():
     est = svc.establishment
     day_sched = DaySchedule.query.filter_by(establishment_id=est.id, day_index=sel_date.weekday()).first()
     if not day_sched or not day_sched.is_active: return jsonify([])
+    
     appts = Appointment.query.filter_by(appointment_date=sel_date, establishment_id=est.id).all()
     busy = []
-    if day_sched.lunch_start and day_sched.lunch_end: busy.append((datetime.combine(sel_date, day_sched.lunch_start), datetime.combine(sel_date, day_sched.lunch_end)))
-    for a in appts: busy.append((datetime.combine(sel_date, a.appointment_time), datetime.combine(sel_date, a.appointment_time) + timedelta(minutes=a.service_info.duration)))
+    
+    # Pausa de almoço é absoluta (ninguém trabalha)
+    if day_sched.lunch_start and day_sched.lunch_end:
+        lunch_s = datetime.combine(sel_date, day_sched.lunch_start)
+        lunch_e = datetime.combine(sel_date, day_sched.lunch_end)
+    
     avail = []
     curr = datetime.combine(sel_date, day_sched.work_start)
     limit = datetime.combine(sel_date, day_sched.work_end)
     now = get_now_brazil()
+    
     while curr + timedelta(minutes=svc.duration) <= limit:
         end = curr + timedelta(minutes=svc.duration)
-        if sel_date == now.date() and curr < now: curr += timedelta(minutes=15); continue
-        collision = False
-        for bs, be in busy:
-            if max(curr, bs) < min(end, be): collision = True; break
-        if not collision: avail.append(curr.strftime('%H:%M'))
+        
+        # Filtro de passado
+        if sel_date == now.date() and curr < now: 
+            curr += timedelta(minutes=15)
+            continue
+            
+        # Filtro de Almoço (Absoluto)
+        in_lunch = False
+        if day_sched.lunch_start and day_sched.lunch_end:
+            lunch_s = datetime.combine(sel_date, day_sched.lunch_start)
+            lunch_e = datetime.combine(sel_date, day_sched.lunch_end)
+            if (curr >= lunch_s and curr < lunch_e) or (end > lunch_s and end <= lunch_e) or (curr < lunch_s and end > lunch_e):
+               in_lunch = True
+        
+        if in_lunch:
+            curr += timedelta(minutes=15)
+            continue
+
+        # Filtro de Capacidade
+        overlap_count = 0
+        for a in appts:
+            s = datetime.combine(sel_date, a.appointment_time)
+            e = s + timedelta(minutes=a.service_info.duration)
+            if max(curr, s) < min(end, e):
+                overlap_count += 1
+        
+        if overlap_count < est.capacity:
+            avail.append(curr.strftime('%H:%M'))
+            
         curr += timedelta(minutes=15)
+        
     return jsonify(avail)
 
 if __name__ == '__main__':

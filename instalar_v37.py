@@ -15,7 +15,7 @@ psycopg2-binary
 
 PROCFILE = r'''web: gunicorn app:app'''
 
-# --- APP.PY (Funcionalidades Completas V35) ---
+# --- APP.PY (Com Lógica de Capacidade) ---
 APP_PY = r'''import os
 import threading
 import time as time_module
@@ -34,10 +34,10 @@ import stripe
 socket.setdefaulttimeout(15)
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'chave-v36-gold-restore'
+app.config['SECRET_KEY'] = 'chave-v37-capacity-master'
 basedir = os.path.abspath(os.path.dirname(__file__))
 
-# --- BANCO DE DADOS (PERSISTÊNCIA POSTGRES) ---
+# --- BANCO DE DADOS ---
 database_url = os.environ.get('DATABASE_URL')
 if database_url and database_url.startswith("postgres://"):
     database_url = database_url.replace("postgres://", "postgresql://", 1)
@@ -46,7 +46,7 @@ app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'sqlite:///' + os.path.j
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 if not database_url:
-    print("⚠️ AVISO LOCAL: Usando SQLite. No Render, configure DATABASE_URL.")
+    print("⚠️ AVISO LOCAL: Usando SQLite.")
 else:
     print("✅ MODO PRODUÇÃO: Conectado ao PostgreSQL.")
 
@@ -117,7 +117,11 @@ class Establishment(db.Model):
     contact_phone = db.Column(db.String(20), nullable=True)
     contact_email = db.Column(db.String(120), nullable=True)
     logo_filename = db.Column(db.String(100), nullable=True)
-    is_active = db.Column(db.Boolean, default=False) 
+    is_active = db.Column(db.Boolean, default=False)
+    
+    # NOVO: CAPACIDADE (QUANTOS PROFISSIONAIS)
+    capacity = db.Column(db.Integer, default=1, nullable=False)
+    
     schedules = db.relationship('DaySchedule', backref='establishment', lazy=True, cascade="all, delete-orphan")
     admins = db.relationship('Admin', backref='establishment', lazy=True)
     services = db.relationship('Service', backref='establishment', lazy=True)
@@ -197,27 +201,24 @@ def notification_worker():
                         db.session.commit()
         except Exception as e:
             print(f"Erro Worker: {e}")
-        
         time_module.sleep(60)
 
 # --- INICIALIZAÇÃO UNIVERSAL ---
 try:
     with app.app_context():
         db.create_all()
-except:
-    pass 
+except: pass 
 
 if not os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
     t = threading.Thread(target=notification_worker, daemon=True)
     t.start()
-
 
 # --- ROTAS DE PAGAMENTO ---
 @app.route('/pagamento')
 @login_required
 def payment():
     if current_user.establishment.is_active: return redirect(url_for('admin_dashboard'))
-    if not stripe.api_key: flash('Erro Config: Chave Stripe ausente.', 'danger'); return redirect(url_for('login'))
+    if not stripe.api_key: flash('Erro Config.', 'danger'); return redirect(url_for('login'))
     try:
         domain = request.host_url
         session = stripe.checkout.Session.create(
@@ -259,7 +260,8 @@ def register_business():
             url_prefix=request.form.get('url_prefix').lower().strip(),
             contact_phone=request.form.get('contact_phone'),
             contact_email=request.form.get('contact_email'),
-            is_active=is_master 
+            is_active=is_master,
+            capacity=1 # Padrão 1 profissional
         )
         db.session.add(est); db.session.commit()
         for i in range(7): db.session.add(DaySchedule(establishment_id=est.id, day_index=i, is_active=(i < 5), work_start=time(9,0), work_end=time(18,0)))
@@ -290,17 +292,37 @@ def create_appointment(url_prefix):
     est = Establishment.query.filter_by(url_prefix=url_prefix).first_or_404()
     d = datetime.strptime(request.form.get('appointment_date'), '%Y-%m-%d').date()
     t = datetime.strptime(request.form.get('appointment_time'), '%H:%M').time()
-    if datetime.combine(d, t) < get_now_brazil():
+    
+    # Validação Dupla de Disponibilidade (Evita conflito simultaneo)
+    # Re-verifica se o horário AINDA está livre antes de salvar
+    service = Service.query.get(request.form.get('service_id'))
+    appts = Appointment.query.filter_by(appointment_date=d, establishment_id=est.id).all()
+    start_dt = datetime.combine(d, t)
+    end_dt = start_dt + timedelta(minutes=service.duration)
+    
+    overlap_count = 0
+    for a in appts:
+        s = datetime.combine(d, a.appointment_time)
+        e = s + timedelta(minutes=a.service_info.duration)
+        # Se sobrepõe
+        if max(start_dt, s) < min(end_dt, e):
+            overlap_count += 1
+            
+    if overlap_count >= est.capacity:
+        flash('Ops! Esse horário acabou de ser ocupado. Tente outro.', 'danger')
+        return redirect(url_for('schedule_service', url_prefix=url_prefix, service_id=service.id))
+
+    if start_dt < get_now_brazil():
         flash('Horário inválido.', 'danger'); return redirect(url_for('schedule_service', url_prefix=url_prefix, service_id=request.form.get('service_id')))
+        
     appt = Appointment(client_name=request.form.get('client_name'), client_phone=request.form.get('client_phone'), client_email=request.form.get('client_email'), service_id=request.form.get('service_id'), appointment_date=d, appointment_time=t, establishment_id=est.id)
     db.session.add(appt); db.session.commit()
-    
-    zap_msg = f"Olá, confirmo agendamento: {d.strftime('%d/%m')} às {t.strftime('%H:%M')}."
-    zap_link = f"https://wa.me/55{est.contact_phone}?text={zap_msg}" if est.contact_phone else "#"
     
     send_email(f"Confirmado: {est.name}", appt.client_email, f"Agendado para {d.strftime('%d/%m')} às {t.strftime('%H:%M')}")
     if est.contact_email: send_email(f"Novo Cliente: {appt.client_name}", est.contact_email, f"Novo agendamento.")
     
+    zap_msg = f"Olá, confirmo agendamento: {d.strftime('%d/%m')} às {t.strftime('%H:%M')}."
+    zap_link = f"https://wa.me/55{est.contact_phone}?text={zap_msg}" if est.contact_phone else "#"
     return render_template('success_appointment.html', appointment=appt, zap_link=zap_link)
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -338,6 +360,14 @@ def update_settings():
     if ft == 'contact':
         est.contact_phone = request.form.get('contact_phone')
         est.contact_email = request.form.get('contact_email')
+        
+        # ATUALIZAÇÃO CAPACIDADE
+        try:
+            new_capacity = int(request.form.get('capacity', 1))
+            if 1 <= new_capacity <= 3:
+                est.capacity = new_capacity
+        except: pass
+
         if 'logo' in request.files:
             file = request.files['logo']
             if file and allowed_file(file.filename):
@@ -345,7 +375,7 @@ def update_settings():
                 uid = f"{est.id}_{int(time_module.time())}_{fname}"
                 file.save(os.path.join(app.config['UPLOAD_FOLDER'], uid))
                 est.logo_filename = uid
-        flash('Salvo!', 'success')
+        flash('Dados salvos!', 'success')
     elif ft == 'schedule':
         for sid in request.form.getlist('schedule_id'):
             ds = DaySchedule.query.get(sid)
@@ -356,7 +386,7 @@ def update_settings():
                 if ws and we: ds.work_start = datetime.strptime(ws, '%H:%M').time(); ds.work_end = datetime.strptime(we, '%H:%M').time()
                 if ls and le: ds.lunch_start = datetime.strptime(ls, '%H:%M').time(); ds.lunch_end = datetime.strptime(le, '%H:%M').time()
                 else: ds.lunch_start = None; ds.lunch_end = None
-        flash('Atualizado!', 'success')
+        flash('Horários atualizados!', 'success')
     db.session.commit()
     return redirect(url_for('admin_dashboard'))
 
@@ -391,153 +421,61 @@ def get_available_times():
     est = svc.establishment
     day_sched = DaySchedule.query.filter_by(establishment_id=est.id, day_index=sel_date.weekday()).first()
     if not day_sched or not day_sched.is_active: return jsonify([])
+    
     appts = Appointment.query.filter_by(appointment_date=sel_date, establishment_id=est.id).all()
     busy = []
-    if day_sched.lunch_start and day_sched.lunch_end: busy.append((datetime.combine(sel_date, day_sched.lunch_start), datetime.combine(sel_date, day_sched.lunch_end)))
-    for a in appts: busy.append((datetime.combine(sel_date, a.appointment_time), datetime.combine(sel_date, a.appointment_time) + timedelta(minutes=a.service_info.duration)))
+    
+    # Pausa de almoço é absoluta (ninguém trabalha)
+    if day_sched.lunch_start and day_sched.lunch_end:
+        lunch_s = datetime.combine(sel_date, day_sched.lunch_start)
+        lunch_e = datetime.combine(sel_date, day_sched.lunch_end)
+    
     avail = []
     curr = datetime.combine(sel_date, day_sched.work_start)
     limit = datetime.combine(sel_date, day_sched.work_end)
     now = get_now_brazil()
+    
     while curr + timedelta(minutes=svc.duration) <= limit:
         end = curr + timedelta(minutes=svc.duration)
-        if sel_date == now.date() and curr < now: curr += timedelta(minutes=15); continue
-        collision = False
-        for bs, be in busy:
-            if max(curr, bs) < min(end, be): collision = True; break
-        if not collision: avail.append(curr.strftime('%H:%M'))
+        
+        # Filtro de passado
+        if sel_date == now.date() and curr < now: 
+            curr += timedelta(minutes=15)
+            continue
+            
+        # Filtro de Almoço (Absoluto)
+        in_lunch = False
+        if day_sched.lunch_start and day_sched.lunch_end:
+            lunch_s = datetime.combine(sel_date, day_sched.lunch_start)
+            lunch_e = datetime.combine(sel_date, day_sched.lunch_end)
+            if (curr >= lunch_s and curr < lunch_e) or (end > lunch_s and end <= lunch_e) or (curr < lunch_s and end > lunch_e):
+               in_lunch = True
+        
+        if in_lunch:
+            curr += timedelta(minutes=15)
+            continue
+
+        # Filtro de Capacidade
+        overlap_count = 0
+        for a in appts:
+            s = datetime.combine(sel_date, a.appointment_time)
+            e = s + timedelta(minutes=a.service_info.duration)
+            if max(curr, s) < min(end, e):
+                overlap_count += 1
+        
+        if overlap_count < est.capacity:
+            avail.append(curr.strftime('%H:%M'))
+            
         curr += timedelta(minutes=15)
+        
     return jsonify(avail)
 
 if __name__ == '__main__':
     app.run(debug=True)
 '''
 
-# --- TEMPLATES RESTAURADOS (COPY V10 + DARK THEME V10) ---
+# --- TEMPLATES RESTAURADOS ---
 
-INDEX_HTML = r'''{% extends 'layout.html' %}
-{% block title %}Agenda Fácil - A Plataforma do Profissional{% endblock %}
-{% block content %}
-<div class="tailwind-scope font-sans">
-    <section class="bg-gradient-to-b from-white to-gray-50 overflow-hidden pt-16 pb-20">
-        <div class="max-w-7xl mx-auto px-6 lg:px-8 grid lg:grid-cols-2 gap-12 items-center">
-            <div class="text-center lg:text-left">
-                <div class="inline-block bg-blue-100 text-blue-700 text-xs font-bold px-3 py-1 rounded-full mb-6">
-                    🚀 Sistema de Gestão Completo
-                </div>
-                <h1 class="text-5xl lg:text-6xl font-extrabold tracking-tight text-gray-900 leading-tight mb-6">
-                    Transforme agendamentos em <span class="text-blue-600">mais lucro</span> e tempo livre.
-                </h1>
-                <p class="text-lg text-gray-600 mb-8 leading-relaxed max-w-lg mx-auto lg:mx-0">
-                    A ferramenta definitiva para barbearias, salões e clínicas. 
-                    <br><span class="text-blue-600 font-bold text-2xl">Apenas R$ 34,90/mês</span>.
-                    <br>Tenha um link profissional, receba agendamentos 24h e elimine a troca de mensagens no WhatsApp.
-                </p>
-                <div class="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
-                    <a href="{{ url_for('register_business') }}" class="bg-blue-600 text-white px-8 py-4 rounded-xl font-bold text-lg hover:bg-blue-700 transition shadow-lg hover:shadow-xl transform hover:-translate-y-1">
-                        Começar Agora
-                    </a>
-                    <a href="{{ url_for('login') }}" class="px-8 py-4 rounded-xl font-bold text-gray-700 hover:bg-gray-200 transition border border-gray-300">
-                        Já sou Cliente
-                    </a>
-                </div>
-                <p class="mt-4 text-xs text-gray-500">Gestão simplificada para o seu crescimento.</p>
-            </div>
-
-            <div class="relative mt-12 lg:mt-0 perspective-1000">
-                <div class="relative bg-gray-900 rounded-2xl p-2 shadow-2xl transform rotate-y-12 transition hover:rotate-y-0 duration-700">
-                    <div class="absolute top-0 left-1/2 -translate-x-1/2 w-20 h-1 bg-gray-800 rounded-b-md z-20"></div>
-                    <div class="relative rounded-xl overflow-hidden bg-white aspect-video group">
-                        <img src="{{ url_for('static', filename='painel.png') }}" 
-                             alt="Painel Administrativo" 
-                             class="w-full h-full object-cover transition duration-500 group-hover:scale-105"
-                             onerror="this.onerror=null; this.src='https://placehold.co/1280x800/E2E8F0/475569?text=Insira+painel.png+na+pasta+static';">
-                        
-                        <div class="absolute inset-0 bg-gradient-to-tr from-white/10 to-transparent pointer-events-none"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <section class="py-20 bg-white">
-        <div class="max-w-7xl mx-auto px-6 text-center">
-            <h2 class="text-3xl font-bold text-gray-900 mb-12">Ideal para profissionais exigentes</h2>
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-8">
-                <div class="p-6 rounded-2xl bg-gray-50 hover:bg-blue-50 transition border border-gray-100 hover:border-blue-200">
-                    <div class="text-4xl mb-4">💈</div>
-                    <h3 class="font-bold text-gray-900">Barbearias</h3>
-                </div>
-                <div class="p-6 rounded-2xl bg-gray-50 hover:bg-pink-50 transition border border-gray-100 hover:border-pink-200">
-                    <div class="text-4xl mb-4">💇‍♀️</div>
-                    <h3 class="font-bold text-gray-900">Salões</h3>
-                </div>
-                <div class="p-6 rounded-2xl bg-gray-50 hover:bg-green-50 transition border border-gray-100 hover:border-green-200">
-                    <div class="text-4xl mb-4">💆‍♂️</div>
-                    <h3 class="font-bold text-gray-900">Clínicas</h3>
-                </div>
-                <div class="p-6 rounded-2xl bg-gray-50 hover:bg-purple-50 transition border border-gray-100 hover:border-purple-200">
-                    <div class="text-4xl mb-4">💅</div>
-                    <h3 class="font-bold text-gray-900">Estética</h3>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <section class="py-20 bg-gray-900 text-white">
-        <div class="max-w-7xl mx-auto px-6">
-            <div class="text-center mb-16">
-                <h2 class="text-3xl lg:text-4xl font-bold mb-4">Tudo o que você precisa para crescer</h2>
-            </div>
-            
-            <div class="grid md:grid-cols-3 gap-8">
-                <div class="bg-gray-800 p-8 rounded-2xl border border-gray-700 hover:border-blue-500 transition group">
-                    <div class="w-12 h-12 bg-blue-500/20 rounded-lg flex items-center justify-center mb-6 text-blue-400 group-hover:bg-blue-500 group-hover:text-white transition">
-                        <i class="bi bi-link-45deg text-2xl"></i>
-                    </div>
-                    <h3 class="text-xl font-bold mb-3">Link Personalizado</h3>
-                    <p class="text-gray-400 text-sm leading-relaxed">
-                        Pare de perguntar "qual horário você quer?". Envie seu link (agendafacil/b/voce) e deixe o cliente escolher.
-                    </p>
-                </div>
-
-                <div class="bg-gray-800 p-8 rounded-2xl border border-gray-700 hover:border-green-500 transition group">
-                    <div class="w-12 h-12 bg-green-500/20 rounded-lg flex items-center justify-center mb-6 text-green-400 group-hover:bg-green-500 group-hover:text-white transition">
-                        <i class="bi bi-clock-history text-2xl"></i>
-                    </div>
-                    <h3 class="text-xl font-bold mb-3">Agenda 24 horas</h3>
-                    <p class="text-gray-400 text-sm leading-relaxed">
-                        Seu negócio aberto mesmo quando você está dormindo. Preencha horários vazios automaticamente.
-                    </p>
-                </div>
-
-                <div class="bg-gray-800 p-8 rounded-2xl border border-gray-700 hover:border-purple-500 transition group">
-                    <div class="w-12 h-12 bg-purple-500/20 rounded-lg flex items-center justify-center mb-6 text-purple-400 group-hover:bg-purple-500 group-hover:text-white transition">
-                        <i class="bi bi-calendar-check text-2xl"></i>
-                    </div>
-                    <h3 class="text-xl font-bold mb-3">Controle Total</h3>
-                    <p class="text-gray-400 text-sm leading-relaxed">
-                        Defina horários de almoço, dias de folga e duração de cada serviço. Você no comando da sua agenda.
-                    </p>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <section class="py-24 bg-blue-600 text-center">
-        <div class="max-w-4xl mx-auto px-6">
-            <h2 class="text-3xl lg:text-4xl font-bold text-white mb-8">Pronto para profissionalizar seu negócio?</h2>
-            <a href="{{ url_for('register_business') }}" class="inline-block bg-white text-blue-600 px-10 py-4 rounded-full font-bold text-lg hover:bg-gray-100 transition shadow-lg">
-                Criar Minha Conta Agora
-            </a>
-            <p class="mt-6 text-blue-200 text-sm">Configuração em menos de 2 minutos.</p>
-        </div>
-    </section>
-</div>
-{% endblock %}
-'''
-
-# --- OUTROS TEMPLATES IGUAIS AOS ANTERIORES ---
 LAYOUT_HTML = r'''<!DOCTYPE html>
 <html lang="pt-br">
 <head>
@@ -573,66 +511,73 @@ LAYOUT_HTML = r'''<!DOCTYPE html>
         {% endwith %}
         {% block content %}{% endblock %}
     </main>
-    <footer class="bg-white border-top pt-8 pb-8 mt-auto">
-        <div class="container text-center">
-            <p class="text-gray-500 text-sm mb-2">© 2025 Agenda Fácil SaaS. Todos os direitos reservados.</p>
-        </div>
-    </footer>
+    <footer class="bg-white border-top pt-4 pb-3 mt-auto"><div class="container text-center"><p class="text-muted small mb-0">© 2025 Agenda Fácil.</p></div></footer>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     {% block scripts %}{% endblock %}
 </body>
 </html>
 '''
 
-REGISTER_HTML = r'''{% extends 'layout.html' %}
-{% block title %}Criar Conta{% endblock %}
+INDEX_HTML = r'''{% extends 'layout.html' %}
+{% block title %}Agenda Fácil - A Plataforma do Profissional{% endblock %}
 {% block content %}
-<div class="row justify-content-center mt-5 mb-5">
-    <div class="col-md-8 col-lg-6">
-        <div class="card shadow-lg border-0 rounded-4 overflow-hidden">
-            <div class="card-header bg-blue-600 text-white text-center py-4"><h3 class="fw-bold mb-0">Assine Agora</h3><p class="text-blue-100 text-sm mb-0">Plano Profissional: R$ 34,90/mês</p></div>
-            <div class="card-body p-4 p-md-5 bg-white">
-                <form method="POST" action="{{ url_for('register_business') }}">
-                    <h5 class="mb-3 text-primary fw-bold small text-uppercase ls-1">Dados do Negócio</h5>
-                    <div class="mb-3"><label class="form-label small fw-bold">Nome do Estabelecimento</label><input type="text" class="form-control" name="business_name" required></div>
-                    <div class="mb-3"><label class="form-label small fw-bold">Link Personalizado</label><div class="input-group"><span class="input-group-text bg-light border-end-0">agendafacil.com/b/</span><input type="text" class="form-control border-start-0 ps-0" name="url_prefix" pattern="[a-z0-9-]+" required></div></div>
-                    <div class="row g-2 mb-4">
-                        <div class="col-md-6"><label class="form-label small fw-bold">WhatsApp</label><input type="text" class="form-control" name="contact_phone"></div>
-                        <div class="col-md-6"><label class="form-label small fw-bold">E-mail para Notificações</label><input type="email" class="form-control" name="contact_email" required></div>
+<div class="tailwind-scope font-sans">
+    <section class="bg-gradient-to-b from-white to-gray-50 overflow-hidden pt-16 pb-20">
+        <div class="max-w-7xl mx-auto px-6 lg:px-8 grid lg:grid-cols-2 gap-12 items-center">
+            <div class="text-center lg:text-left">
+                <div class="inline-block bg-blue-100 text-blue-700 text-xs font-bold px-3 py-1 rounded-full mb-6">🚀 Sistema de Gestão Completo</div>
+                <h1 class="text-5xl lg:text-6xl font-extrabold tracking-tight text-gray-900 leading-tight mb-6">Transforme agendamentos em <span class="text-blue-600">mais lucro</span>.</h1>
+                <p class="text-lg text-gray-600 mb-8 leading-relaxed max-w-lg mx-auto lg:mx-0">Barbearias, salões e clínicas. Tenha um link profissional, receba agendamentos 24h e seja notificado por e-mail.</p>
+                <div class="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
+                    <a href="{{ url_for('register_business') }}" class="bg-blue-600 text-white px-8 py-4 rounded-xl font-bold text-lg hover:bg-blue-700 transition shadow-lg">Começar Agora</a>
+                    <a href="{{ url_for('login') }}" class="px-8 py-4 rounded-xl font-bold text-gray-700 hover:bg-gray-200 transition border border-gray-300">Já sou Cliente</a>
+                </div>
+            </div>
+            <div class="relative mt-12 lg:mt-0 perspective-1000">
+                <div class="relative bg-gray-900 rounded-2xl p-2 shadow-2xl transform rotate-y-12 transition hover:rotate-y-0 duration-700">
+                    <div class="relative rounded-xl overflow-hidden bg-white aspect-video group">
+                        <img src="{{ url_for('static', filename='painel.png') }}" class="w-full h-full object-cover" onerror="this.onerror=null; this.src='https://placehold.co/1280x800/E2E8F0/475569?text=Insira+painel.png+na+pasta+static';">
                     </div>
-                    <h5 class="mb-3 text-primary fw-bold small text-uppercase ls-1 border-top pt-4">Acesso</h5>
-                    <div class="row g-2">
-                        <div class="col-md-6 mb-3"><label class="form-label small fw-bold">Usuário</label><input type="text" class="form-control" name="username" required></div>
-                        <div class="col-md-6 mb-3"><label class="form-label small fw-bold">Senha</label><input type="password" class="form-control" name="password" required></div>
-                    </div>
-                    <button class="btn btn-primary w-100 py-3 fw-bold rounded-3 shadow-sm mt-2">Ir para Pagamento</button>
-                </form>
+                </div>
             </div>
         </div>
-    </div>
-</div>
-{% endblock %}
-'''
-
-LOGIN_HTML = r'''{% extends 'layout.html' %}
-{% block title %}Login{% endblock %}
-{% block content %}
-<div class="row justify-content-center mt-5">
-    <div class="col-md-5 col-lg-4">
-        <div class="card shadow-lg border-0 rounded-4 p-4">
-            <div class="text-center mb-4"><h2 class="fw-bold h4">Acessar Painel</h2></div>
-            <form method="POST">
-                <div class="mb-3"><label class="form-label small fw-bold">Usuário</label><input type="text" class="form-control form-control-lg" name="username" required></div>
-                <div class="mb-4"><label class="form-label small fw-bold">Senha</label><input type="password" class="form-control form-control-lg" name="password" required></div>
-                <button class="btn btn-dark w-100 py-3 fw-bold rounded-3">Entrar</button>
-            </form>
-            <div class="text-center mt-4 border-top pt-3"><a href="{{ url_for('register_business') }}" class="text-decoration-none small text-muted">Não tem conta? <span class="text-blue-600 fw-bold">Assine já</span></a></div>
+    </section>
+    
+    <section class="py-20 bg-gray-900 text-white">
+        <div class="max-w-7xl mx-auto px-6">
+            <div class="text-center mb-16"><h2 class="text-3xl lg:text-4xl font-bold mb-4">Tudo o que você precisa para crescer</h2></div>
+            <div class="grid md:grid-cols-3 gap-8">
+                <div class="bg-gray-800 p-8 rounded-2xl border border-gray-700 hover:border-blue-500 transition group">
+                    <div class="w-12 h-12 bg-blue-500/20 rounded-lg flex items-center justify-center mb-6 text-blue-400 group-hover:bg-blue-500 group-hover:text-white transition"><i class="bi bi-link-45deg text-2xl"></i></div>
+                    <h3 class="text-xl font-bold mb-3">Link Personalizado</h3>
+                    <p class="text-gray-400 text-sm leading-relaxed">Pare de perguntar "qual horário você quer?". Envie seu link e deixe o cliente escolher.</p>
+                </div>
+                <div class="bg-gray-800 p-8 rounded-2xl border border-gray-700 hover:border-green-500 transition group">
+                    <div class="w-12 h-12 bg-green-500/20 rounded-lg flex items-center justify-center mb-6 text-green-400 group-hover:bg-green-500 group-hover:text-white transition"><i class="bi bi-clock-history text-2xl"></i></div>
+                    <h3 class="text-xl font-bold mb-3">Agenda 24 horas</h3>
+                    <p class="text-gray-400 text-sm leading-relaxed">Seu negócio aberto mesmo quando você está dormindo.</p>
+                </div>
+                <div class="bg-gray-800 p-8 rounded-2xl border border-gray-700 hover:border-purple-500 transition group">
+                    <div class="w-12 h-12 bg-purple-500/20 rounded-lg flex items-center justify-center mb-6 text-purple-400 group-hover:bg-purple-500 group-hover:text-white transition"><i class="bi bi-calendar-check text-2xl"></i></div>
+                    <h3 class="text-xl font-bold mb-3">Controle Total</h3>
+                    <p class="text-gray-400 text-sm leading-relaxed">Defina horários de almoço, dias de folga e duração de cada serviço.</p>
+                </div>
+            </div>
         </div>
-    </div>
+    </section>
+
+    <section class="py-24 bg-blue-600 text-center">
+        <div class="max-w-4xl mx-auto px-6">
+            <h2 class="text-3xl lg:text-4xl font-bold text-white mb-8">Pronto para profissionalizar seu negócio?</h2>
+            <a href="{{ url_for('register_business') }}" class="inline-block bg-white text-blue-600 px-10 py-4 rounded-full font-bold text-lg hover:bg-gray-100 transition shadow-lg">Criar Minha Conta Agora</a>
+            <p class="mt-6 text-blue-200 text-sm">Configuração em menos de 2 minutos.</p>
+        </div>
+    </section>
 </div>
 {% endblock %}
 '''
 
+# --- ADMIN COM SELETOR DE CAPACIDADE ---
 ADMIN_HTML = r'''{% extends 'layout.html' %}
 {% block title %}Painel Admin{% endblock %}
 {% block content %}
@@ -651,8 +596,19 @@ ADMIN_HTML = r'''{% extends 'layout.html' %}
         <form action="{{ url_for('update_settings') }}" method="POST" enctype="multipart/form-data" class="row align-items-center g-2">
             <input type="hidden" name="form_type" value="contact"> 
             <div class="col-md-3"><label class="small fw-bold">WhatsApp:</label><input type="text" name="contact_phone" class="form-control form-control-sm" value="{{ establishment.contact_phone or '' }}"></div>
-            <div class="col-md-4"><label class="small fw-bold">E-mail (Notificações):</label><input type="email" name="contact_email" class="form-control form-control-sm" value="{{ establishment.contact_email or '' }}"></div>
-            <div class="col-md-3"><label class="small fw-bold">Logo:</label><input type="file" name="logo" class="form-control form-control-sm" accept="image/*"></div>
+            <div class="col-md-3"><label class="small fw-bold">E-mail (Notificações):</label><input type="email" name="contact_email" class="form-control form-control-sm" value="{{ establishment.contact_email or '' }}"></div>
+            
+            <!-- CAMPO NOVO: CAPACIDADE -->
+            <div class="col-md-2">
+                <label class="small fw-bold">Profissionais:</label>
+                <select name="capacity" class="form-select form-select-sm">
+                    <option value="1" {% if establishment.capacity == 1 %}selected{% endif %}>1</option>
+                    <option value="2" {% if establishment.capacity == 2 %}selected{% endif %}>2</option>
+                    <option value="3" {% if establishment.capacity == 3 %}selected{% endif %}>3</option>
+                </select>
+            </div>
+            
+            <div class="col-md-2"><label class="small fw-bold">Logo:</label><input type="file" name="logo" class="form-control form-control-sm" accept="image/*"></div>
             <div class="col-md-2 text-end pt-4"><button class="btn btn-primary btn-sm w-100">Salvar</button></div>
         </form>
     </div>
@@ -725,6 +681,55 @@ ADMIN_HTML = r'''{% extends 'layout.html' %}
                     </ul>
                 </div>
             </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+'''
+
+REGISTER_HTML = r'''{% extends 'layout.html' %}
+{% block title %}Criar Conta{% endblock %}
+{% block content %}
+<div class="row justify-content-center mt-5 mb-5">
+    <div class="col-md-8 col-lg-6">
+        <div class="card shadow-lg border-0 rounded-4 overflow-hidden">
+            <div class="card-header bg-blue-600 text-white text-center py-4"><h3 class="fw-bold mb-0">Assine Agora</h3><p class="text-blue-100 text-sm mb-0">Plano Profissional: R$ 34,90/mês</p></div>
+            <div class="card-body p-4 p-md-5 bg-white">
+                <form method="POST" action="{{ url_for('register_business') }}">
+                    <h5 class="mb-3 text-primary fw-bold small text-uppercase ls-1">Dados do Negócio</h5>
+                    <div class="mb-3"><label class="form-label small fw-bold">Nome do Estabelecimento</label><input type="text" class="form-control" name="business_name" required></div>
+                    <div class="mb-3"><label class="form-label small fw-bold">Link Personalizado</label><div class="input-group"><span class="input-group-text bg-light border-end-0">agendafacil.com/b/</span><input type="text" class="form-control border-start-0 ps-0" name="url_prefix" pattern="[a-z0-9-]+" required></div></div>
+                    <div class="row g-2 mb-4">
+                        <div class="col-md-6"><label class="form-label small fw-bold">WhatsApp</label><input type="text" class="form-control" name="contact_phone"></div>
+                        <div class="col-md-6"><label class="form-label small fw-bold">E-mail para Notificações</label><input type="email" class="form-control" name="contact_email" required></div>
+                    </div>
+                    <h5 class="mb-3 text-primary fw-bold small text-uppercase ls-1 border-top pt-4">Acesso</h5>
+                    <div class="row g-2">
+                        <div class="col-md-6 mb-3"><label class="form-label small fw-bold">Usuário</label><input type="text" class="form-control" name="username" required></div>
+                        <div class="col-md-6 mb-3"><label class="form-label small fw-bold">Senha</label><input type="password" class="form-control" name="password" required></div>
+                    </div>
+                    <button class="btn btn-primary w-100 py-3 fw-bold rounded-3 shadow-sm mt-2">Ir para Pagamento</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+'''
+
+LOGIN_HTML = r'''{% extends 'layout.html' %}
+{% block title %}Login{% endblock %}
+{% block content %}
+<div class="row justify-content-center mt-5">
+    <div class="col-md-5 col-lg-4">
+        <div class="card shadow-lg border-0 rounded-4 p-4">
+            <div class="text-center mb-4"><h2 class="fw-bold h4">Acessar Painel</h2></div>
+            <form method="POST">
+                <div class="mb-3"><label class="form-label small fw-bold">Usuário</label><input type="text" class="form-control form-control-lg" name="username" required></div>
+                <div class="mb-4"><label class="form-label small fw-bold">Senha</label><input type="password" class="form-control form-control-lg" name="password" required></div>
+                <button class="btn btn-dark w-100 py-3 fw-bold rounded-3">Entrar</button>
+            </form>
+            <div class="text-center mt-4 border-top pt-3"><a href="{{ url_for('register_business') }}" class="text-decoration-none small text-muted">Não tem conta? <span class="text-blue-600 fw-bold">Assine já</span></a></div>
         </div>
     </div>
 </div>
@@ -818,7 +823,6 @@ document.getElementById('date').addEventListener('change', async (e) => {
 {% endblock %}
 '''
 
-# --- NOVA TELA DE SUCESSO (COM BOTÃO ZAP) ---
 SUCCESS_APPOINTMENT_HTML = r'''{% extends 'layout.html' %}
 {% block title %}Sucesso{% endblock %}
 {% block content %}
@@ -865,7 +869,6 @@ def atualizar_sistema():
     if not os.path.exists('templates'): os.makedirs('templates')
     uploads_path = os.path.join('static', 'uploads')
     if not os.path.exists(uploads_path): os.makedirs(uploads_path)
-    
     if os.path.exists('agendamento.db'):
         try: os.remove('agendamento.db')
         except: pass
@@ -874,11 +877,11 @@ def atualizar_sistema():
         'app.py': APP_PY,
         'requirements.txt': REQUIREMENTS_TXT,
         'Procfile': PROCFILE,
+        'templates/admin.html': ADMIN_HTML,
         'templates/layout.html': LAYOUT_HTML,
         'templates/index.html': INDEX_HTML,
         'templates/register.html': REGISTER_HTML,
         'templates/login.html': LOGIN_HTML,
-        'templates/admin.html': ADMIN_HTML,
         'templates/lista_servicos.html': LISTA_SERVICOS_HTML,
         'templates/agendamento.html': AGENDAMENTO_HTML,
         'templates/success_appointment.html': SUCCESS_APPOINTMENT_HTML,
@@ -897,7 +900,7 @@ def atualizar_sistema():
     except Exception as e:
         print(f"[ERRO] Instale manualmente: pip install -r requirements.txt")
 
-    print("\n[SUCESSO] Sistema V36 (Gold Restaurada) instalado!")
+    print("\n[SUCESSO] Sistema V37 (Multi-Profissionais) instalado!")
     print("Execute: python app.py")
 
 if __name__ == "__main__":
