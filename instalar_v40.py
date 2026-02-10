@@ -3,6 +3,7 @@ import sys
 import subprocess
 
 # --- DEPENDÊNCIAS ---
+# Adicionado Flask-Migrate
 REQUIREMENTS_TXT = r'''Flask
 Flask-SQLAlchemy
 Flask-Login
@@ -11,11 +12,13 @@ gunicorn
 stripe
 requests
 psycopg2-binary
+Flask-Migrate
 '''
 
-PROCFILE = r'''web: gunicorn app:app'''
+# --- PROCFILE (Atualizado para rodar migrações no boot) ---
+PROCFILE = r'''web: flask db upgrade && gunicorn app:app'''
 
-# --- APP.PY (Com Lógica de Capacidade) ---
+# --- APP.PY (Com Flask-Migrate e Sidebar Logic) ---
 APP_PY = r'''import os
 import threading
 import time as time_module
@@ -28,13 +31,14 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from datetime import datetime, time, timedelta
 from sqlalchemy import inspect
+from flask_migrate import Migrate
 import stripe
 
 # Timeout de segurança
 socket.setdefaulttimeout(15)
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'chave-v37-capacity-master'
+app.config['SECRET_KEY'] = 'chave-v40-sidebar-master'
 basedir = os.path.abspath(os.path.dirname(__file__))
 
 # --- BANCO DE DADOS ---
@@ -67,6 +71,8 @@ if not os.path.exists(UPLOAD_FOLDER):
     except OSError: pass
 
 db = SQLAlchemy(app)
+migrate = Migrate(app, db) # INICIALIZA O FLASK-MIGRATE
+
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 login_manager.login_message = 'Faça login.'
@@ -118,8 +124,6 @@ class Establishment(db.Model):
     contact_email = db.Column(db.String(120), nullable=True)
     logo_filename = db.Column(db.String(100), nullable=True)
     is_active = db.Column(db.Boolean, default=False)
-    
-    # NOVO: CAPACIDADE (QUANTOS PROFISSIONAIS)
     capacity = db.Column(db.Integer, default=1, nullable=False)
     
     schedules = db.relationship('DaySchedule', backref='establishment', lazy=True, cascade="all, delete-orphan")
@@ -203,10 +207,13 @@ def notification_worker():
             print(f"Erro Worker: {e}")
         time_module.sleep(60)
 
-# --- INICIALIZAÇÃO UNIVERSAL ---
+# --- INICIALIZAÇÃO HÍBRIDA (DEV/PROD) ---
+# Tenta criar tabelas se não existirem (fallback para dev local)
 try:
     with app.app_context():
-        db.create_all()
+        # inspect verifica se a tabela principal existe antes de tentar criar
+        if not inspect(db.engine).has_table("establishments"):
+            db.create_all()
 except: pass 
 
 if not os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
@@ -261,7 +268,7 @@ def register_business():
             contact_phone=request.form.get('contact_phone'),
             contact_email=request.form.get('contact_email'),
             is_active=is_master,
-            capacity=1 # Padrão 1 profissional
+            capacity=1 
         )
         db.session.add(est); db.session.commit()
         for i in range(7): db.session.add(DaySchedule(establishment_id=est.id, day_index=i, is_active=(i < 5), work_start=time(9,0), work_end=time(18,0)))
@@ -293,8 +300,6 @@ def create_appointment(url_prefix):
     d = datetime.strptime(request.form.get('appointment_date'), '%Y-%m-%d').date()
     t = datetime.strptime(request.form.get('appointment_time'), '%H:%M').time()
     
-    # Validação Dupla de Disponibilidade (Evita conflito simultaneo)
-    # Re-verifica se o horário AINDA está livre antes de salvar
     service = Service.query.get(request.form.get('service_id'))
     appts = Appointment.query.filter_by(appointment_date=d, establishment_id=est.id).all()
     start_dt = datetime.combine(d, t)
@@ -304,7 +309,6 @@ def create_appointment(url_prefix):
     for a in appts:
         s = datetime.combine(d, a.appointment_time)
         e = s + timedelta(minutes=a.service_info.duration)
-        # Se sobrepõe
         if max(start_dt, s) < min(end_dt, e):
             overlap_count += 1
             
@@ -361,7 +365,6 @@ def update_settings():
         est.contact_phone = request.form.get('contact_phone')
         est.contact_email = request.form.get('contact_email')
         
-        # ATUALIZAÇÃO CAPACIDADE
         try:
             new_capacity = int(request.form.get('capacity', 1))
             if 1 <= new_capacity <= 3:
@@ -425,7 +428,6 @@ def get_available_times():
     appts = Appointment.query.filter_by(appointment_date=sel_date, establishment_id=est.id).all()
     busy = []
     
-    # Pausa de almoço é absoluta (ninguém trabalha)
     if day_sched.lunch_start and day_sched.lunch_end:
         lunch_s = datetime.combine(sel_date, day_sched.lunch_start)
         lunch_e = datetime.combine(sel_date, day_sched.lunch_end)
@@ -438,12 +440,10 @@ def get_available_times():
     while curr + timedelta(minutes=svc.duration) <= limit:
         end = curr + timedelta(minutes=svc.duration)
         
-        # Filtro de passado
         if sel_date == now.date() and curr < now: 
             curr += timedelta(minutes=15)
             continue
             
-        # Filtro de Almoço (Absoluto)
         in_lunch = False
         if day_sched.lunch_start and day_sched.lunch_end:
             lunch_s = datetime.combine(sel_date, day_sched.lunch_start)
@@ -455,7 +455,6 @@ def get_available_times():
             curr += timedelta(minutes=15)
             continue
 
-        # Filtro de Capacidade
         overlap_count = 0
         for a in appts:
             s = datetime.combine(sel_date, a.appointment_time)
@@ -470,11 +469,21 @@ def get_available_times():
         
     return jsonify(avail)
 
+# --- ROTA DE EMERGÊNCIA RESET BANCO ---
+@app.route('/reset-banco')
+def reset_db():
+    try:
+        db.drop_all()
+        db.create_all()
+        return "Banco Resetado."
+    except Exception as e:
+        return str(e)
+
 if __name__ == '__main__':
     app.run(debug=True)
 '''
 
-# --- TEMPLATES RESTAURADOS ---
+# --- TEMPLATES ATUALIZADOS COM SIDEBAR ---
 
 LAYOUT_HTML = r'''<!DOCTYPE html>
 <html lang="pt-br">
@@ -492,19 +501,65 @@ LAYOUT_HTML = r'''<!DOCTYPE html>
     <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm sticky-top">
         <div class="container">
             <a class="navbar-brand fw-bold" href="{{ url_for('index') }}"><i class="bi bi-calendar-check text-primary"></i> Agenda Fácil</a>
-            <div class="collapse navbar-collapse" id="nav">
-                <ul class="navbar-nav ms-auto align-items-center">
-                    {% if current_user.is_authenticated %}
-                        <li class="nav-item"><a class="nav-link fw-bold" href="{{ url_for('admin_dashboard') }}">Painel</a></li>
-                        <li class="nav-item"><a class="nav-link text-danger" href="{{ url_for('logout') }}">Sair</a></li>
-                    {% else %}
-                        <li class="nav-item"><a class="nav-link" href="{{ url_for('login') }}">Login</a></li>
-                        <li class="nav-item ms-2"><a href="{{ url_for('register_business') }}" class="btn btn-primary btn-sm rounded-pill px-3">Criar Conta</a></li>
-                    {% endif %}
+            
+            <div class="d-flex align-items-center">
+                {% if current_user.is_authenticated %}
+                    <button class="btn btn-outline-primary border-0" type="button" data-bs-toggle="offcanvas" data-bs-target="#sidebarMenu">
+                        <i class="bi bi-list fs-4"></i>
+                    </button>
+                {% else %}
+                    <div class="d-none d-lg-block">
+                        <a href="{{ url_for('login') }}" class="fw-bold text-decoration-none me-3 text-dark">Login</a>
+                        <a href="{{ url_for('register_business') }}" class="btn btn-primary btn-sm rounded-pill px-3">Criar Conta</a>
+                    </div>
+                     <!-- Mobile Menu Button for non-authenticated -->
+                     <button class="navbar-toggler d-lg-none" type="button" data-bs-toggle="collapse" data-bs-target="#mobileNav">
+                        <span class="navbar-toggler-icon"></span>
+                    </button>
+                {% endif %}
+            </div>
+
+            <!-- Collapse for non-auth mobile -->
+            <div class="collapse navbar-collapse" id="mobileNav">
+                 {% if not current_user.is_authenticated %}
+                <ul class="navbar-nav ms-auto mt-2 mt-lg-0">
+                    <li class="nav-item"><a class="nav-link" href="{{ url_for('login') }}">Login</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{{ url_for('register_business') }}">Criar Conta</a></li>
                 </ul>
+                {% endif %}
             </div>
         </div>
     </nav>
+
+    <!-- SIDEBAR (OFFCANVAS) -->
+    {% if current_user.is_authenticated %}
+    <div class="offcanvas offcanvas-end" tabindex="-1" id="sidebarMenu">
+        <div class="offcanvas-header">
+            <h5 class="offcanvas-title fw-bold">{{ current_user.establishment.name }}</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+        </div>
+        <div class="offcanvas-body d-flex flex-column">
+            <ul class="nav flex-column fs-5 gap-2">
+                <li class="nav-item">
+                    <a class="nav-link text-dark" href="{{ url_for('admin_dashboard') }}">
+                        <i class="bi bi-speedometer2 me-2"></i> Painel
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link text-dark" href="{{ url_for('establishment_services', url_prefix=current_user.establishment.url_prefix) }}" target="_blank">
+                        <i class="bi bi-box-arrow-up-right me-2"></i> Ver Minha Página
+                    </a>
+                </li>
+            </ul>
+            <div class="mt-auto border-top pt-3">
+                 <a class="nav-link text-danger fw-bold" href="{{ url_for('logout') }}">
+                    <i class="bi bi-box-arrow-right me-2"></i> Sair
+                </a>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     <main class="container-fluid p-0">
         {% with m = get_flashed_messages(with_categories=true) %}
             {% if m %}<div class="container mt-3">{% for c, msg in m %}<div class="alert alert-{{ c }} alert-dismissible fade show shadow-sm">{{ msg }} <button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>{% endfor %}</div>{% endif %}
@@ -518,6 +573,8 @@ LAYOUT_HTML = r'''<!DOCTYPE html>
 </html>
 '''
 
+# Manter os outros templates (INDEX, REGISTER, LOGIN, ADMIN, LISTA, AGENDAMENTO, SUCCESS, ERROR) idênticos ao V37
+# Vou replicar aqui para garantir que o arquivo seja completo e funcional
 INDEX_HTML = r'''{% extends 'layout.html' %}
 {% block title %}Agenda Fácil - A Plataforma do Profissional{% endblock %}
 {% block content %}
@@ -536,7 +593,7 @@ INDEX_HTML = r'''{% extends 'layout.html' %}
             <div class="relative mt-12 lg:mt-0 perspective-1000">
                 <div class="relative bg-gray-900 rounded-2xl p-2 shadow-2xl transform rotate-y-12 transition hover:rotate-y-0 duration-700">
                     <div class="relative rounded-xl overflow-hidden bg-white aspect-video group">
-                        <img src="{{ url_for('static', filename='painel.png') }}" class="w-full h-full object-cover" onerror="this.onerror=null; this.src='https://placehold.co/1280x800/E2E8F0/475569?text=Insira+painel.png+na+pasta+static';">
+                        <img src="{{ url_for('static', filename='painel.png') }}" class="w-full h-full object-cover" onerror="this.onerror=null; this.src='https://placehold.co/1280x800/E2E8F0/475569?text=Insira+painel.png';">
                     </div>
                 </div>
             </div>
@@ -577,7 +634,55 @@ INDEX_HTML = r'''{% extends 'layout.html' %}
 {% endblock %}
 '''
 
-# --- ADMIN COM SELETOR DE CAPACIDADE ---
+REGISTER_HTML = r'''{% extends 'layout.html' %}
+{% block title %}Criar Conta{% endblock %}
+{% block content %}
+<div class="row justify-content-center mt-5 mb-5">
+    <div class="col-md-8 col-lg-6">
+        <div class="card shadow-lg border-0 rounded-4 overflow-hidden">
+            <div class="card-header bg-blue-600 text-white text-center py-4"><h3 class="fw-bold mb-0">Assine Agora</h3><p class="text-blue-100 text-sm mb-0">Plano Profissional: R$ 34,90/mês</p></div>
+            <div class="card-body p-4 p-md-5 bg-white">
+                <form method="POST" action="{{ url_for('register_business') }}">
+                    <h5 class="mb-3 text-primary fw-bold small text-uppercase ls-1">Dados do Negócio</h5>
+                    <div class="mb-3"><label class="form-label small fw-bold">Nome do Estabelecimento</label><input type="text" class="form-control" name="business_name" required></div>
+                    <div class="mb-3"><label class="form-label small fw-bold">Link Personalizado</label><div class="input-group"><span class="input-group-text bg-light border-end-0">agendafacil.com/b/</span><input type="text" class="form-control border-start-0 ps-0" name="url_prefix" pattern="[a-z0-9-]+" required></div></div>
+                    <div class="row g-2 mb-4">
+                        <div class="col-md-6"><label class="form-label small fw-bold">WhatsApp</label><input type="text" class="form-control" name="contact_phone"></div>
+                        <div class="col-md-6"><label class="form-label small fw-bold">E-mail para Notificações</label><input type="email" class="form-control" name="contact_email" required></div>
+                    </div>
+                    <h5 class="mb-3 text-primary fw-bold small text-uppercase ls-1 border-top pt-4">Acesso</h5>
+                    <div class="row g-2">
+                        <div class="col-md-6 mb-3"><label class="form-label small fw-bold">Usuário</label><input type="text" class="form-control" name="username" required></div>
+                        <div class="col-md-6 mb-3"><label class="form-label small fw-bold">Senha</label><input type="password" class="form-control" name="password" required></div>
+                    </div>
+                    <button class="btn btn-primary w-100 py-3 fw-bold rounded-3 shadow-sm mt-2">Ir para Pagamento</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+'''
+
+LOGIN_HTML = r'''{% extends 'layout.html' %}
+{% block title %}Login{% endblock %}
+{% block content %}
+<div class="row justify-content-center mt-5">
+    <div class="col-md-5 col-lg-4">
+        <div class="card shadow-lg border-0 rounded-4 p-4">
+            <div class="text-center mb-4"><h2 class="fw-bold h4">Acessar Painel</h2></div>
+            <form method="POST">
+                <div class="mb-3"><label class="form-label small fw-bold">Usuário</label><input type="text" class="form-control form-control-lg" name="username" required></div>
+                <div class="mb-4"><label class="form-label small fw-bold">Senha</label><input type="password" class="form-control form-control-lg" name="password" required></div>
+                <button class="btn btn-dark w-100 py-3 fw-bold rounded-3">Entrar</button>
+            </form>
+            <div class="text-center mt-4 border-top pt-3"><a href="{{ url_for('register_business') }}" class="text-decoration-none small text-muted">Não tem conta? <span class="text-blue-600 fw-bold">Assine já</span></a></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+'''
+
 ADMIN_HTML = r'''{% extends 'layout.html' %}
 {% block title %}Painel Admin{% endblock %}
 {% block content %}
@@ -681,55 +786,6 @@ ADMIN_HTML = r'''{% extends 'layout.html' %}
                     </ul>
                 </div>
             </div>
-        </div>
-    </div>
-</div>
-{% endblock %}
-'''
-
-REGISTER_HTML = r'''{% extends 'layout.html' %}
-{% block title %}Criar Conta{% endblock %}
-{% block content %}
-<div class="row justify-content-center mt-5 mb-5">
-    <div class="col-md-8 col-lg-6">
-        <div class="card shadow-lg border-0 rounded-4 overflow-hidden">
-            <div class="card-header bg-blue-600 text-white text-center py-4"><h3 class="fw-bold mb-0">Assine Agora</h3><p class="text-blue-100 text-sm mb-0">Plano Profissional: R$ 34,90/mês</p></div>
-            <div class="card-body p-4 p-md-5 bg-white">
-                <form method="POST" action="{{ url_for('register_business') }}">
-                    <h5 class="mb-3 text-primary fw-bold small text-uppercase ls-1">Dados do Negócio</h5>
-                    <div class="mb-3"><label class="form-label small fw-bold">Nome do Estabelecimento</label><input type="text" class="form-control" name="business_name" required></div>
-                    <div class="mb-3"><label class="form-label small fw-bold">Link Personalizado</label><div class="input-group"><span class="input-group-text bg-light border-end-0">agendafacil.com/b/</span><input type="text" class="form-control border-start-0 ps-0" name="url_prefix" pattern="[a-z0-9-]+" required></div></div>
-                    <div class="row g-2 mb-4">
-                        <div class="col-md-6"><label class="form-label small fw-bold">WhatsApp</label><input type="text" class="form-control" name="contact_phone"></div>
-                        <div class="col-md-6"><label class="form-label small fw-bold">E-mail para Notificações</label><input type="email" class="form-control" name="contact_email" required></div>
-                    </div>
-                    <h5 class="mb-3 text-primary fw-bold small text-uppercase ls-1 border-top pt-4">Acesso</h5>
-                    <div class="row g-2">
-                        <div class="col-md-6 mb-3"><label class="form-label small fw-bold">Usuário</label><input type="text" class="form-control" name="username" required></div>
-                        <div class="col-md-6 mb-3"><label class="form-label small fw-bold">Senha</label><input type="password" class="form-control" name="password" required></div>
-                    </div>
-                    <button class="btn btn-primary w-100 py-3 fw-bold rounded-3 shadow-sm mt-2">Ir para Pagamento</button>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
-{% endblock %}
-'''
-
-LOGIN_HTML = r'''{% extends 'layout.html' %}
-{% block title %}Login{% endblock %}
-{% block content %}
-<div class="row justify-content-center mt-5">
-    <div class="col-md-5 col-lg-4">
-        <div class="card shadow-lg border-0 rounded-4 p-4">
-            <div class="text-center mb-4"><h2 class="fw-bold h4">Acessar Painel</h2></div>
-            <form method="POST">
-                <div class="mb-3"><label class="form-label small fw-bold">Usuário</label><input type="text" class="form-control form-control-lg" name="username" required></div>
-                <div class="mb-4"><label class="form-label small fw-bold">Senha</label><input type="password" class="form-control form-control-lg" name="password" required></div>
-                <button class="btn btn-dark w-100 py-3 fw-bold rounded-3">Entrar</button>
-            </form>
-            <div class="text-center mt-4 border-top pt-3"><a href="{{ url_for('register_business') }}" class="text-decoration-none small text-muted">Não tem conta? <span class="text-blue-600 fw-bold">Assine já</span></a></div>
         </div>
     </div>
 </div>
@@ -900,8 +956,12 @@ def atualizar_sistema():
     except Exception as e:
         print(f"[ERRO] Instale manualmente: pip install -r requirements.txt")
 
-    print("\n[SUCESSO] Sistema V37 (Multi-Profissionais) instalado!")
-    print("Execute: python app.py")
+    print("\n[SUCESSO] Sistema V40 (Sidebar + Migrate) instalado!")
+    print("\n--- INSTRUÇÕES FINAIS ---")
+    print("1. Rode: flask db init")
+    print("2. Rode: flask db migrate -m 'Inicial'")
+    print("3. Rode: flask db upgrade")
+    print("4. Execute: python app.py")
 
 if __name__ == "__main__":
     atualizar_sistema()

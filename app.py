@@ -10,13 +10,14 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from datetime import datetime, time, timedelta
 from sqlalchemy import inspect
+from flask_migrate import Migrate
 import stripe
 
 # Timeout de segurança
 socket.setdefaulttimeout(15)
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'chave-v37-capacity-master'
+app.config['SECRET_KEY'] = 'chave-v40-sidebar-master'
 basedir = os.path.abspath(os.path.dirname(__file__))
 
 # --- BANCO DE DADOS ---
@@ -49,6 +50,8 @@ if not os.path.exists(UPLOAD_FOLDER):
     except OSError: pass
 
 db = SQLAlchemy(app)
+migrate = Migrate(app, db) # INICIALIZA O FLASK-MIGRATE
+
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 login_manager.login_message = 'Faça login.'
@@ -100,8 +103,6 @@ class Establishment(db.Model):
     contact_email = db.Column(db.String(120), nullable=True)
     logo_filename = db.Column(db.String(100), nullable=True)
     is_active = db.Column(db.Boolean, default=False)
-    
-    # NOVO: CAPACIDADE (QUANTOS PROFISSIONAIS)
     capacity = db.Column(db.Integer, default=1, nullable=False)
     
     schedules = db.relationship('DaySchedule', backref='establishment', lazy=True, cascade="all, delete-orphan")
@@ -185,10 +186,13 @@ def notification_worker():
             print(f"Erro Worker: {e}")
         time_module.sleep(60)
 
-# --- INICIALIZAÇÃO UNIVERSAL ---
+# --- INICIALIZAÇÃO HÍBRIDA (DEV/PROD) ---
+# Tenta criar tabelas se não existirem (fallback para dev local)
 try:
     with app.app_context():
-        db.create_all()
+        # inspect verifica se a tabela principal existe antes de tentar criar
+        if not inspect(db.engine).has_table("establishments"):
+            db.create_all()
 except: pass 
 
 if not os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
@@ -243,7 +247,7 @@ def register_business():
             contact_phone=request.form.get('contact_phone'),
             contact_email=request.form.get('contact_email'),
             is_active=is_master,
-            capacity=1 # Padrão 1 profissional
+            capacity=1 
         )
         db.session.add(est); db.session.commit()
         for i in range(7): db.session.add(DaySchedule(establishment_id=est.id, day_index=i, is_active=(i < 5), work_start=time(9,0), work_end=time(18,0)))
@@ -275,8 +279,6 @@ def create_appointment(url_prefix):
     d = datetime.strptime(request.form.get('appointment_date'), '%Y-%m-%d').date()
     t = datetime.strptime(request.form.get('appointment_time'), '%H:%M').time()
     
-    # Validação Dupla de Disponibilidade (Evita conflito simultaneo)
-    # Re-verifica se o horário AINDA está livre antes de salvar
     service = Service.query.get(request.form.get('service_id'))
     appts = Appointment.query.filter_by(appointment_date=d, establishment_id=est.id).all()
     start_dt = datetime.combine(d, t)
@@ -286,7 +288,6 @@ def create_appointment(url_prefix):
     for a in appts:
         s = datetime.combine(d, a.appointment_time)
         e = s + timedelta(minutes=a.service_info.duration)
-        # Se sobrepõe
         if max(start_dt, s) < min(end_dt, e):
             overlap_count += 1
             
@@ -343,7 +344,6 @@ def update_settings():
         est.contact_phone = request.form.get('contact_phone')
         est.contact_email = request.form.get('contact_email')
         
-        # ATUALIZAÇÃO CAPACIDADE
         try:
             new_capacity = int(request.form.get('capacity', 1))
             if 1 <= new_capacity <= 3:
@@ -407,7 +407,6 @@ def get_available_times():
     appts = Appointment.query.filter_by(appointment_date=sel_date, establishment_id=est.id).all()
     busy = []
     
-    # Pausa de almoço é absoluta (ninguém trabalha)
     if day_sched.lunch_start and day_sched.lunch_end:
         lunch_s = datetime.combine(sel_date, day_sched.lunch_start)
         lunch_e = datetime.combine(sel_date, day_sched.lunch_end)
@@ -420,12 +419,10 @@ def get_available_times():
     while curr + timedelta(minutes=svc.duration) <= limit:
         end = curr + timedelta(minutes=svc.duration)
         
-        # Filtro de passado
         if sel_date == now.date() and curr < now: 
             curr += timedelta(minutes=15)
             continue
             
-        # Filtro de Almoço (Absoluto)
         in_lunch = False
         if day_sched.lunch_start and day_sched.lunch_end:
             lunch_s = datetime.combine(sel_date, day_sched.lunch_start)
@@ -437,7 +434,6 @@ def get_available_times():
             curr += timedelta(minutes=15)
             continue
 
-        # Filtro de Capacidade
         overlap_count = 0
         for a in appts:
             s = datetime.combine(sel_date, a.appointment_time)
@@ -451,6 +447,16 @@ def get_available_times():
         curr += timedelta(minutes=15)
         
     return jsonify(avail)
+
+# --- ROTA DE EMERGÊNCIA RESET BANCO ---
+@app.route('/reset-banco')
+def reset_db():
+    try:
+        db.drop_all()
+        db.create_all()
+        return "Banco Resetado."
+    except Exception as e:
+        return str(e)
 
 if __name__ == '__main__':
     app.run(debug=True)
