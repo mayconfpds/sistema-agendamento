@@ -13,14 +13,12 @@ from sqlalchemy import inspect
 from flask_migrate import Migrate
 import stripe
 
-# Timeout de segurança
 socket.setdefaulttimeout(15)
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'chave-v40-sidebar-master'
+app.config['SECRET_KEY'] = 'chave-v42-pro-master'
 basedir = os.path.abspath(os.path.dirname(__file__))
 
-# --- BANCO DE DADOS ---
 database_url = os.environ.get('DATABASE_URL')
 if database_url and database_url.startswith("postgres://"):
     database_url = database_url.replace("postgres://", "postgresql://", 1)
@@ -28,12 +26,6 @@ if database_url and database_url.startswith("postgres://"):
 app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'sqlite:///' + os.path.join(basedir, 'agendamento.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-if not database_url:
-    print("⚠️ AVISO LOCAL: Usando SQLite.")
-else:
-    print("✅ MODO PRODUÇÃO: Conectado ao PostgreSQL.")
-
-# --- CONFIGURAÇÕES ---
 raw_key = os.environ.get('BREVO_API_KEY', '')
 BREVO_API_KEY = raw_key.strip() if raw_key else None
 BREVO_SENDER_EMAIL = os.environ.get('BREVO_SENDER_EMAIL', 'seu_email@gmail.com') 
@@ -50,47 +42,29 @@ if not os.path.exists(UPLOAD_FOLDER):
     except OSError: pass
 
 db = SQLAlchemy(app)
-migrate = Migrate(app, db) # INICIALIZA O FLASK-MIGRATE
+migrate = Migrate(app, db, render_as_batch=True)
 
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 login_manager.login_message = 'Faça login.'
 
-# --- AUXILIARES ---
 def get_now_brazil():
     return datetime.utcnow() - timedelta(hours=3)
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-# --- ENVIO DE EMAIL (BREVO) ---
 def send_email(subject, recipient, body):
     if not BREVO_API_KEY:
-        print(f"\n⚠️ [EMAIL VIRTUAL] Sem chave API. Para: {recipient}")
+        print(f"\n⚠️ [EMAIL VIRTUAL] Para: {recipient}")
         return
-
     def _send_thread():
         url = "https://api.brevo.com/v3/smtp/email"
-        headers = {
-            "accept": "application/json",
-            "api-key": BREVO_API_KEY,
-            "content-type": "application/json"
-        }
+        headers = {"accept": "application/json", "api-key": BREVO_API_KEY, "content-type": "application/json"}
         html_body = f"<html><body><p>{body.replace(chr(10), '<br>')}</p></body></html>"
-        
-        payload = {
-            "sender": {"name": BREVO_SENDER_NAME, "email": BREVO_SENDER_EMAIL},
-            "to": [{"email": recipient}],
-            "subject": subject,
-            "htmlContent": html_body
-        }
-        try:
-            r = requests.post(url, json=payload, headers=headers)
-            if r.status_code not in [200, 201, 202]:
-                print(f"\n❌ [BREVO ERRO] {r.text}")
-        except Exception as e:
-            print(f"\n❌ [ERRO CONEXÃO] {e}")
-
+        payload = {"sender": {"name": BREVO_SENDER_NAME, "email": BREVO_SENDER_EMAIL}, "to": [{"email": recipient}], "subject": subject, "htmlContent": html_body}
+        try: requests.post(url, json=payload, headers=headers)
+        except Exception as e: print(f"\n❌ [ERRO BREVO] {e}")
     threading.Thread(target=_send_thread).start()
 
 # --- MODELOS ---
@@ -109,6 +83,7 @@ class Establishment(db.Model):
     admins = db.relationship('Admin', backref='establishment', lazy=True)
     services = db.relationship('Service', backref='establishment', lazy=True)
     appointments = db.relationship('Appointment', backref='establishment', lazy=True)
+    blacklists = db.relationship('Blacklist', backref='establishment', lazy=True)
 
 class DaySchedule(db.Model):
     __tablename__ = 'day_schedules'
@@ -137,7 +112,11 @@ class Service(db.Model):
     duration = db.Column(db.Integer, nullable=False)
     price = db.Column(db.Float, nullable=False, default=0.0)
     establishment_id = db.Column(db.Integer, db.ForeignKey('establishments.id'), nullable=False)
-    appointments = db.relationship('Appointment', backref='service_info', lazy=True, cascade="all, delete-orphan")
+
+appointment_services = db.Table('appointment_services',
+    db.Column('appointment_id', db.Integer, db.ForeignKey('appointments.id'), primary_key=True),
+    db.Column('service_id', db.Integer, db.ForeignKey('services.id'), primary_key=True)
+)
 
 class Appointment(db.Model):
     __tablename__ = 'appointments'
@@ -148,88 +127,77 @@ class Appointment(db.Model):
     appointment_date = db.Column(db.Date, nullable=False)
     appointment_time = db.Column(db.Time, nullable=False)
     notified = db.Column(db.Boolean, default=False)
-    service_id = db.Column(db.Integer, db.ForeignKey('services.id'), nullable=False)
+    total_duration = db.Column(db.Integer, default=0, nullable=False)
+    total_price = db.Column(db.Float, default=0.0, nullable=False)
+    establishment_id = db.Column(db.Integer, db.ForeignKey('establishments.id'), nullable=False)
+    services = db.relationship('Service', secondary=appointment_services, lazy='subquery', backref=db.backref('appointments', lazy=True))
+
+    @property
+    def service_names(self):
+        return " + ".join([s.name for s in self.services])
+
+class Blacklist(db.Model):
+    __tablename__ = 'blacklists'
+    id = db.Column(db.Integer, primary_key=True)
+    client_phone = db.Column(db.String(20), nullable=False)
     establishment_id = db.Column(db.Integer, db.ForeignKey('establishments.id'), nullable=False)
 
 @login_manager.user_loader
 def load_user(user_id): return Admin.query.get(int(user_id))
 
-# --- WORKER DE NOTIFICAÇÕES ---
+# --- WORKER ---
 def notification_worker():
-    print(">>> Robô de Notificações INICIADO (Background) <<<")
     while True:
         try:
             with app.app_context():
                 inspector = inspect(db.engine)
                 if not inspector.has_table("appointments"): 
-                    time_module.sleep(10)
-                    continue
-                
+                    time_module.sleep(10); continue
                 upcoming = Appointment.query.filter(Appointment.notified == False).all()
                 now = get_now_brazil()
-                
                 for appt in upcoming:
                     appt_dt = datetime.combine(appt.appointment_date, appt.appointment_time)
-                    time_diff = appt_dt - now
-                    minutes = time_diff.total_seconds() / 60
-                    
+                    minutes = (appt_dt - now).total_seconds() / 60
                     if 50 <= minutes <= 70:
-                        print(f"⏰ Enviando e-mail para {appt.client_name} (Faltam {int(minutes)} min)")
                         subj = f"Lembrete: {appt.establishment.name}"
-                        body = f"Olá {appt.client_name},\n\nLembrete do seu horário: {appt.appointment_time.strftime('%H:%M')}."
+                        body = f"Olá {appt.client_name},\n\nLembrete do seu horário: {appt.appointment_time.strftime('%H:%M')} para {appt.service_names}."
                         send_email(subj, appt.client_email, body)
-                        if appt.establishment.contact_email:
-                             send_email("Alerta", appt.establishment.contact_email, f"Cliente {appt.client_name} em 1h.")
                         appt.notified = True
                         db.session.commit()
-        except Exception as e:
-            print(f"Erro Worker: {e}")
+        except: pass
         time_module.sleep(60)
 
-# --- INICIALIZAÇÃO HÍBRIDA (DEV/PROD) ---
-# Tenta criar tabelas se não existirem (fallback para dev local)
 try:
     with app.app_context():
-        # inspect verifica se a tabela principal existe antes de tentar criar
-        if not inspect(db.engine).has_table("establishments"):
-            db.create_all()
+        if not inspect(db.engine).has_table("establishments"): db.create_all()
 except: pass 
 
 if not os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
-    t = threading.Thread(target=notification_worker, daemon=True)
-    t.start()
+    threading.Thread(target=notification_worker, daemon=True).start()
 
 # --- ROTAS DE PAGAMENTO ---
 @app.route('/pagamento')
 @login_required
 def payment():
     if current_user.establishment.is_active: return redirect(url_for('admin_dashboard'))
-    if not stripe.api_key: flash('Erro Config.', 'danger'); return redirect(url_for('login'))
     try:
-        domain = request.host_url
         session = stripe.checkout.Session.create(
-            payment_method_types=['card'],
-            line_items=[{'price': STRIPE_PRICE_ID, 'quantity': 1}],
-            mode='subscription',
-            allow_promotion_codes=True,
-            success_url=domain + 'pagamento/sucesso',
-            cancel_url=domain + 'pagamento/cancelado',
-            customer_email=current_user.establishment.contact_email,
+            payment_method_types=['card'], line_items=[{'price': STRIPE_PRICE_ID, 'quantity': 1}],
+            mode='subscription', allow_promotion_codes=True, success_url=request.host_url + 'pagamento/sucesso',
+            cancel_url=request.host_url + 'pagamento/cancelado', customer_email=current_user.establishment.contact_email,
         )
         return redirect(session.url, code=303)
-    except Exception as e:
-        flash(f'Erro Stripe: {str(e)}', 'danger'); return render_template('login.html')
+    except: return render_template('login.html')
 
 @app.route('/pagamento/sucesso')
 @login_required
 def payment_success():
-    est = current_user.establishment; est.is_active = True; db.session.commit()
-    flash('Assinatura Ativa!', 'success'); return redirect(url_for('admin_dashboard'))
+    current_user.establishment.is_active = True; db.session.commit()
+    return redirect(url_for('admin_dashboard'))
 
 @app.route('/pagamento/cancelado')
 @login_required
-def payment_cancel():
-    flash('Cancelado.', 'warning'); return redirect(url_for('login'))
+def payment_cancel(): return redirect(url_for('login'))
 
 # --- ROTAS PRINCIPAIS ---
 @app.route('/')
@@ -241,28 +209,20 @@ def register_business():
     if request.method == 'POST':
         username = request.form.get('username')
         is_master = (username == 'admin_demo') 
-        est = Establishment(
-            name=request.form.get('business_name'),
-            url_prefix=request.form.get('url_prefix').lower().strip(),
-            contact_phone=request.form.get('contact_phone'),
-            contact_email=request.form.get('contact_email'),
-            is_active=is_master,
-            capacity=1 
-        )
+        est = Establishment(name=request.form.get('business_name'), url_prefix=request.form.get('url_prefix').lower().strip(), contact_phone=request.form.get('contact_phone'), contact_email=request.form.get('contact_email'), is_active=is_master, capacity=1)
         db.session.add(est); db.session.commit()
         for i in range(7): db.session.add(DaySchedule(establishment_id=est.id, day_index=i, is_active=(i < 5), work_start=time(9,0), work_end=time(18,0)))
         adm = Admin(username=username, establishment_id=est.id)
         adm.set_password(request.form.get('password'))
         db.session.add(adm); db.session.commit()
         login_user(adm)
-        if is_master: return redirect(url_for('admin_dashboard'))
-        return redirect(url_for('payment'))
+        return redirect(url_for('admin_dashboard')) if is_master else redirect(url_for('payment'))
     return render_template('register.html')
 
 @app.route('/b/<url_prefix>')
 def establishment_services(url_prefix):
     est = Establishment.query.filter_by(url_prefix=url_prefix).first_or_404()
-    if not est.is_active: return render_template('error_inactive.html', message="Estabelecimento temporariamente indisponível."), 403
+    if not est.is_active: return render_template('error_inactive.html', message="Indisponível."), 403
     services = Service.query.filter_by(establishment_id=est.id).order_by(Service.name).all()
     return render_template('lista_servicos.html', services=services, establishment=est)
 
@@ -270,39 +230,62 @@ def establishment_services(url_prefix):
 def schedule_service(url_prefix, service_id):
     est = Establishment.query.filter_by(url_prefix=url_prefix).first_or_404()
     if not est.is_active: return "Inativo", 403
-    service = Service.query.get_or_404(service_id)
-    return render_template('agendamento.html', service=service, establishment=est)
+    main_service = Service.query.get_or_404(service_id)
+    other_services = Service.query.filter(Service.establishment_id == est.id, Service.id != service_id).order_by(Service.name).all()
+    return render_template('agendamento.html', main_service=main_service, other_services=other_services, establishment=est)
 
 @app.route('/b/<url_prefix>/confirmar', methods=['POST'])
 def create_appointment(url_prefix):
     est = Establishment.query.filter_by(url_prefix=url_prefix).first_or_404()
+    client_phone = request.form.get('client_phone').strip()
+    
+    if Blacklist.query.filter_by(establishment_id=est.id, client_phone=client_phone).first():
+        flash('Agendamento bloqueado. Entre em contato com o estabelecimento.', 'danger')
+        return redirect(url_for('establishment_services', url_prefix=url_prefix))
+
+    now = get_now_brazil()
+    user_appts = Appointment.query.filter_by(establishment_id=est.id, client_phone=client_phone).all()
+    if any(datetime.combine(a.appointment_date, a.appointment_time) >= now for a in user_appts):
+        flash('Você já possui um agendamento futuro conosco. Conclua-o antes de agendar novamente.', 'warning')
+        return redirect(url_for('establishment_services', url_prefix=url_prefix))
+
     d = datetime.strptime(request.form.get('appointment_date'), '%Y-%m-%d').date()
     t = datetime.strptime(request.form.get('appointment_time'), '%H:%M').time()
+    service_ids = request.form.getlist('services')
     
-    service = Service.query.get(request.form.get('service_id'))
-    appts = Appointment.query.filter_by(appointment_date=d, establishment_id=est.id).all()
+    selected_services = Service.query.filter(Service.id.in_(service_ids)).all()
+    if not selected_services:
+        flash('Nenhum serviço selecionado.', 'danger')
+        return redirect(url_for('establishment_services', url_prefix=url_prefix))
+
+    total_dur = sum(s.duration for s in selected_services)
+    total_price = sum(s.price for s in selected_services)
+
     start_dt = datetime.combine(d, t)
-    end_dt = start_dt + timedelta(minutes=service.duration)
+    end_dt = start_dt + timedelta(minutes=total_dur)
     
+    if start_dt < now:
+        flash('Horário inválido.', 'danger'); return redirect(url_for('establishment_services', url_prefix=url_prefix))
+        
+    appts_on_day = Appointment.query.filter_by(appointment_date=d, establishment_id=est.id).all()
     overlap_count = 0
-    for a in appts:
+    for a in appts_on_day:
         s = datetime.combine(d, a.appointment_time)
-        e = s + timedelta(minutes=a.service_info.duration)
+        e = s + timedelta(minutes=a.total_duration)
         if max(start_dt, s) < min(end_dt, e):
             overlap_count += 1
             
     if overlap_count >= est.capacity:
-        flash('Ops! Esse horário acabou de ser ocupado. Tente outro.', 'danger')
-        return redirect(url_for('schedule_service', url_prefix=url_prefix, service_id=service.id))
+        flash('Ops! Esse horário acabou de ser ocupado.', 'danger')
+        return redirect(url_for('schedule_service', url_prefix=url_prefix, service_id=selected_services[0].id))
 
-    if start_dt < get_now_brazil():
-        flash('Horário inválido.', 'danger'); return redirect(url_for('schedule_service', url_prefix=url_prefix, service_id=request.form.get('service_id')))
-        
-    appt = Appointment(client_name=request.form.get('client_name'), client_phone=request.form.get('client_phone'), client_email=request.form.get('client_email'), service_id=request.form.get('service_id'), appointment_date=d, appointment_time=t, establishment_id=est.id)
+    appt = Appointment(client_name=request.form.get('client_name'), client_phone=client_phone, client_email=request.form.get('client_email'), appointment_date=d, appointment_time=t, establishment_id=est.id, total_duration=total_dur, total_price=total_price)
+    for s in selected_services: appt.services.append(s)
+    
     db.session.add(appt); db.session.commit()
     
-    send_email(f"Confirmado: {est.name}", appt.client_email, f"Agendado para {d.strftime('%d/%m')} às {t.strftime('%H:%M')}")
-    if est.contact_email: send_email(f"Novo Cliente: {appt.client_name}", est.contact_email, f"Novo agendamento.")
+    send_email(f"Confirmado: {est.name}", appt.client_email, f"Agendado para {d.strftime('%d/%m')} às {t.strftime('%H:%M')}.")
+    if est.contact_email: send_email(f"Novo Cliente", est.contact_email, f"Novo agendamento.")
     
     zap_msg = f"Olá, confirmo agendamento: {d.strftime('%d/%m')} às {t.strftime('%H:%M')}."
     zap_link = f"https://wa.me/55{est.contact_phone}?text={zap_msg}" if est.contact_phone else "#"
@@ -332,8 +315,9 @@ def admin_dashboard():
     appts = Appointment.query.filter(Appointment.establishment_id == est.id, Appointment.appointment_date >= today).order_by(Appointment.appointment_date, Appointment.appointment_time).all()
     services = Service.query.filter_by(establishment_id=est.id).all()
     schedules = DaySchedule.query.filter_by(establishment_id=est.id).order_by(DaySchedule.day_index).all()
+    blacklists = Blacklist.query.filter_by(establishment_id=est.id).all()
     today_count = Appointment.query.filter(Appointment.establishment_id == est.id, Appointment.appointment_date == today).count()
-    return render_template('admin.html', appointments=appts, services=services, establishment=est, schedules=schedules, today_count=today_count)
+    return render_template('admin.html', appointments=appts, services=services, establishment=est, schedules=schedules, blacklists=blacklists, today_count=today_count)
 
 @app.route('/admin/configurar', methods=['POST'])
 @login_required
@@ -343,13 +327,8 @@ def update_settings():
     if ft == 'contact':
         est.contact_phone = request.form.get('contact_phone')
         est.contact_email = request.form.get('contact_email')
-        
-        try:
-            new_capacity = int(request.form.get('capacity', 1))
-            if 1 <= new_capacity <= 3:
-                est.capacity = new_capacity
+        try: est.capacity = int(request.form.get('capacity', 1))
         except: pass
-
         if 'logo' in request.files:
             file = request.files['logo']
             if file and allowed_file(file.filename):
@@ -357,7 +336,7 @@ def update_settings():
                 uid = f"{est.id}_{int(time_module.time())}_{fname}"
                 file.save(os.path.join(app.config['UPLOAD_FOLDER'], uid))
                 est.logo_filename = uid
-        flash('Dados salvos!', 'success')
+        flash('Salvo!', 'success')
     elif ft == 'schedule':
         for sid in request.form.getlist('schedule_id'):
             ds = DaySchedule.query.get(sid)
@@ -393,35 +372,70 @@ def delete_appointment(id):
     a = Appointment.query.get(id); db.session.delete(a); db.session.commit()
     return redirect(url_for('admin_dashboard'))
 
+# ROTAS DE BLACKLIST
+@app.route('/admin/agendamentos/falta/<int:id>', methods=['POST'])
+@login_required
+def mark_no_show(id):
+    a = Appointment.query.get_or_404(id)
+    if a.establishment_id != current_user.establishment_id: return "Erro", 403
+    if not Blacklist.query.filter_by(establishment_id=a.establishment_id, client_phone=a.client_phone).first():
+        bl = Blacklist(establishment_id=a.establishment_id, client_phone=a.client_phone)
+        db.session.add(bl)
+    db.session.delete(a)
+    db.session.commit()
+    flash('Cliente marcado como Falta e bloqueado.', 'warning')
+    return redirect(url_for('admin_dashboard'))
+
+@app.route('/admin/blacklist/add', methods=['POST'])
+@login_required
+def add_blacklist():
+    phone = request.form.get('phone', '').strip()
+    if phone:
+        exists = Blacklist.query.filter_by(establishment_id=current_user.establishment_id, client_phone=phone).first()
+        if not exists:
+            db.session.add(Blacklist(client_phone=phone, establishment_id=current_user.establishment_id))
+            db.session.commit()
+            flash('Número bloqueado.', 'success')
+        else:
+            flash('Número já bloqueado.', 'warning')
+    return redirect(url_for('admin_dashboard'))
+
+@app.route('/admin/blacklist/remove/<int:id>', methods=['POST'])
+@login_required
+def remove_blacklist(id):
+    b = Blacklist.query.get_or_404(id)
+    if b.establishment_id == current_user.establishment_id:
+        db.session.delete(b)
+        db.session.commit()
+        flash('Número desbloqueado.', 'success')
+    return redirect(url_for('admin_dashboard'))
+
 @app.route('/api/horarios_disponiveis')
 def get_available_times():
-    sid, d_str = request.args.get('service_id'), request.args.get('date')
-    if not sid or not d_str: return jsonify([])
-    try: sel_date = datetime.strptime(d_str, '%Y-%m-%d').date()
+    est_id = request.args.get('est_id')
+    d_str = request.args.get('date')
+    dur_str = request.args.get('duration')
+    if not est_id or not d_str or not dur_str: return jsonify([])
+    try: 
+        sel_date = datetime.strptime(d_str, '%Y-%m-%d').date()
+        total_dur = int(dur_str)
     except: return jsonify([])
-    svc = Service.query.get(sid)
-    est = svc.establishment
+    
+    est = Establishment.query.get(est_id)
     day_sched = DaySchedule.query.filter_by(establishment_id=est.id, day_index=sel_date.weekday()).first()
     if not day_sched or not day_sched.is_active: return jsonify([])
     
     appts = Appointment.query.filter_by(appointment_date=sel_date, establishment_id=est.id).all()
-    busy = []
-    
-    if day_sched.lunch_start and day_sched.lunch_end:
-        lunch_s = datetime.combine(sel_date, day_sched.lunch_start)
-        lunch_e = datetime.combine(sel_date, day_sched.lunch_end)
     
     avail = []
     curr = datetime.combine(sel_date, day_sched.work_start)
     limit = datetime.combine(sel_date, day_sched.work_end)
     now = get_now_brazil()
     
-    while curr + timedelta(minutes=svc.duration) <= limit:
-        end = curr + timedelta(minutes=svc.duration)
-        
+    while curr + timedelta(minutes=total_dur) <= limit:
+        end = curr + timedelta(minutes=total_dur)
         if sel_date == now.date() and curr < now: 
-            curr += timedelta(minutes=15)
-            continue
+            curr += timedelta(minutes=15); continue
             
         in_lunch = False
         if day_sched.lunch_start and day_sched.lunch_end:
@@ -429,34 +443,18 @@ def get_available_times():
             lunch_e = datetime.combine(sel_date, day_sched.lunch_end)
             if (curr >= lunch_s and curr < lunch_e) or (end > lunch_s and end <= lunch_e) or (curr < lunch_s and end > lunch_e):
                in_lunch = True
-        
         if in_lunch:
-            curr += timedelta(minutes=15)
-            continue
+            curr += timedelta(minutes=15); continue
 
         overlap_count = 0
         for a in appts:
             s = datetime.combine(sel_date, a.appointment_time)
-            e = s + timedelta(minutes=a.service_info.duration)
-            if max(curr, s) < min(end, e):
-                overlap_count += 1
+            e = s + timedelta(minutes=a.total_duration)
+            if max(curr, s) < min(end, e): overlap_count += 1
         
-        if overlap_count < est.capacity:
-            avail.append(curr.strftime('%H:%M'))
-            
+        if overlap_count < est.capacity: avail.append(curr.strftime('%H:%M'))
         curr += timedelta(minutes=15)
-        
     return jsonify(avail)
-
-# --- ROTA DE EMERGÊNCIA RESET BANCO ---
-@app.route('/reset-banco')
-def reset_db():
-    try:
-        db.drop_all()
-        db.create_all()
-        return "Banco Resetado."
-    except Exception as e:
-        return str(e)
 
 if __name__ == '__main__':
     app.run(debug=True)

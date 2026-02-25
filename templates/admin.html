@@ -1,5 +1,4 @@
 {% extends 'layout.html' %}
-{% block title %}Painel Admin{% endblock %}
 {% block content %}
 <div class="container py-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
@@ -9,29 +8,18 @@
             <div><h1 class="h3 mb-0">Painel: {{ establishment.name }}</h1><a href="{{ url_for('establishment_services', url_prefix=establishment.url_prefix) }}" target="_blank" class="text-decoration-none small">Ver Página <i class="bi bi-box-arrow-up-right"></i></a></div>
         </div>
     </div>
-    {% if today_count > 0 %}
-    <div class="alert alert-info d-flex align-items-center mb-4 shadow-sm" role="alert"><i class="bi bi-bell-fill me-2 fs-4"></i><div><strong>Atenção!</strong> Você tem <strong>{{ today_count }}</strong> agendamento(s) para hoje.</div></div>
-    {% endif %}
+    
     <div class="card shadow-sm border-0 mb-4 p-3 bg-light">
         <form action="{{ url_for('update_settings') }}" method="POST" enctype="multipart/form-data" class="row align-items-center g-2">
             <input type="hidden" name="form_type" value="contact"> 
             <div class="col-md-3"><label class="small fw-bold">WhatsApp:</label><input type="text" name="contact_phone" class="form-control form-control-sm" value="{{ establishment.contact_phone or '' }}"></div>
             <div class="col-md-3"><label class="small fw-bold">E-mail (Notificações):</label><input type="email" name="contact_email" class="form-control form-control-sm" value="{{ establishment.contact_email or '' }}"></div>
-            
-            <!-- CAMPO NOVO: CAPACIDADE -->
-            <div class="col-md-2">
-                <label class="small fw-bold">Profissionais:</label>
-                <select name="capacity" class="form-select form-select-sm">
-                    <option value="1" {% if establishment.capacity == 1 %}selected{% endif %}>1</option>
-                    <option value="2" {% if establishment.capacity == 2 %}selected{% endif %}>2</option>
-                    <option value="3" {% if establishment.capacity == 3 %}selected{% endif %}>3</option>
-                </select>
-            </div>
-            
+            <div class="col-md-2"><label class="small fw-bold">Profissionais:</label><select name="capacity" class="form-select form-select-sm"><option value="1" {% if establishment.capacity == 1 %}selected{% endif %}>1</option><option value="2" {% if establishment.capacity == 2 %}selected{% endif %}>2</option><option value="3" {% if establishment.capacity == 3 %}selected{% endif %}>3</option></select></div>
             <div class="col-md-2"><label class="small fw-bold">Logo:</label><input type="file" name="logo" class="form-control form-control-sm" accept="image/*"></div>
             <div class="col-md-2 text-end pt-4"><button class="btn btn-primary btn-sm w-100">Salvar</button></div>
         </form>
     </div>
+    
     <div class="row">
         <div class="col-12 mb-4">
             <div class="card shadow-sm border-0">
@@ -40,63 +28,86 @@
                     <form action="{{ url_for('update_settings') }}" method="POST">
                         <input type="hidden" name="form_type" value="schedule">
                         <div class="table-responsive">
-                            <table class="table table-bordered mb-0 align-middle text-center">
-                                <thead class="table-light"><tr><th style="width: 50px;">Ativo</th><th>Dia</th><th>Abertura</th><th>Fechamento</th><th>Almoço Início</th><th>Almoço Fim</th></tr></thead>
-                                <tbody>
-                                    {% set day_names = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'] %}
-                                    {% for d in schedules %}
-                                    <tr class="{% if not d.is_active %}bg-light text-muted{% endif %}">
-                                        <input type="hidden" name="schedule_id" value="{{ d.id }}">
-                                        <td><div class="form-check d-flex justify-content-center"><input class="form-check-input" type="checkbox" name="active_{{ d.id }}" {% if d.is_active %}checked{% endif %}></div></td>
-                                        <td class="fw-bold text-start">{{ day_names[d.day_index] }}</td>
-                                        <td><input type="time" class="form-control form-control-sm" name="work_start_{{ d.id }}" value="{{ d.work_start.strftime('%H:%M') }}"></td>
-                                        <td><input type="time" class="form-control form-control-sm" name="work_end_{{ d.id }}" value="{{ d.work_end.strftime('%H:%M') }}"></td>
-                                        <td><input type="time" class="form-control form-control-sm" name="lunch_start_{{ d.id }}" value="{{ d.lunch_start.strftime('%H:%M') if d.lunch_start else '' }}"></td>
-                                        <td><input type="time" class="form-control form-control-sm" name="lunch_end_{{ d.id }}" value="{{ d.lunch_end.strftime('%H:%M') if d.lunch_end else '' }}"></td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
+                            <table class="table table-bordered mb-0 align-middle text-center"><thead class="table-light"><tr><th style="width: 50px;">Ativo</th><th>Dia</th><th>Abertura</th><th>Fechamento</th><th>Almoço Início</th><th>Almoço Fim</th></tr></thead><tbody>
+                                    {% set day_names = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'] %}{% for d in schedules %}<tr class="{% if not d.is_active %}bg-light text-muted{% endif %}"><input type="hidden" name="schedule_id" value="{{ d.id }}"><td><input class="form-check-input" type="checkbox" name="active_{{ d.id }}" {% if d.is_active %}checked{% endif %}></td><td class="fw-bold text-start">{{ day_names[d.day_index] }}</td><td><input type="time" class="form-control form-control-sm" name="work_start_{{ d.id }}" value="{{ d.work_start.strftime('%H:%M') }}"></td><td><input type="time" class="form-control form-control-sm" name="work_end_{{ d.id }}" value="{{ d.work_end.strftime('%H:%M') }}"></td><td><input type="time" class="form-control form-control-sm" name="lunch_start_{{ d.id }}" value="{{ d.lunch_start.strftime('%H:%M') if d.lunch_start else '' }}"></td><td><input type="time" class="form-control form-control-sm" name="lunch_end_{{ d.id }}" value="{{ d.lunch_end.strftime('%H:%M') if d.lunch_end else '' }}"></td></tr>{% endfor %}
+                            </tbody></table>
                         </div>
                         <div class="p-3 bg-light border-top text-end"><button class="btn btn-success fw-bold px-4">Salvar Horários</button></div>
                     </form>
                 </div>
             </div>
         </div>
-        <div class="col-lg-6">
+        
+        <div class="col-lg-7">
             <div class="card shadow-sm border-0 mb-4">
-                <div class="card-header bg-white fw-bold">Próximos Agendamentos</div>
+                <div class="card-header bg-white fw-bold d-flex justify-content-between">
+                    <span>Próximos Agendamentos</span> <span class="badge bg-primary rounded-pill">{{ today_count }} hoje</span>
+                </div>
                 <div class="card-body p-0">
-                    <table class="table table-hover mb-0">
-                        <thead><tr><th>Data/Hora</th><th>Cliente</th><th>Ação</th></tr></thead>
+                    <table class="table table-hover mb-0 align-middle">
+                        <thead class="table-light"><tr><th>Data/Hora</th><th>Serviços / Cliente</th><th>Ações</th></tr></thead>
                         <tbody>
                             {% for a in appointments %}
                             <tr>
-                                <td><b>{{ a.appointment_date.strftime('%d/%m') }}</b> {{ a.appointment_time.strftime('%H:%M') }}<br><small>{{ a.service_info.name }}</small></td>
-                                <td>{{ a.client_name }}<br><small class="text-success"><i class="bi bi-whatsapp"></i> {{ a.client_phone }}</small></td>
-                                <td><form method="POST" action="{{ url_for('delete_appointment', id=a.id) }}" onsubmit="return confirm('Cancelar?');"><button class="btn btn-sm btn-danger"><i class="bi bi-trash"></i></button></form></td>
+                                <td><div class="fw-bold text-primary">{{ a.appointment_date.strftime('%d/%m') }}</div><div>{{ a.appointment_time.strftime('%H:%M') }}</div><div class="small text-muted">{{ a.total_duration }}min</div></td>
+                                <td><div class="fw-bold">{{ a.service_names }}</div><div class="text-success fw-bold small">R$ {{ "%.2f"|format(a.total_price) }}</div><div class="mt-1">{{ a.client_name }} <br> <i class="bi bi-whatsapp text-success"></i> {{ a.client_phone }}</div></td>
+                                <td>
+                                    <div class="d-flex gap-1 flex-column flex-md-row">
+                                        <form method="POST" action="{{ url_for('delete_appointment', id=a.id) }}" onsubmit="return confirm('Apenas cancelar?');"><button class="btn btn-sm btn-outline-danger w-100" title="Cancelar Agendamento"><i class="bi bi-trash"></i> Cancelar</button></form>
+                                        <form method="POST" action="{{ url_for('mark_no_show', id=a.id) }}" onsubmit="return confirm('Isso bloqueará este cliente de novos agendamentos.');"><button class="btn btn-sm btn-warning w-100 text-dark fw-bold" title="Bloquear Cliente"><i class="bi bi-person-x-fill"></i> Deu Bolo!</button></form>
+                                    </div>
+                                </td>
                             </tr>
-                            {% else %}<tr><td colspan="3" class="text-center py-4">Agenda livre.</td></tr>{% endfor %}
+                            {% else %}<tr><td colspan="3" class="text-center py-4 text-muted">Agenda livre.</td></tr>{% endfor %}
                         </tbody>
                     </table>
                 </div>
             </div>
         </div>
-        <div class="col-lg-6">
-            <div class="card shadow-sm border-0">
-                <div class="card-header bg-white fw-bold">Serviços</div>
+        
+        <div class="col-lg-5">
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-header bg-white fw-bold">Serviços Oferecidos</div>
                 <div class="card-body">
                     <form action="{{ url_for('add_service') }}" method="POST" class="mb-3">
                         <div class="input-group input-group-sm">
-                            <input type="text" name="name" class="form-control" placeholder="Nome (ex: Corte)" required>
+                            <input type="text" name="name" class="form-control" placeholder="Nome" required>
                             <input type="number" name="duration" class="form-control" placeholder="Min" style="max-width: 70px;" required>
-                            <input type="text" name="price" class="form-control" placeholder="R$" style="max-width: 100px;" required>
-                            <button class="btn btn-success">+</button>
+                            <input type="text" name="price" class="form-control" placeholder="R$" style="max-width: 90px;" required>
+                            <button class="btn btn-success"><i class="bi bi-plus"></i></button>
                         </div>
                     </form>
                     <ul class="list-group list-group-flush small">
                         {% for s in services %}
-                        <li class="list-group-item d-flex justify-content-between px-0"><span>{{ s.name }} ({{ s.duration }}min) - <span class="fw-bold text-success">R$ {{ "%.2f"|format(s.price) }}</span></span><form method="POST" action="{{ url_for('delete_service', id=s.id) }}" onsubmit="return confirm('Excluir?');"><button class="btn btn-link text-danger p-0 border-0"><i class="bi bi-trash"></i></button></form></li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                            <div><strong>{{ s.name }}</strong> ({{ s.duration }}m)<br><span class="text-success fw-bold">R$ {{ "%.2f"|format(s.price) }}</span></div>
+                            <form method="POST" action="{{ url_for('delete_service', id=s.id) }}" onsubmit="return confirm('Excluir?');"><button class="btn btn-link text-danger p-0"><i class="bi bi-trash"></i></button></form>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+
+            <!-- NOVA ABA BLACKLIST -->
+            <div class="card shadow-sm border-0 mt-4">
+                <div class="card-header bg-white py-3 border-bottom"><h6 class="mb-0 fw-bold text-danger"><i class="bi bi-person-x"></i> Clientes Bloqueados (No-Show)</h6></div>
+                <div class="card-body">
+                    <form action="{{ url_for('add_blacklist') }}" method="POST" class="mb-3">
+                        <div class="input-group input-group-sm">
+                            <input type="text" name="phone" class="form-control" placeholder="WhatsApp (ex: 87999999999)" required>
+                            <button class="btn btn-danger fw-bold">Bloquear</button>
+                        </div>
+                    </form>
+                    <ul class="list-group list-group-flush small" style="max-height: 200px; overflow-y: auto;">
+                        {% for b in blacklists %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                            <span class="text-muted fw-bold"><i class="bi bi-whatsapp"></i> {{ b.client_phone }}</span>
+                            <form method="POST" action="{{ url_for('remove_blacklist', id=b.id) }}" onsubmit="return confirm('Desbloquear este cliente?');">
+                                <button class="btn btn-link text-success p-0 text-decoration-none"><i class="bi bi-unlock-fill"></i> Liberar</button>
+                            </form>
+                        </li>
+                        {% else %}
+                        <li class="list-group-item px-0 text-muted text-center border-0">Nenhum número bloqueado.</li>
                         {% endfor %}
                     </ul>
                 </div>
