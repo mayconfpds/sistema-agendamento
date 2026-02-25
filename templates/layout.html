@@ -42,9 +42,7 @@
             <ul class="nav flex-column fs-5 gap-2">
                 <li class="nav-item"><a class="nav-link text-dark" href="{{ url_for('admin_dashboard') }}"><i class="bi bi-speedometer2 me-2"></i> Painel</a></li>
                 <li class="nav-item"><a class="nav-link text-dark" href="{{ url_for('establishment_services', url_prefix=current_user.establishment.url_prefix) }}" target="_blank"><i class="bi bi-box-arrow-up-right me-2"></i> Ver Minha Página</a></li>
-                {% if not current_user.establishment.is_active %}
-                <li class="nav-item mt-3"><a class="nav-link text-white bg-success rounded shadow-sm text-center py-2" href="{{ url_for('payment') }}"><i class="bi bi-star-fill me-2"></i> Assinar Versão Pro</a></li>
-                {% endif %}
+                <!-- REMOVIDO: Botão Assinar Plano retirado do Menu para o Hard Trial -->
             </ul>
             <div class="mt-auto border-top pt-3"><a class="nav-link text-danger fw-bold" href="{{ url_for('logout') }}"><i class="bi bi-box-arrow-right me-2"></i> Sair</a></div>
         </div>

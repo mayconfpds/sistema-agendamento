@@ -33,7 +33,7 @@ import stripe
 socket.setdefaulttimeout(15)
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'chave-v46-trial-br'
+app.config['SECRET_KEY'] = 'chave-v47-trial-br'
 basedir = os.path.abspath(os.path.dirname(__file__))
 
 database_url = os.environ.get('DATABASE_URL')
@@ -210,15 +210,27 @@ if not os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
 @app.route('/pagamento')
 @login_required
 def payment():
-    if current_user.establishment.is_active: return redirect(url_for('admin_dashboard'))
+    if current_user.establishment.is_active: 
+        return redirect(url_for('admin_dashboard'))
+    
     try:
+        # Corrige erro do Render passar http:// para a Stripe
+        success_url = request.host_url.replace('http://', 'https://') + 'pagamento/sucesso'
+        cancel_url = request.host_url.replace('http://', 'https://') + 'pagamento/cancelado'
+
         session = stripe.checkout.Session.create(
-            payment_method_types=['card'], line_items=[{'price': STRIPE_PRICE_ID, 'quantity': 1}],
-            mode='subscription', allow_promotion_codes=True, success_url=request.host_url + 'pagamento/sucesso',
-            cancel_url=request.host_url + 'pagamento/cancelado', customer_email=current_user.establishment.contact_email,
+            payment_method_types=['card'], 
+            line_items=[{'price': STRIPE_PRICE_ID, 'quantity': 1}],
+            mode='subscription', 
+            allow_promotion_codes=True, 
+            success_url=success_url,
+            cancel_url=cancel_url, 
+            customer_email=current_user.establishment.contact_email,
         )
         return redirect(session.url, code=303)
-    except: return render_template('login.html')
+    except Exception as e:
+        # FIM DO BURACO NEGRO: Mostra o erro real na tela ao invés de jogar pro login
+        return f"<div style='font-family:sans-serif; padding:40px; text-align:center;'> <h2 style='color:red;'>Erro na comunicação com a Stripe</h2> <p>Por favor, verifique se as chaves <b>STRIPE_API_KEY</b> e <b>STRIPE_PRICE_ID</b> estão corretas no Render.</p> <p style='background:#f4f4f4; padding:15px; border-radius:8px;'>Detalhe do Erro: <b>{str(e)}</b></p> <a href='/logout'>Sair</a> </div>", 500
 
 @app.route('/pagamento/sucesso')
 @login_required
@@ -228,7 +240,7 @@ def payment_success():
 
 @app.route('/pagamento/cancelado')
 @login_required
-def payment_cancel(): return redirect(url_for('login'))
+def payment_cancel(): return redirect(url_for('logout'))
 
 # --- ROTAS PRINCIPAIS ---
 @app.route('/')
@@ -354,6 +366,7 @@ def logout(): logout_user(); return redirect(url_for('login'))
 @app.route('/admin')
 @login_required
 def admin_dashboard():
+    # HARD TRIAL (Paywall): Se acabou o teste e nao tem plano, força o checkout
     if not current_user.establishment.has_access: return redirect(url_for('payment'))
     est = current_user.establishment
     today = get_now_brazil().date()
@@ -552,9 +565,7 @@ LAYOUT_HTML = r'''<!DOCTYPE html>
             <ul class="nav flex-column fs-5 gap-2">
                 <li class="nav-item"><a class="nav-link text-dark" href="{{ url_for('admin_dashboard') }}"><i class="bi bi-speedometer2 me-2"></i> Painel</a></li>
                 <li class="nav-item"><a class="nav-link text-dark" href="{{ url_for('establishment_services', url_prefix=current_user.establishment.url_prefix) }}" target="_blank"><i class="bi bi-box-arrow-up-right me-2"></i> Ver Minha Página</a></li>
-                {% if not current_user.establishment.is_active %}
-                <li class="nav-item mt-3"><a class="nav-link text-white bg-success rounded shadow-sm text-center py-2" href="{{ url_for('payment') }}"><i class="bi bi-star-fill me-2"></i> Assinar Versão Pro</a></li>
-                {% endif %}
+                <!-- REMOVIDO: Botão Assinar Plano retirado do Menu para o Hard Trial -->
             </ul>
             <div class="mt-auto border-top pt-3"><a class="nav-link text-danger fw-bold" href="{{ url_for('logout') }}"><i class="bi bi-box-arrow-right me-2"></i> Sair</a></div>
         </div>
@@ -717,17 +728,16 @@ ADMIN_HTML = r'''{% extends 'layout.html' %}
 {% block content %}
 <div class="container py-4">
 
-    <!-- BANNER DE TESTE GRÁTIS -->
+    <!-- BANNER DE TESTE GRÁTIS (SEM BOTÃO DE PAGAMENTO - HARD TRIAL) -->
     {% if not current_user.establishment.is_active and current_user.establishment.trial_ends %}
     <div class="alert alert-warning border-warning shadow-sm d-flex flex-column flex-md-row justify-content-between align-items-center mb-4 rounded-3">
-        <div class="mb-3 mb-md-0 d-flex align-items-center">
+        <div class="d-flex align-items-center">
             <i class="bi bi-clock-history fs-3 me-3 text-warning-emphasis"></i>
             <div>
                 <h6 class="fw-bold mb-0 text-dark">Período de Teste Gratuito</h6>
-                <span class="small text-dark">Faltam <strong>{{ current_user.establishment.trial_days_left }} dias</strong> para o fim do seu teste.</span>
+                <span class="small text-dark">Aproveite! Faltam <strong>{{ current_user.establishment.trial_days_left }} dias</strong> para o fim do seu teste.</span>
             </div>
         </div>
-        <a href="{{ url_for('payment') }}" class="btn btn-success fw-bold px-4 shadow-sm text-nowrap"><i class="bi bi-star-fill me-1"></i> Assinar Versão Pro</a>
     </div>
     {% endif %}
 
@@ -1040,7 +1050,7 @@ def atualizar_sistema():
 
     print("\n[INFO] Instalando dependências...")
     subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"])
-    print("\n[SUCESSO] Sistema V46 (Copy BR Original + Destaque 7 Dias) instalado!")
+    print("\n[SUCESSO] Sistema V47 (Hard Trial Paywall + Correção Stripe) instalado!")
 
 if __name__ == "__main__":
     atualizar_sistema()
