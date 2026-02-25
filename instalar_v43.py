@@ -539,18 +539,22 @@ LAYOUT_HTML = r'''<!DOCTYPE html>
 </html>
 '''
 
+# MODIFICAÇÃO PRINCIPAL AQUI: Classes do h1 e textos alteradas para serem menores em telas de celular
 INDEX_HTML = r'''{% extends 'layout.html' %}
 {% block title %}Agenda Fácil - Plataforma Profissional{% endblock %}
 {% block content %}
 <div class="tailwind-scope">
-    <section class="bg-gradient-to-b from-white to-gray-50 overflow-hidden pt-16 pb-20">
+    <section class="bg-gradient-to-b from-white to-gray-50 overflow-hidden pt-12 md:pt-16 pb-16 md:pb-20">
         <div class="max-w-7xl mx-auto px-6 lg:px-8 grid lg:grid-cols-2 gap-12 items-center">
             <div class="text-center lg:text-left">
                 <div class="inline-block bg-blue-100 text-blue-700 text-xs font-bold px-3 py-1 rounded-full mb-6">🚀 Sistema Completo de Gestão</div>
-                <h1 class="text-5xl lg:text-6xl font-extrabold tracking-tight text-gray-900 leading-tight mb-6">Transforme agendamentos em <span class="text-blue-600">mais lucro</span>.</h1>
-                <p class="text-lg text-gray-600 mb-8 leading-relaxed max-w-lg mx-auto lg:mx-0">
+                
+                <!-- Ajuste responsivo na fonte (text-4xl no mobile, md:text-5xl, lg:text-6xl) -->
+                <h1 class="text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight text-gray-900 leading-tight mb-4 md:mb-6">Transforme agendamentos em <span class="text-blue-600">mais lucro</span>.</h1>
+                
+                <p class="text-base md:text-lg text-gray-600 mb-8 leading-relaxed max-w-lg mx-auto lg:mx-0">
                     A ferramenta definitiva para barbearias, salões e clínicas.
-                    <br><span class="text-blue-600 font-bold text-2xl">Apenas R$ 34,90/mês</span>.
+                    <br><span class="text-blue-600 font-bold text-xl md:text-2xl">Apenas R$ 34,90/mês</span>.
                     <br>Tenha um link profissional, receba agendamentos 24h e elimine a troca de mensagens no WhatsApp.
                 </p>
                 <div class="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
@@ -561,7 +565,6 @@ INDEX_HTML = r'''{% extends 'layout.html' %}
             <div class="relative mt-12 lg:mt-0 perspective-1000">
                 <div class="relative bg-gray-900 rounded-2xl p-2 shadow-2xl transform rotate-y-12 transition hover:rotate-y-0 duration-700">
                     <div class="relative rounded-xl overflow-hidden bg-white aspect-video group">
-                        <!-- Imagem do painel -->
                         <img src="{{ url_for('static', filename='painel.png') }}" class="w-full h-full object-cover" onerror="this.onerror=null; this.src='https://placehold.co/1280x800/E2E8F0/475569?text=Insira+painel.png+na+pasta+static';">
                     </div>
                 </div>
@@ -570,30 +573,30 @@ INDEX_HTML = r'''{% extends 'layout.html' %}
     </section>
 
     <!-- SEÇÃO PARA QUEM É -->
-    <section class="py-20 bg-white">
+    <section class="py-16 md:py-20 bg-white">
         <div class="max-w-7xl mx-auto px-6 text-center">
-            <h2 class="text-3xl font-bold text-gray-900 mb-12">Ideal para profissionais exigentes</h2>
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-8">
+            <h2 class="text-2xl md:text-3xl font-bold text-gray-900 mb-10 md:mb-12">Ideal para profissionais exigentes</h2>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-8">
                 <div class="p-6 rounded-2xl bg-gray-50 hover:bg-blue-50 transition border border-gray-100 hover:border-blue-200">
-                    <div class="text-4xl mb-4">💈</div><h3 class="font-bold text-gray-900">Barbearias</h3>
+                    <div class="text-3xl md:text-4xl mb-4">💈</div><h3 class="font-bold text-gray-900 text-sm md:text-base">Barbearias</h3>
                 </div>
                 <div class="p-6 rounded-2xl bg-gray-50 hover:bg-pink-50 transition border border-gray-100 hover:border-pink-200">
-                    <div class="text-4xl mb-4">💇‍♀️</div><h3 class="font-bold text-gray-900">Salões</h3>
+                    <div class="text-3xl md:text-4xl mb-4">💇‍♀️</div><h3 class="font-bold text-gray-900 text-sm md:text-base">Salões</h3>
                 </div>
                 <div class="p-6 rounded-2xl bg-gray-50 hover:bg-green-50 transition border border-gray-100 hover:border-green-200">
-                    <div class="text-4xl mb-4">💆‍♂️</div><h3 class="font-bold text-gray-900">Clínicas</h3>
+                    <div class="text-3xl md:text-4xl mb-4">💆‍♂️</div><h3 class="font-bold text-gray-900 text-sm md:text-base">Clínicas</h3>
                 </div>
                 <div class="p-6 rounded-2xl bg-gray-50 hover:bg-purple-50 transition border border-gray-100 hover:border-purple-200">
-                    <div class="text-4xl mb-4">💅</div><h3 class="font-bold text-gray-900">Estética</h3>
+                    <div class="text-3xl md:text-4xl mb-4">💅</div><h3 class="font-bold text-gray-900 text-sm md:text-base">Estética</h3>
                 </div>
             </div>
         </div>
     </section>
 
-    <section class="py-20 bg-gray-900 text-white">
+    <section class="py-16 md:py-20 bg-gray-900 text-white">
         <div class="max-w-7xl mx-auto px-6">
-            <div class="text-center mb-16"><h2 class="text-3xl lg:text-4xl font-bold mb-4">Tudo o que você precisa para crescer</h2></div>
-            <div class="grid md:grid-cols-3 gap-8">
+            <div class="text-center mb-12 md:mb-16"><h2 class="text-2xl md:text-3xl lg:text-4xl font-bold mb-4">Tudo o que você precisa para crescer</h2></div>
+            <div class="grid md:grid-cols-3 gap-6 md:gap-8">
                 <div class="bg-gray-800 p-8 rounded-2xl border border-gray-700 hover:border-blue-500 transition group">
                     <div class="w-12 h-12 bg-blue-500/20 rounded-lg flex items-center justify-center mb-6 text-blue-400 group-hover:bg-blue-500 group-hover:text-white transition"><i class="bi bi-link-45deg text-2xl"></i></div>
                     <h3 class="text-xl font-bold mb-3">Link Personalizado</h3>
@@ -613,9 +616,9 @@ INDEX_HTML = r'''{% extends 'layout.html' %}
         </div>
     </section>
 
-    <section class="py-24 bg-blue-600 text-center">
+    <section class="py-16 md:py-24 bg-blue-600 text-center">
         <div class="max-w-4xl mx-auto px-6">
-            <h2 class="text-3xl lg:text-4xl font-bold text-white mb-8">Pronto para profissionalizar seu negócio?</h2>
+            <h2 class="text-2xl md:text-3xl lg:text-4xl font-bold text-white mb-8">Pronto para profissionalizar seu negócio?</h2>
             <a href="{{ url_for('register_business') }}" class="inline-block bg-white text-blue-600 px-10 py-4 rounded-full font-bold text-lg hover:bg-gray-100 transition shadow-lg">Criar Minha Conta Agora</a>
             <p class="mt-6 text-blue-200 text-sm">Configuração em menos de 2 minutos.</p>
         </div>
@@ -673,7 +676,6 @@ LOGIN_HTML = r'''{% extends 'layout.html' %}
 {% endblock %}
 '''
 
-# --- ADMIN ATUALIZADO (Blacklist) ---
 ADMIN_HTML = r'''{% extends 'layout.html' %}
 {% block content %}
 <div class="container py-4">
@@ -986,10 +988,8 @@ def atualizar_sistema():
     for caminho, conteudo in arquivos.items():
         with open(caminho, 'w', encoding='utf-8') as f: f.write(conteudo.strip())
 
-    print("\n[INFO] Instalando dependências...")
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"])
-    print("\n[SUCESSO] Sistema V42 (Bloqueio + Copy Ouro) instalado!")
-    print("\n[AVISO IMPORTANTE]: Apague o banco 'agendamento.db' e a pasta 'migrations' antes de rodar os comandos do flask db!")
+    print("\n[INFO] Arquivos HTML atualizados com sucesso (Correção Responsiva Mobile).")
+    print("\n[SUCESSO] Sistema V43 instalado! Basta enviar para o Git.")
 
 if __name__ == "__main__":
     atualizar_sistema()
