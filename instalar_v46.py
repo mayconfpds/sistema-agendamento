@@ -33,7 +33,7 @@ import stripe
 socket.setdefaulttimeout(15)
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'chave-v42-pro-master'
+app.config['SECRET_KEY'] = 'chave-v46-trial-br'
 basedir = os.path.abspath(os.path.dirname(__file__))
 
 database_url = os.environ.get('DATABASE_URL')
@@ -46,7 +46,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 raw_key = os.environ.get('BREVO_API_KEY', '')
 BREVO_API_KEY = raw_key.strip() if raw_key else None
 BREVO_SENDER_EMAIL = os.environ.get('BREVO_SENDER_EMAIL', 'seu_email@gmail.com') 
-BREVO_SENDER_NAME = "Agenda Facil"
+BREVO_SENDER_NAME = "Agenda Fácil"
 
 stripe.api_key = os.environ.get('STRIPE_API_KEY')
 STRIPE_PRICE_ID = os.environ.get('STRIPE_PRICE_ID')
@@ -63,7 +63,7 @@ migrate = Migrate(app, db, render_as_batch=True)
 
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
-login_manager.login_message = 'Faça login.'
+login_manager.login_message = 'Faça login para continuar.'
 
 def get_now_brazil():
     return datetime.utcnow() - timedelta(hours=3)
@@ -96,11 +96,25 @@ class Establishment(db.Model):
     is_active = db.Column(db.Boolean, default=False)
     capacity = db.Column(db.Integer, default=1, nullable=False)
     
+    trial_ends = db.Column(db.DateTime, nullable=True)
+    
     schedules = db.relationship('DaySchedule', backref='establishment', lazy=True, cascade="all, delete-orphan")
     admins = db.relationship('Admin', backref='establishment', lazy=True)
     services = db.relationship('Service', backref='establishment', lazy=True)
     appointments = db.relationship('Appointment', backref='establishment', lazy=True)
     blacklists = db.relationship('Blacklist', backref='establishment', lazy=True)
+
+    @property
+    def has_access(self):
+        if self.is_active: return True
+        if self.trial_ends and get_now_brazil() < self.trial_ends: return True
+        return False
+
+    @property
+    def trial_days_left(self):
+        if self.is_active or not self.trial_ends: return 0
+        delta = self.trial_ends - get_now_brazil()
+        return max(0, delta.days)
 
 class DaySchedule(db.Model):
     __tablename__ = 'day_schedules'
@@ -177,7 +191,7 @@ def notification_worker():
                     minutes = (appt_dt - now).total_seconds() / 60
                     if 50 <= minutes <= 70:
                         subj = f"Lembrete: {appt.establishment.name}"
-                        body = f"Olá {appt.client_name},\n\nLembrete do seu horário: {appt.appointment_time.strftime('%H:%M')} para {appt.service_names}."
+                        body = f"Olá {appt.client_name},\n\nLembrete do seu horário hoje às {appt.appointment_time.strftime('%H:%M')} para {appt.service_names}."
                         send_email(subj, appt.client_email, body)
                         appt.notified = True
                         db.session.commit()
@@ -226,27 +240,39 @@ def register_business():
     if request.method == 'POST':
         username = request.form.get('username')
         is_master = (username == 'admin_demo') 
-        est = Establishment(name=request.form.get('business_name'), url_prefix=request.form.get('url_prefix').lower().strip(), contact_phone=request.form.get('contact_phone'), contact_email=request.form.get('contact_email'), is_active=is_master, capacity=1)
+        
+        est = Establishment(
+            name=request.form.get('business_name'), 
+            url_prefix=request.form.get('url_prefix').lower().strip(), 
+            contact_phone=request.form.get('contact_phone'), 
+            contact_email=request.form.get('contact_email'), 
+            is_active=is_master, 
+            capacity=1,
+            trial_ends=get_now_brazil() + timedelta(days=7) # +7 DIAS DE TESTE
+        )
         db.session.add(est); db.session.commit()
         for i in range(7): db.session.add(DaySchedule(establishment_id=est.id, day_index=i, is_active=(i < 5), work_start=time(9,0), work_end=time(18,0)))
         adm = Admin(username=username, establishment_id=est.id)
         adm.set_password(request.form.get('password'))
         db.session.add(adm); db.session.commit()
+        
         login_user(adm)
-        return redirect(url_for('admin_dashboard')) if is_master else redirect(url_for('payment'))
+        # Login vai direto para o painel para iniciar os 7 dias
+        return redirect(url_for('admin_dashboard'))
+        
     return render_template('register.html')
 
 @app.route('/b/<url_prefix>')
 def establishment_services(url_prefix):
     est = Establishment.query.filter_by(url_prefix=url_prefix).first_or_404()
-    if not est.is_active: return render_template('error_inactive.html', message="Indisponível."), 403
+    if not est.has_access: return render_template('error_inactive.html', message="O período de teste ou assinatura deste estabelecimento expirou."), 403
     services = Service.query.filter_by(establishment_id=est.id).order_by(Service.name).all()
     return render_template('lista_servicos.html', services=services, establishment=est)
 
 @app.route('/b/<url_prefix>/agendar/<int:service_id>')
 def schedule_service(url_prefix, service_id):
     est = Establishment.query.filter_by(url_prefix=url_prefix).first_or_404()
-    if not est.is_active: return "Inativo", 403
+    if not est.has_access: return "Inativo", 403
     main_service = Service.query.get_or_404(service_id)
     other_services = Service.query.filter(Service.establishment_id == est.id, Service.id != service_id).order_by(Service.name).all()
     return render_template('agendamento.html', main_service=main_service, other_services=other_services, establishment=est)
@@ -254,10 +280,12 @@ def schedule_service(url_prefix, service_id):
 @app.route('/b/<url_prefix>/confirmar', methods=['POST'])
 def create_appointment(url_prefix):
     est = Establishment.query.filter_by(url_prefix=url_prefix).first_or_404()
+    if not est.has_access: return "Inativo", 403
+    
     client_phone = request.form.get('client_phone').strip()
     
     if Blacklist.query.filter_by(establishment_id=est.id, client_phone=client_phone).first():
-        flash('Agendamento bloqueado. Entre em contato com o estabelecimento.', 'danger')
+        flash('Agendamento bloqueado. Por favor, entre em contato com o estabelecimento.', 'danger')
         return redirect(url_for('establishment_services', url_prefix=url_prefix))
 
     now = get_now_brazil()
@@ -293,7 +321,7 @@ def create_appointment(url_prefix):
             overlap_count += 1
             
     if overlap_count >= est.capacity:
-        flash('Ops! Esse horário acabou de ser ocupado.', 'danger')
+        flash('Ops! Esse horário acabou de ser ocupado. Tente outro.', 'danger')
         return redirect(url_for('schedule_service', url_prefix=url_prefix, service_id=selected_services[0].id))
 
     appt = Appointment(client_name=request.form.get('client_name'), client_phone=client_phone, client_email=request.form.get('client_email'), appointment_date=d, appointment_time=t, establishment_id=est.id, total_duration=total_dur, total_price=total_price)
@@ -302,9 +330,9 @@ def create_appointment(url_prefix):
     db.session.add(appt); db.session.commit()
     
     send_email(f"Confirmado: {est.name}", appt.client_email, f"Agendado para {d.strftime('%d/%m')} às {t.strftime('%H:%M')}.")
-    if est.contact_email: send_email(f"Novo Cliente", est.contact_email, f"Novo agendamento.")
+    if est.contact_email: send_email(f"Novo Cliente", est.contact_email, f"Novo agendamento recebido.")
     
-    zap_msg = f"Olá, confirmo agendamento: {d.strftime('%d/%m')} às {t.strftime('%H:%M')}."
+    zap_msg = f"Olá, confirmo meu agendamento para: {d.strftime('%d/%m')} às {t.strftime('%H:%M')}."
     zap_link = f"https://wa.me/55{est.contact_phone}?text={zap_msg}" if est.contact_phone else "#"
     return render_template('success_appointment.html', appointment=appt, zap_link=zap_link)
 
@@ -314,7 +342,7 @@ def login():
         adm = Admin.query.filter_by(username=request.form.get('username')).first()
         if adm and adm.check_password(request.form.get('password')):
             login_user(adm)
-            if not adm.establishment.is_active: return redirect(url_for('payment'))
+            if not adm.establishment.has_access: return redirect(url_for('payment'))
             return redirect(url_for('admin_dashboard'))
         flash('Login inválido.', 'danger')
     return render_template('login.html')
@@ -326,7 +354,7 @@ def logout(): logout_user(); return redirect(url_for('login'))
 @app.route('/admin')
 @login_required
 def admin_dashboard():
-    if not current_user.establishment.is_active: return redirect(url_for('payment'))
+    if not current_user.establishment.has_access: return redirect(url_for('payment'))
     est = current_user.establishment
     today = get_now_brazil().date()
     appts = Appointment.query.filter(Appointment.establishment_id == est.id, Appointment.appointment_date >= today).order_by(Appointment.appointment_date, Appointment.appointment_time).all()
@@ -339,6 +367,7 @@ def admin_dashboard():
 @app.route('/admin/configurar', methods=['POST'])
 @login_required
 def update_settings():
+    if not current_user.establishment.has_access: return redirect(url_for('payment'))
     est = current_user.establishment
     ft = request.form.get('form_type')
     if ft == 'contact':
@@ -353,7 +382,7 @@ def update_settings():
                 uid = f"{est.id}_{int(time_module.time())}_{fname}"
                 file.save(os.path.join(app.config['UPLOAD_FOLDER'], uid))
                 est.logo_filename = uid
-        flash('Salvo!', 'success')
+        flash('Salvo com sucesso!', 'success')
     elif ft == 'schedule':
         for sid in request.form.getlist('schedule_id'):
             ds = DaySchedule.query.get(sid)
@@ -371,6 +400,7 @@ def update_settings():
 @app.route('/admin/servicos/novo', methods=['POST'])
 @login_required
 def add_service():
+    if not current_user.establishment.has_access: return redirect(url_for('payment'))
     try: p = float(request.form.get('price', '0').replace(',', '.'))
     except: p = 0.0
     svc = Service(name=request.form.get('name'), duration=int(request.form.get('duration')), price=p, establishment_id=current_user.establishment_id)
@@ -389,10 +419,10 @@ def delete_appointment(id):
     a = Appointment.query.get(id); db.session.delete(a); db.session.commit()
     return redirect(url_for('admin_dashboard'))
 
-# ROTAS DE BLACKLIST
 @app.route('/admin/agendamentos/falta/<int:id>', methods=['POST'])
 @login_required
 def mark_no_show(id):
+    if not current_user.establishment.has_access: return redirect(url_for('payment'))
     a = Appointment.query.get_or_404(id)
     if a.establishment_id != current_user.establishment_id: return "Erro", 403
     if not Blacklist.query.filter_by(establishment_id=a.establishment_id, client_phone=a.client_phone).first():
@@ -406,6 +436,7 @@ def mark_no_show(id):
 @app.route('/admin/blacklist/add', methods=['POST'])
 @login_required
 def add_blacklist():
+    if not current_user.establishment.has_access: return redirect(url_for('payment'))
     phone = request.form.get('phone', '').strip()
     if phone:
         exists = Blacklist.query.filter_by(establishment_id=current_user.establishment_id, client_phone=phone).first()
@@ -498,8 +529,8 @@ LAYOUT_HTML = r'''<!DOCTYPE html>
                     <button class="btn btn-outline-primary border-0" type="button" data-bs-toggle="offcanvas" data-bs-target="#sidebarMenu"><i class="bi bi-list fs-4"></i></button>
                 {% else %}
                     <div class="d-none d-lg-block">
-                        <a href="{{ url_for('login') }}" class="fw-bold text-decoration-none me-3 text-dark">Login</a>
-                        <a href="{{ url_for('register_business') }}" class="btn btn-primary btn-sm rounded-pill px-3">Criar Conta</a>
+                        <a href="{{ url_for('login') }}" class="fw-bold text-decoration-none me-3 text-dark">Entrar</a>
+                        <a href="{{ url_for('register_business') }}" class="btn btn-primary btn-sm rounded-pill px-3">Testar Grátis</a>
                     </div>
                      <button class="navbar-toggler d-lg-none" type="button" data-bs-toggle="collapse" data-bs-target="#mobileNav"><span class="navbar-toggler-icon"></span></button>
                 {% endif %}
@@ -507,8 +538,8 @@ LAYOUT_HTML = r'''<!DOCTYPE html>
             <div class="collapse navbar-collapse" id="mobileNav">
                  {% if not current_user.is_authenticated %}
                 <ul class="navbar-nav ms-auto mt-2 mt-lg-0">
-                    <li class="nav-item"><a class="nav-link" href="{{ url_for('login') }}">Login</a></li>
-                    <li class="nav-item"><a class="nav-link" href="{{ url_for('register_business') }}">Criar Conta</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{{ url_for('login') }}">Entrar</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{{ url_for('register_business') }}">Testar Grátis</a></li>
                 </ul>
                 {% endif %}
             </div>
@@ -521,6 +552,9 @@ LAYOUT_HTML = r'''<!DOCTYPE html>
             <ul class="nav flex-column fs-5 gap-2">
                 <li class="nav-item"><a class="nav-link text-dark" href="{{ url_for('admin_dashboard') }}"><i class="bi bi-speedometer2 me-2"></i> Painel</a></li>
                 <li class="nav-item"><a class="nav-link text-dark" href="{{ url_for('establishment_services', url_prefix=current_user.establishment.url_prefix) }}" target="_blank"><i class="bi bi-box-arrow-up-right me-2"></i> Ver Minha Página</a></li>
+                {% if not current_user.establishment.is_active %}
+                <li class="nav-item mt-3"><a class="nav-link text-white bg-success rounded shadow-sm text-center py-2" href="{{ url_for('payment') }}"><i class="bi bi-star-fill me-2"></i> Assinar Versão Pro</a></li>
+                {% endif %}
             </ul>
             <div class="mt-auto border-top pt-3"><a class="nav-link text-danger fw-bold" href="{{ url_for('logout') }}"><i class="bi bi-box-arrow-right me-2"></i> Sair</a></div>
         </div>
@@ -539,7 +573,6 @@ LAYOUT_HTML = r'''<!DOCTYPE html>
 </html>
 '''
 
-# MODIFICAÇÃO PRINCIPAL AQUI: Classes do h1 e textos alteradas para serem menores em telas de celular
 INDEX_HTML = r'''{% extends 'layout.html' %}
 {% block title %}Agenda Fácil - Plataforma Profissional{% endblock %}
 {% block content %}
@@ -547,18 +580,17 @@ INDEX_HTML = r'''{% extends 'layout.html' %}
     <section class="bg-gradient-to-b from-white to-gray-50 overflow-hidden pt-12 md:pt-16 pb-16 md:pb-20">
         <div class="max-w-7xl mx-auto px-6 lg:px-8 grid lg:grid-cols-2 gap-12 items-center">
             <div class="text-center lg:text-left">
-                <div class="inline-block bg-blue-100 text-blue-700 text-xs font-bold px-3 py-1 rounded-full mb-6">🚀 Sistema Completo de Gestão</div>
+                <div class="inline-block bg-blue-100 text-blue-700 text-xs font-bold px-3 py-1 rounded-full mb-6">🚀 Teste Grátis por 7 Dias</div>
                 
-                <!-- Ajuste responsivo na fonte (text-4xl no mobile, md:text-5xl, lg:text-6xl) -->
                 <h1 class="text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight text-gray-900 leading-tight mb-4 md:mb-6">Transforme agendamentos em <span class="text-blue-600">mais lucro</span>.</h1>
                 
                 <p class="text-base md:text-lg text-gray-600 mb-8 leading-relaxed max-w-lg mx-auto lg:mx-0">
                     A ferramenta definitiva para barbearias, salões e clínicas.
-                    <br><span class="text-blue-600 font-bold text-xl md:text-2xl">Apenas R$ 34,90/mês</span>.
+                    <br><span class="text-blue-600 font-bold text-xl md:text-2xl">Teste grátis por 7 dias</span>. Depois, apenas R$ 34,90/mês.
                     <br>Tenha um link profissional, receba agendamentos 24h e elimine a troca de mensagens no WhatsApp.
                 </p>
                 <div class="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
-                    <a href="{{ url_for('register_business') }}" class="bg-blue-600 text-white px-8 py-4 rounded-xl font-bold text-lg hover:bg-blue-700 transition shadow-lg transform hover:-translate-y-1">Começar Agora</a>
+                    <a href="{{ url_for('register_business') }}" class="bg-blue-600 text-white px-8 py-4 rounded-xl font-bold text-lg hover:bg-blue-700 transition shadow-lg transform hover:-translate-y-1">Começar Teste Grátis</a>
                     <a href="{{ url_for('login') }}" class="px-8 py-4 rounded-xl font-bold text-gray-700 hover:bg-gray-200 transition border border-gray-300">Já sou Cliente</a>
                 </div>
             </div>
@@ -619,8 +651,8 @@ INDEX_HTML = r'''{% extends 'layout.html' %}
     <section class="py-16 md:py-24 bg-blue-600 text-center">
         <div class="max-w-4xl mx-auto px-6">
             <h2 class="text-2xl md:text-3xl lg:text-4xl font-bold text-white mb-8">Pronto para profissionalizar seu negócio?</h2>
-            <a href="{{ url_for('register_business') }}" class="inline-block bg-white text-blue-600 px-10 py-4 rounded-full font-bold text-lg hover:bg-gray-100 transition shadow-lg">Criar Minha Conta Agora</a>
-            <p class="mt-6 text-blue-200 text-sm">Configuração em menos de 2 minutos.</p>
+            <a href="{{ url_for('register_business') }}" class="inline-block bg-white text-blue-600 px-10 py-4 rounded-full font-bold text-lg hover:bg-gray-100 transition shadow-lg">Iniciar Teste Grátis</a>
+            <p class="mt-6 text-blue-200 text-sm">Configuração em menos de 2 minutos. Sem compromisso.</p>
         </div>
     </section>
 </div>
@@ -633,7 +665,10 @@ REGISTER_HTML = r'''{% extends 'layout.html' %}
 <div class="row justify-content-center mt-5 mb-5">
     <div class="col-md-8 col-lg-6">
         <div class="card shadow-lg border-0 rounded-4 overflow-hidden">
-            <div class="card-header bg-blue-600 text-white text-center py-4"><h3 class="fw-bold mb-0">Assine Agora</h3><p class="text-blue-100 text-sm mb-0">Plano Profissional: R$ 34,90/mês</p></div>
+            <div class="card-header bg-blue-600 text-white text-center py-4">
+                <h3 class="fw-bold mb-0">Crie sua conta e teste grátis</h3>
+                <p class="text-blue-100 text-sm mb-0 mt-1"><i class="bi bi-check-circle-fill"></i> 7 dias de acesso total. Sem cartão de crédito.</p>
+            </div>
             <div class="card-body p-4 p-md-5 bg-white">
                 <form method="POST" action="{{ url_for('register_business') }}">
                     <h5 class="mb-3 text-primary fw-bold small text-uppercase ls-1">Dados do Negócio</h5>
@@ -643,12 +678,13 @@ REGISTER_HTML = r'''{% extends 'layout.html' %}
                         <div class="col-md-6"><label class="form-label small fw-bold">WhatsApp</label><input type="text" class="form-control" name="contact_phone"></div>
                         <div class="col-md-6"><label class="form-label small fw-bold">E-mail para Notificações</label><input type="email" class="form-control" name="contact_email" required></div>
                     </div>
-                    <h5 class="mb-3 text-primary fw-bold small text-uppercase ls-1 border-top pt-4">Acesso</h5>
+                    <h5 class="mb-3 text-primary fw-bold small text-uppercase ls-1 border-top pt-4">Acesso ao Painel</h5>
                     <div class="row g-2">
                         <div class="col-md-6 mb-3"><label class="form-label small fw-bold">Usuário</label><input type="text" class="form-control" name="username" required></div>
                         <div class="col-md-6 mb-3"><label class="form-label small fw-bold">Senha</label><input type="password" class="form-control" name="password" required></div>
                     </div>
-                    <button class="btn btn-primary w-100 py-3 fw-bold rounded-3 shadow-sm mt-2">Ir para Pagamento</button>
+                    <button class="btn btn-primary w-100 py-3 fw-bold rounded-3 shadow-sm mt-2">Criar Conta e Acessar Painel</button>
+                    <div class="text-center mt-3 small text-muted">Ao criar conta você concorda com nossos termos de serviço.</div>
                 </form>
             </div>
         </div>
@@ -669,7 +705,7 @@ LOGIN_HTML = r'''{% extends 'layout.html' %}
                 <div class="mb-4"><label class="form-label small fw-bold">Senha</label><input type="password" class="form-control form-control-lg" name="password" required></div>
                 <button class="btn btn-dark w-100 py-3 fw-bold rounded-3">Entrar</button>
             </form>
-            <div class="text-center mt-4 border-top pt-3"><a href="{{ url_for('register_business') }}" class="text-decoration-none small text-muted">Não tem conta? <span class="text-blue-600 fw-bold">Assine já</span></a></div>
+            <div class="text-center mt-4 border-top pt-3"><a href="{{ url_for('register_business') }}" class="text-decoration-none small text-muted">Não tem conta? <span class="text-blue-600 fw-bold">Teste grátis</span></a></div>
         </div>
     </div>
 </div>
@@ -677,13 +713,29 @@ LOGIN_HTML = r'''{% extends 'layout.html' %}
 '''
 
 ADMIN_HTML = r'''{% extends 'layout.html' %}
+{% block title %}Painel Admin{% endblock %}
 {% block content %}
 <div class="container py-4">
+
+    <!-- BANNER DE TESTE GRÁTIS -->
+    {% if not current_user.establishment.is_active and current_user.establishment.trial_ends %}
+    <div class="alert alert-warning border-warning shadow-sm d-flex flex-column flex-md-row justify-content-between align-items-center mb-4 rounded-3">
+        <div class="mb-3 mb-md-0 d-flex align-items-center">
+            <i class="bi bi-clock-history fs-3 me-3 text-warning-emphasis"></i>
+            <div>
+                <h6 class="fw-bold mb-0 text-dark">Período de Teste Gratuito</h6>
+                <span class="small text-dark">Faltam <strong>{{ current_user.establishment.trial_days_left }} dias</strong> para o fim do seu teste.</span>
+            </div>
+        </div>
+        <a href="{{ url_for('payment') }}" class="btn btn-success fw-bold px-4 shadow-sm text-nowrap"><i class="bi bi-star-fill me-1"></i> Assinar Versão Pro</a>
+    </div>
+    {% endif %}
+
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div class="d-flex align-items-center gap-3">
             {% if establishment.logo_filename %}<img src="{{ url_for('static', filename='uploads/' + establishment.logo_filename) }}" class="rounded-circle shadow-sm border border-2 border-white" style="width: 50px; height: 50px; object-fit: cover;">
             {% else %}<div class="rounded-circle bg-secondary d-flex align-items-center justify-content-center text-white fw-bold" style="width: 60px; height: 60px;">Logo</div>{% endif %}
-            <div><h1 class="h3 mb-0">Painel: {{ establishment.name }}</h1><a href="{{ url_for('establishment_services', url_prefix=establishment.url_prefix) }}" target="_blank" class="text-decoration-none small">Ver Página <i class="bi bi-box-arrow-up-right"></i></a></div>
+            <div><h1 class="h3 mb-0">Painel: {{ establishment.name }}</h1><a href="{{ url_for('establishment_services', url_prefix=establishment.url_prefix) }}" target="_blank" class="text-decoration-none small">Ver a Minha Página <i class="bi bi-box-arrow-up-right"></i></a></div>
         </div>
     </div>
     
@@ -766,7 +818,6 @@ ADMIN_HTML = r'''{% extends 'layout.html' %}
                 </div>
             </div>
 
-            <!-- NOVA ABA BLACKLIST -->
             <div class="card shadow-sm border-0 mt-4">
                 <div class="card-header bg-white py-3 border-bottom"><h6 class="mb-0 fw-bold text-danger"><i class="bi bi-person-x"></i> Clientes Bloqueados (No-Show)</h6></div>
                 <div class="card-body">
@@ -862,7 +913,6 @@ AGENDAMENTO_HTML = r'''{% extends 'layout.html' %}
                     <div class="mb-3"><label class="fw-bold small">Escolha a Data</label><input type="date" id="date" name="appointment_date" class="form-control" required></div>
                     <div class="mb-4"><label class="fw-bold small">Horários Disponíveis</label><div id="slots" class="d-flex flex-wrap gap-2 mt-2"><small class="text-muted">Selecione a data...</small></div><input type="hidden" id="time" name="appointment_time" required></div>
                     
-                    <!-- FRICÇÃO PSICOLÓGICA ANTI NO-SHOW -->
                     <div class="form-check mb-4 bg-warning bg-opacity-10 p-3 rounded border border-warning">
                         <input class="form-check-input ms-1" type="checkbox" id="term_noshow" required>
                         <label class="form-check-label ms-2 small fw-bold text-dark" for="term_noshow">
@@ -953,7 +1003,7 @@ SUCCESS_APPOINTMENT_HTML = r'''{% extends 'layout.html' %}
         </div>
 
         {% if zap_link != "#" %}
-        <a href="{{ zap_link }}" target="_blank" class="btn btn-success w-100 py-3 fw-bold rounded-pill mb-2"><i class="bi bi-whatsapp"></i> Confirmar no WhatsApp</a>
+        <a href="{{ zap_link }}" target="_blank" class="btn btn-success w-100 py-3 fw-bold rounded-pill mb-2"><i class="bi bi-whatsapp"></i> Enviar Mensagem ao Profissional</a>
         {% endif %}
         <div class="mt-3"><a href="{{ url_for('establishment_services', url_prefix=appointment.establishment.url_prefix) }}" class="text-decoration-none fw-bold">Agendar Outro</a></div>
     </div>
@@ -988,8 +1038,9 @@ def atualizar_sistema():
     for caminho, conteudo in arquivos.items():
         with open(caminho, 'w', encoding='utf-8') as f: f.write(conteudo.strip())
 
-    print("\n[INFO] Arquivos HTML atualizados com sucesso (Correção Responsiva Mobile).")
-    print("\n[SUCESSO] Sistema V43 instalado! Basta enviar para o Git.")
+    print("\n[INFO] Instalando dependências...")
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"])
+    print("\n[SUCESSO] Sistema V46 (Copy BR Original + Destaque 7 Dias) instalado!")
 
 if __name__ == "__main__":
     atualizar_sistema()

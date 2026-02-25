@@ -16,7 +16,7 @@ import stripe
 socket.setdefaulttimeout(15)
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'chave-v42-pro-master'
+app.config['SECRET_KEY'] = 'chave-v46-trial-br'
 basedir = os.path.abspath(os.path.dirname(__file__))
 
 database_url = os.environ.get('DATABASE_URL')
@@ -29,7 +29,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 raw_key = os.environ.get('BREVO_API_KEY', '')
 BREVO_API_KEY = raw_key.strip() if raw_key else None
 BREVO_SENDER_EMAIL = os.environ.get('BREVO_SENDER_EMAIL', 'seu_email@gmail.com') 
-BREVO_SENDER_NAME = "Agenda Facil"
+BREVO_SENDER_NAME = "Agenda Fácil"
 
 stripe.api_key = os.environ.get('STRIPE_API_KEY')
 STRIPE_PRICE_ID = os.environ.get('STRIPE_PRICE_ID')
@@ -46,7 +46,7 @@ migrate = Migrate(app, db, render_as_batch=True)
 
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
-login_manager.login_message = 'Faça login.'
+login_manager.login_message = 'Faça login para continuar.'
 
 def get_now_brazil():
     return datetime.utcnow() - timedelta(hours=3)
@@ -79,11 +79,25 @@ class Establishment(db.Model):
     is_active = db.Column(db.Boolean, default=False)
     capacity = db.Column(db.Integer, default=1, nullable=False)
     
+    trial_ends = db.Column(db.DateTime, nullable=True)
+    
     schedules = db.relationship('DaySchedule', backref='establishment', lazy=True, cascade="all, delete-orphan")
     admins = db.relationship('Admin', backref='establishment', lazy=True)
     services = db.relationship('Service', backref='establishment', lazy=True)
     appointments = db.relationship('Appointment', backref='establishment', lazy=True)
     blacklists = db.relationship('Blacklist', backref='establishment', lazy=True)
+
+    @property
+    def has_access(self):
+        if self.is_active: return True
+        if self.trial_ends and get_now_brazil() < self.trial_ends: return True
+        return False
+
+    @property
+    def trial_days_left(self):
+        if self.is_active or not self.trial_ends: return 0
+        delta = self.trial_ends - get_now_brazil()
+        return max(0, delta.days)
 
 class DaySchedule(db.Model):
     __tablename__ = 'day_schedules'
@@ -160,7 +174,7 @@ def notification_worker():
                     minutes = (appt_dt - now).total_seconds() / 60
                     if 50 <= minutes <= 70:
                         subj = f"Lembrete: {appt.establishment.name}"
-                        body = f"Olá {appt.client_name},\n\nLembrete do seu horário: {appt.appointment_time.strftime('%H:%M')} para {appt.service_names}."
+                        body = f"Olá {appt.client_name},\n\nLembrete do seu horário hoje às {appt.appointment_time.strftime('%H:%M')} para {appt.service_names}."
                         send_email(subj, appt.client_email, body)
                         appt.notified = True
                         db.session.commit()
@@ -209,27 +223,39 @@ def register_business():
     if request.method == 'POST':
         username = request.form.get('username')
         is_master = (username == 'admin_demo') 
-        est = Establishment(name=request.form.get('business_name'), url_prefix=request.form.get('url_prefix').lower().strip(), contact_phone=request.form.get('contact_phone'), contact_email=request.form.get('contact_email'), is_active=is_master, capacity=1)
+        
+        est = Establishment(
+            name=request.form.get('business_name'), 
+            url_prefix=request.form.get('url_prefix').lower().strip(), 
+            contact_phone=request.form.get('contact_phone'), 
+            contact_email=request.form.get('contact_email'), 
+            is_active=is_master, 
+            capacity=1,
+            trial_ends=get_now_brazil() + timedelta(minutes=1) # +7 DIAS DE TESTE
+        )
         db.session.add(est); db.session.commit()
         for i in range(7): db.session.add(DaySchedule(establishment_id=est.id, day_index=i, is_active=(i < 5), work_start=time(9,0), work_end=time(18,0)))
         adm = Admin(username=username, establishment_id=est.id)
         adm.set_password(request.form.get('password'))
         db.session.add(adm); db.session.commit()
+        
         login_user(adm)
-        return redirect(url_for('admin_dashboard')) if is_master else redirect(url_for('payment'))
+        # Login vai direto para o painel para iniciar os 7 dias
+        return redirect(url_for('admin_dashboard'))
+        
     return render_template('register.html')
 
 @app.route('/b/<url_prefix>')
 def establishment_services(url_prefix):
     est = Establishment.query.filter_by(url_prefix=url_prefix).first_or_404()
-    if not est.is_active: return render_template('error_inactive.html', message="Indisponível."), 403
+    if not est.has_access: return render_template('error_inactive.html', message="O período de teste ou assinatura deste estabelecimento expirou."), 403
     services = Service.query.filter_by(establishment_id=est.id).order_by(Service.name).all()
     return render_template('lista_servicos.html', services=services, establishment=est)
 
 @app.route('/b/<url_prefix>/agendar/<int:service_id>')
 def schedule_service(url_prefix, service_id):
     est = Establishment.query.filter_by(url_prefix=url_prefix).first_or_404()
-    if not est.is_active: return "Inativo", 403
+    if not est.has_access: return "Inativo", 403
     main_service = Service.query.get_or_404(service_id)
     other_services = Service.query.filter(Service.establishment_id == est.id, Service.id != service_id).order_by(Service.name).all()
     return render_template('agendamento.html', main_service=main_service, other_services=other_services, establishment=est)
@@ -237,10 +263,12 @@ def schedule_service(url_prefix, service_id):
 @app.route('/b/<url_prefix>/confirmar', methods=['POST'])
 def create_appointment(url_prefix):
     est = Establishment.query.filter_by(url_prefix=url_prefix).first_or_404()
+    if not est.has_access: return "Inativo", 403
+    
     client_phone = request.form.get('client_phone').strip()
     
     if Blacklist.query.filter_by(establishment_id=est.id, client_phone=client_phone).first():
-        flash('Agendamento bloqueado. Entre em contato com o estabelecimento.', 'danger')
+        flash('Agendamento bloqueado. Por favor, entre em contato com o estabelecimento.', 'danger')
         return redirect(url_for('establishment_services', url_prefix=url_prefix))
 
     now = get_now_brazil()
@@ -276,7 +304,7 @@ def create_appointment(url_prefix):
             overlap_count += 1
             
     if overlap_count >= est.capacity:
-        flash('Ops! Esse horário acabou de ser ocupado.', 'danger')
+        flash('Ops! Esse horário acabou de ser ocupado. Tente outro.', 'danger')
         return redirect(url_for('schedule_service', url_prefix=url_prefix, service_id=selected_services[0].id))
 
     appt = Appointment(client_name=request.form.get('client_name'), client_phone=client_phone, client_email=request.form.get('client_email'), appointment_date=d, appointment_time=t, establishment_id=est.id, total_duration=total_dur, total_price=total_price)
@@ -285,9 +313,9 @@ def create_appointment(url_prefix):
     db.session.add(appt); db.session.commit()
     
     send_email(f"Confirmado: {est.name}", appt.client_email, f"Agendado para {d.strftime('%d/%m')} às {t.strftime('%H:%M')}.")
-    if est.contact_email: send_email(f"Novo Cliente", est.contact_email, f"Novo agendamento.")
+    if est.contact_email: send_email(f"Novo Cliente", est.contact_email, f"Novo agendamento recebido.")
     
-    zap_msg = f"Olá, confirmo agendamento: {d.strftime('%d/%m')} às {t.strftime('%H:%M')}."
+    zap_msg = f"Olá, confirmo meu agendamento para: {d.strftime('%d/%m')} às {t.strftime('%H:%M')}."
     zap_link = f"https://wa.me/55{est.contact_phone}?text={zap_msg}" if est.contact_phone else "#"
     return render_template('success_appointment.html', appointment=appt, zap_link=zap_link)
 
@@ -297,7 +325,7 @@ def login():
         adm = Admin.query.filter_by(username=request.form.get('username')).first()
         if adm and adm.check_password(request.form.get('password')):
             login_user(adm)
-            if not adm.establishment.is_active: return redirect(url_for('payment'))
+            if not adm.establishment.has_access: return redirect(url_for('payment'))
             return redirect(url_for('admin_dashboard'))
         flash('Login inválido.', 'danger')
     return render_template('login.html')
@@ -309,7 +337,7 @@ def logout(): logout_user(); return redirect(url_for('login'))
 @app.route('/admin')
 @login_required
 def admin_dashboard():
-    if not current_user.establishment.is_active: return redirect(url_for('payment'))
+    if not current_user.establishment.has_access: return redirect(url_for('payment'))
     est = current_user.establishment
     today = get_now_brazil().date()
     appts = Appointment.query.filter(Appointment.establishment_id == est.id, Appointment.appointment_date >= today).order_by(Appointment.appointment_date, Appointment.appointment_time).all()
@@ -322,6 +350,7 @@ def admin_dashboard():
 @app.route('/admin/configurar', methods=['POST'])
 @login_required
 def update_settings():
+    if not current_user.establishment.has_access: return redirect(url_for('payment'))
     est = current_user.establishment
     ft = request.form.get('form_type')
     if ft == 'contact':
@@ -336,7 +365,7 @@ def update_settings():
                 uid = f"{est.id}_{int(time_module.time())}_{fname}"
                 file.save(os.path.join(app.config['UPLOAD_FOLDER'], uid))
                 est.logo_filename = uid
-        flash('Salvo!', 'success')
+        flash('Salvo com sucesso!', 'success')
     elif ft == 'schedule':
         for sid in request.form.getlist('schedule_id'):
             ds = DaySchedule.query.get(sid)
@@ -354,6 +383,7 @@ def update_settings():
 @app.route('/admin/servicos/novo', methods=['POST'])
 @login_required
 def add_service():
+    if not current_user.establishment.has_access: return redirect(url_for('payment'))
     try: p = float(request.form.get('price', '0').replace(',', '.'))
     except: p = 0.0
     svc = Service(name=request.form.get('name'), duration=int(request.form.get('duration')), price=p, establishment_id=current_user.establishment_id)
@@ -372,10 +402,10 @@ def delete_appointment(id):
     a = Appointment.query.get(id); db.session.delete(a); db.session.commit()
     return redirect(url_for('admin_dashboard'))
 
-# ROTAS DE BLACKLIST
 @app.route('/admin/agendamentos/falta/<int:id>', methods=['POST'])
 @login_required
 def mark_no_show(id):
+    if not current_user.establishment.has_access: return redirect(url_for('payment'))
     a = Appointment.query.get_or_404(id)
     if a.establishment_id != current_user.establishment_id: return "Erro", 403
     if not Blacklist.query.filter_by(establishment_id=a.establishment_id, client_phone=a.client_phone).first():
@@ -389,6 +419,7 @@ def mark_no_show(id):
 @app.route('/admin/blacklist/add', methods=['POST'])
 @login_required
 def add_blacklist():
+    if not current_user.establishment.has_access: return redirect(url_for('payment'))
     phone = request.form.get('phone', '').strip()
     if phone:
         exists = Blacklist.query.filter_by(establishment_id=current_user.establishment_id, client_phone=phone).first()
