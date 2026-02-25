@@ -243,7 +243,7 @@ def register_business():
             contact_email=request.form.get('contact_email'), 
             is_active=is_master, 
             capacity=1,
-            trial_ends=get_now_brazil() + timedelta(minutes=2) # +7 DIAS DE TESTE
+            trial_ends=get_now_brazil() + timedelta(days=7) # +7 DIAS DE TESTE
         )
         db.session.add(est); db.session.commit()
         for i in range(7): db.session.add(DaySchedule(establishment_id=est.id, day_index=i, is_active=(i < 5), work_start=time(9,0), work_end=time(18,0)))
