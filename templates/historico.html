@@ -76,8 +76,12 @@
                                 {% if a.status in ['concluido', 'arquivado'] %}
                                     <span class="badge bg-success mb-1">Concluído</span>
                                     {% if a.rating %}<div class="text-warning small">{% for i in range(a.rating) %}★{% endfor %}</div>{% endif %}
+                                {% elif a.status == 'falta' %}
+                                    <span class="badge bg-danger mb-1"><i class="bi bi-person-x-fill"></i> Bloqueado (Falta)</span>
+                                {% elif a.status == 'cancelado' %}
+                                    <span class="badge bg-secondary mb-1">Cancelado</span>
                                 {% else %}
-                                    <span class="badge bg-secondary text-white">Cancelado / Falta</span>
+                                    <span class="badge bg-warning text-dark mb-1">Pendente</span>
                                 {% endif %}
                             </td>
                         </tr>

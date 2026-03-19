@@ -341,7 +341,7 @@ def create_appointment(url_prefix):
 
     now = get_now_brazil()
     user_appts = Appointment.query.filter_by(establishment_id=est.id, client_phone=client_phone).all()
-    if any(datetime.combine(a.appointment_date, a.appointment_time) >= now and a.status not in ['concluido', 'arquivado'] for a in user_appts):
+    if any(datetime.combine(a.appointment_date, a.appointment_time) >= now and a.status == 'pendente' for a in user_appts):
         flash('Você já possui um agendamento futuro conosco. Conclua-o antes de agendar novamente.', 'warning')
         return redirect(url_for('establishment_services', url_prefix=url_prefix))
 
@@ -363,7 +363,7 @@ def create_appointment(url_prefix):
     if start_dt < now:
         flash('Horário inválido.', 'danger'); return redirect(url_for('establishment_services', url_prefix=url_prefix))
         
-    appts_on_day = Appointment.query.filter_by(appointment_date=d, establishment_id=est.id).filter(Appointment.status != 'concluido').all()
+    appts_on_day = Appointment.query.filter_by(appointment_date=d, establishment_id=est.id).filter(Appointment.status == 'pendente').all()
     overlap_count = 0
     for a in appts_on_day:
         s = datetime.combine(d, a.appointment_time)
@@ -409,7 +409,7 @@ def admin_dashboard():
     if not current_user.establishment.has_access: return redirect(url_for('payment'))
     est = current_user.establishment
     today = get_now_brazil().date()
-    appts = Appointment.query.filter(Appointment.establishment_id == est.id, Appointment.appointment_date >= today, Appointment.status != 'arquivado').order_by(Appointment.appointment_date, Appointment.appointment_time).all()
+    appts = Appointment.query.filter(Appointment.establishment_id == est.id, Appointment.appointment_date >= today, Appointment.status.notin_(['arquivado', 'falta', 'cancelado'])).order_by(Appointment.appointment_date, Appointment.appointment_time).all()
     services = Service.query.filter_by(establishment_id=est.id).all()
     schedules = DaySchedule.query.filter_by(establishment_id=est.id).order_by(DaySchedule.day_index).all()
     blacklists = Blacklist.query.filter_by(establishment_id=est.id).all()
@@ -506,7 +506,10 @@ def delete_service(id):
 @app.route('/admin/agendamentos/excluir/<int:id>', methods=['POST'])
 @login_required
 def delete_appointment(id):
-    a = Appointment.query.get(id); db.session.delete(a); db.session.commit()
+    a = Appointment.query.get_or_404(id)
+    if a.establishment_id == current_user.establishment_id:
+        a.status = 'cancelado'
+        db.session.commit()
     return redirect(url_for('admin_dashboard'))
 
 @app.route('/admin/agendamentos/concluir/<int:id>', methods=['POST'])
@@ -602,7 +605,7 @@ def mark_no_show(id):
     if not Blacklist.query.filter_by(establishment_id=a.establishment_id, client_phone=a.client_phone).first():
         bl = Blacklist(establishment_id=a.establishment_id, client_phone=a.client_phone)
         db.session.add(bl)
-    db.session.delete(a)
+    a.status = 'falta'
     db.session.commit()
     flash('Cliente marcado como Falta e bloqueado.', 'warning')
     return redirect(url_for('admin_dashboard'))
@@ -647,7 +650,7 @@ def get_available_times():
     day_sched = DaySchedule.query.filter_by(establishment_id=est.id, day_index=sel_date.weekday()).first()
     if not day_sched or not day_sched.is_active: return jsonify([])
     
-    appts = Appointment.query.filter_by(appointment_date=sel_date, establishment_id=est.id).filter(Appointment.status != 'concluido').all()
+    appts = Appointment.query.filter_by(appointment_date=sel_date, establishment_id=est.id).filter(Appointment.status == 'pendente').all()
     
     avail = []
     curr = datetime.combine(sel_date, day_sched.work_start)
