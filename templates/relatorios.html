@@ -1,0 +1,182 @@
+{% extends 'layout.html' %}
+{% block title %}Relatórios Gerenciais{% endblock %}
+{% block content %}
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="fw-bold mb-0">Visão do Negócio (BI)</h2>
+        <a href="{{ url_for('admin_dashboard') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i> Voltar</a>
+    </div>
+
+    <div class="card shadow-sm border-0 mb-4 p-3 bg-light rounded-4">
+        <form method="GET" action="{{ url_for('relatorios_gerenciais') }}" class="row align-items-end g-2">
+            <div class="col-md-3">
+                <label class="small fw-bold">Data Inicial</label>
+                <input type="date" name="start_date" id="start_date" class="form-control" value="{{ start_date }}">
+            </div>
+            <div class="col-md-3">
+                <label class="small fw-bold">Data Final</label>
+                <input type="date" name="end_date" id="end_date" class="form-control" value="{{ end_date }}">
+            </div>
+            <div class="col-md-6">
+                <button type="submit" class="btn btn-primary fw-bold px-4"><i class="bi bi-filter"></i> Analisar</button>
+            </div>
+        </form>
+        
+        <div class="mt-3 gap-2 d-flex flex-wrap">
+            <button class="btn btn-sm btn-dark" onclick="setFilter('semana')">Últimos 7 Dias</button>
+            <button class="btn btn-sm btn-dark" onclick="setFilter('mes')">Últimos 30 Dias</button>
+            <button class="btn btn-sm btn-dark" onclick="setFilter('ano')">Este Ano</button>
+        </div>
+    </div>
+
+    <div class="row mb-4 g-3">
+        <div class="col-md-3 col-6">
+            <div class="card bg-success text-white shadow-sm border-0 p-3 h-100 rounded-4">
+                <h6 class="mb-1 text-white-50 small"><i class="bi bi-cash-stack"></i> Faturação (Concluídos)</h6>
+                <h3 class="fw-bold mb-0">R$ {{ "%.2f"|format(faturamento_total) }}</h3>
+            </div>
+        </div>
+        <div class="col-md-3 col-6">
+            <div class="card bg-primary text-white shadow-sm border-0 p-3 h-100 rounded-4">
+                <h6 class="mb-1 text-white-50 small"><i class="bi bi-receipt"></i> Ticket Médio</h6>
+                <h3 class="fw-bold mb-0">R$ {{ "%.2f"|format(ticket_medio) }}</h3>
+                <div class="small text-white-50 mt-1" style="font-size: 0.75rem;">Baseado em {{ qtd_concluidos }} clientes</div>
+            </div>
+        </div>
+        <div class="col-md-3 col-6">
+            <div class="card bg-info text-white shadow-sm border-0 p-3 h-100 rounded-4">
+                <h6 class="mb-1 text-white-50 small"><i class="bi bi-people-fill"></i> Clientes Atendidos</h6>
+                <h3 class="fw-bold mb-0">{{ qtd_concluidos }}</h3>
+            </div>
+        </div>
+        <div class="col-md-3 col-6">
+            <div class="card bg-danger text-white shadow-sm border-0 p-3 h-100 rounded-4">
+                <h6 class="mb-1 text-white-50 small"><i class="bi bi-person-x-fill"></i> Taxa de Faltas (Furos)</h6>
+                <h3 class="fw-bold mb-0">{{ "%.1f"|format(taxa_faltas) }}%</h3>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0 mb-4 rounded-4">
+        <div class="card-header bg-white py-3 border-bottom-0"><h6 class="fw-bold mb-0 text-secondary">Evolução da Faturação</h6></div>
+        <div class="card-body">
+            <div style="position: relative; height:40vh; width:100%">
+                <canvas id="graficoFaturamento"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-5">
+        <div class="col-md-6">
+            <div class="card shadow-sm border-0 h-100 rounded-4">
+                <div class="card-header bg-white py-3 border-bottom-0"><h6 class="fw-bold mb-0 text-secondary">Top 5 Serviços (Receita)</h6></div>
+                <div class="card-body d-flex justify-content-center">
+                    <div style="position: relative; height:30vh; width:100%">
+                        <canvas id="graficoServicos"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card shadow-sm border-0 h-100 rounded-4">
+                <div class="card-header bg-white py-3 border-bottom-0"><h6 class="fw-bold mb-0 text-secondary">Saúde da Agenda</h6></div>
+                <div class="card-body d-flex justify-content-center">
+                    <div style="position: relative; height:30vh; width:100%">
+                        <canvas id="graficoSaude"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+// Filtros Rápidos
+function setFilter(type) {
+    const today = new Date();
+    let start = new Date();
+    
+    if (type === 'semana') {
+        start.setDate(today.getDate() - 7);
+    } else if (type === 'mes') {
+        start.setDate(today.getDate() - 30);
+    } else if (type === 'ano') {
+        start = new Date(today.getFullYear(), 0, 1);
+    }
+
+    document.getElementById('start_date').value = start.toISOString().split('T')[0];
+    document.getElementById('end_date').value = today.toISOString().split('T')[0];
+    document.forms[0].submit();
+}
+
+// === DESENHANDO OS GRÁFICOS ===
+
+// 1. Gráfico de Faturação (Linha do Tempo)
+const ctxFaturamento = document.getElementById('graficoFaturamento').getContext('2d');
+new Chart(ctxFaturamento, {
+    type: 'line',
+    data: {
+        labels: {{ labels_tempo | tojson }},
+        datasets: [{
+            label: 'Faturação (R$)',
+            data: {{ dados_tempo | tojson }},
+            borderColor: '#198754',
+            backgroundColor: 'rgba(25, 135, 84, 0.2)',
+            borderWidth: 3,
+            tension: 0.4, // Curva suave
+            fill: true
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true } }
+    }
+});
+
+// 2. Gráfico de Curva ABC (Rosca)
+const ctxServicos = document.getElementById('graficoServicos').getContext('2d');
+new Chart(ctxServicos, {
+    type: 'doughnut',
+    data: {
+        labels: {{ labels_servicos | tojson }},
+        datasets: [{
+            data: {{ dados_servicos | tojson }},
+            backgroundColor: ['#0d6efd', '#6610f2', '#d63384', '#fd7e14', '#ffc107'],
+            borderWidth: 2
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { position: 'right', labels: { boxWidth: 12 } }
+        }
+    }
+});
+
+// 3. Gráfico de Saúde da Agenda (Pizza)
+const ctxSaude = document.getElementById('graficoSaude').getContext('2d');
+new Chart(ctxSaude, {
+    type: 'pie',
+    data: {
+        labels: {{ saude_labels | tojson }},
+        datasets: [{
+            data: {{ saude_dados | tojson }},
+            backgroundColor: ['#198754', '#6c757d', '#dc3545'], // Verde, Cinza, Vermelho
+            borderWidth: 2
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { position: 'bottom', labels: { boxWidth: 12 } }
+        }
+    }
+});
+</script>
+{% endblock %}

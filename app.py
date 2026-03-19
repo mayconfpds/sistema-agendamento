@@ -448,6 +448,89 @@ def historico_atendimentos():
     
     return render_template('historico.html', appointments=appts, establishment=est, start_date=start_date_str, end_date=end_date_str, total_revenue=total_revenue, total_appts=total_appts)
 
+@app.route('/admin/relatorios')
+@login_required
+def relatorios_gerenciais():
+    if not current_user.establishment.has_access: return redirect(url_for('payment'))
+    est = current_user.establishment
+    
+    # Filtro de datas (Por padrão, mostra os últimos 30 dias)
+    hoje = get_now_brazil().date()
+    start_date_str = request.args.get('start_date', (hoje - timedelta(days=30)).strftime('%Y-%m-%d'))
+    end_date_str = request.args.get('end_date', hoje.strftime('%Y-%m-%d'))
+    
+    try:
+        start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+    except:
+        start_date = hoje - timedelta(days=30); end_date = hoje
+
+    appts = Appointment.query.filter(
+        Appointment.establishment_id == est.id,
+        Appointment.appointment_date >= start_date,
+        Appointment.appointment_date <= end_date
+    ).all()
+
+    # --- 1. KPIs Principais ---
+    concluidos = [a for a in appts if a.status in ['concluido', 'arquivado']]
+    faltas = [a for a in appts if a.status == 'falta']
+    
+    faturamento_total = sum(a.total_price for a in concluidos)
+    qtd_concluidos = len(concluidos)
+    ticket_medio = faturamento_total / qtd_concluidos if qtd_concluidos > 0 else 0
+    
+    qtd_total_marcacoes = len(appts)
+    taxa_faltas = (len(faltas) / qtd_total_marcacoes * 100) if qtd_total_marcacoes > 0 else 0
+
+    # --- 2. Agrupamento Dinâmico para o Gráfico de Faturamento ---
+    dias_diferenca = (end_date - start_date).days
+    faturamento_tempo = {}
+    
+    for a in concluidos:
+        data = a.appointment_date
+        # Regra do Agrupamento
+        if dias_diferenca <= 31: chave = data.strftime('%d/%m') # Dia a dia
+        elif dias_diferenca <= 90: chave = f"Semana {data.isocalendar()[1]}" # Por Semana
+        else: chave = data.strftime('%b/%Y') # Por Mês/Ano
+        
+        faturamento_tempo[chave] = faturamento_tempo.get(chave, 0) + a.total_price
+
+    # Organiza os dados para o Chart.js
+    labels_tempo = list(faturamento_tempo.keys())
+    dados_tempo = list(faturamento_tempo.values())
+
+    # --- 3. Ranking de Serviços (Curva ABC) ---
+    ranking_servicos = {}
+    for a in concluidos:
+        for s in a.services:
+            if s.name not in ranking_servicos:
+                ranking_servicos[s.name] = {'qtd': 0, 'receita': 0}
+            ranking_servicos[s.name]['qtd'] += 1
+            ranking_servicos[s.name]['receita'] += s.price
+
+    # Ordena pelos que deram mais receita (Top 5)
+    servicos_top = sorted(ranking_servicos.items(), key=lambda x: x[1]['receita'], reverse=True)[:5]
+    labels_servicos = [s[0] for s in servicos_top]
+    dados_servicos = [s[1]['receita'] for s in servicos_top]
+
+    # --- 4. Saúde da Agenda (Retenção vs Furos) ---
+    saude_labels = ['Concluídos', 'Cancelados', 'Faltas']
+    saude_dados = [
+        len(concluidos),
+        len([a for a in appts if a.status == 'cancelado']),
+        len(faltas)
+    ]
+
+    return render_template(
+        'relatorios.html', 
+        establishment=est, start_date=start_date_str, end_date=end_date_str,
+        faturamento_total=faturamento_total, ticket_medio=ticket_medio, 
+        qtd_concluidos=qtd_concluidos, taxa_faltas=taxa_faltas,
+        labels_tempo=labels_tempo, dados_tempo=dados_tempo,
+        labels_servicos=labels_servicos, dados_servicos=dados_servicos,
+        saude_labels=saude_labels, saude_dados=saude_dados
+    )
+
 @app.route('/admin/configurar', methods=['POST'])
 @login_required
 def update_settings():
