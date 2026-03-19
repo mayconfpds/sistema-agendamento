@@ -102,6 +102,9 @@
                                         {% else %}
                                             <span class="small text-muted fst-italic">Aguardando nota...</span>
                                         {% endif %}
+                                        <form method="POST" action="{{ url_for('archive_appointment', id=a.id) }}" class="mt-2">
+                                            <button class="btn btn-sm btn-outline-secondary py-0 w-100" style="font-size: 0.75rem;" title="Limpar este agendamento da tela inicial"><i class="bi bi-eye-slash"></i> Limpar da Tela</button>
+                                        </form>
                                     {% endif %}
                                 </td>
                             </tr>

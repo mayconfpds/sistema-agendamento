@@ -73,7 +73,7 @@
                             <td class="small">{{ a.service_names }}</td>
                             <td class="text-success fw-bold">R$ {{ "%.2f"|format(a.total_price) }}</td>
                             <td>
-                                {% if a.status == 'concluido' %}
+                                {% if a.status in ['concluido', 'arquivado'] %}
                                     <span class="badge bg-success mb-1">Concluído</span>
                                     {% if a.rating %}<div class="text-warning small">{% for i in range(a.rating) %}★{% endfor %}</div>{% endif %}
                                 {% else %}

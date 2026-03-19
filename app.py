@@ -341,7 +341,7 @@ def create_appointment(url_prefix):
 
     now = get_now_brazil()
     user_appts = Appointment.query.filter_by(establishment_id=est.id, client_phone=client_phone).all()
-    if any(datetime.combine(a.appointment_date, a.appointment_time) >= now for a in user_appts):
+    if any(datetime.combine(a.appointment_date, a.appointment_time) >= now and a.status not in ['concluido', 'arquivado'] for a in user_appts):
         flash('Você já possui um agendamento futuro conosco. Conclua-o antes de agendar novamente.', 'warning')
         return redirect(url_for('establishment_services', url_prefix=url_prefix))
 
@@ -409,7 +409,7 @@ def admin_dashboard():
     if not current_user.establishment.has_access: return redirect(url_for('payment'))
     est = current_user.establishment
     today = get_now_brazil().date()
-    appts = Appointment.query.filter(Appointment.establishment_id == est.id, Appointment.appointment_date >= today).order_by(Appointment.appointment_date, Appointment.appointment_time).all()
+    appts = Appointment.query.filter(Appointment.establishment_id == est.id, Appointment.appointment_date >= today, Appointment.status != 'arquivado').order_by(Appointment.appointment_date, Appointment.appointment_time).all()
     services = Service.query.filter_by(establishment_id=est.id).all()
     schedules = DaySchedule.query.filter_by(establishment_id=est.id).order_by(DaySchedule.day_index).all()
     blacklists = Blacklist.query.filter_by(establishment_id=est.id).all()
@@ -443,7 +443,7 @@ def historico_atendimentos():
     appts = query.order_by(Appointment.appointment_date.desc(), Appointment.appointment_time.desc()).all()
     
     # Calcula os totais do período filtrado
-    total_revenue = sum(a.total_price for a in appts if a.status == 'concluido')
+    total_revenue = sum(a.total_price for a in appts if a.status in ['concluido', 'arquivado'])
     total_appts = len(appts)
     
     return render_template('historico.html', appointments=appts, establishment=est, start_date=start_date_str, end_date=end_date_str, total_revenue=total_revenue, total_appts=total_appts)
@@ -542,6 +542,15 @@ def complete_appointment(id):
     send_email(subj, a.client_email, body)
     
     flash('Atendimento concluído! Ponto contabilizado.', 'success')
+    return redirect(url_for('admin_dashboard'))
+
+@app.route('/admin/agendamentos/arquivar/<int:id>', methods=['POST'])
+@login_required
+def archive_appointment(id):
+    a = Appointment.query.get_or_404(id)
+    if a.establishment_id == current_user.establishment_id:
+        a.status = 'arquivado'
+        db.session.commit()
     return redirect(url_for('admin_dashboard'))
 
 @app.route('/admin/cliente/<int:id>/zerar_pontos', methods=['POST'])
