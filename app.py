@@ -204,7 +204,7 @@ def notification_worker():
                 inspector = inspect(db.engine)
                 if not inspector.has_table("appointments"): 
                     time_module.sleep(10); continue
-                upcoming = Appointment.query.filter(Appointment.notified == False, Appointment.status != 'concluido').all()
+                upcoming = Appointment.query.filter(Appointment.notified == False, Appointment.status == 'pendente').all()
                 now = get_now_brazil()
                 for appt in upcoming:
                     appt_dt = datetime.combine(appt.appointment_date, appt.appointment_time)
