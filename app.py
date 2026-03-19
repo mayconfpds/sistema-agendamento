@@ -348,7 +348,8 @@ def establishment_services(url_prefix):
     est = Establishment.query.filter_by(url_prefix=url_prefix).first_or_404()
     if not est.has_access: return render_template('error_inactive.html', message="O período de teste ou assinatura deste estabelecimento expirou."), 403
     services = Service.query.filter_by(establishment_id=est.id).order_by(Service.name).all()
-    return render_template('lista_servicos.html', services=services, establishment=est)
+    categories = Category.query.filter_by(establishment_id=est.id).all()
+    return render_template('lista_servicos.html', services=services, categories=categories, establishment=est)
 
 @app.route('/b/<url_prefix>/agendar/<int:service_id>')
 def schedule_service(url_prefix, service_id):

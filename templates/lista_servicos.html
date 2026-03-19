@@ -1,25 +1,52 @@
 {% extends 'layout.html' %}
 {% block content %}
-<div class="container py-5">
+<div class="container py-5" style="max-width: 900px;">
     <div class="text-center mb-5">
-        {% if establishment.logo_filename %}<img src="{{ url_for('static', filename='uploads/' + establishment.logo_filename) }}" class="rounded-circle shadow mb-3" style="width: 100px; height: 100px; object-fit: cover;">
-        {% else %}<div class="rounded-circle bg-secondary d-inline-flex align-items-center justify-content-center text-white fw-bold mb-3 shadow" style="width: 100px; height: 100px; font-size: 2rem;">{{ establishment.name[0] }}</div>{% endif %}
-        <h1 class="display-5 fw-bold mb-2">{{ establishment.name }}</h1>
-        {% if establishment.rating_count > 0 %}
-            <div class="badge bg-warning text-dark fs-6 shadow-sm mb-4"><i class="bi bi-star-fill"></i> {{ "%.1f"|format(establishment.average_rating) }} ({{ establishment.rating_count }} avaliações)</div>
+        {% if establishment.logo_filename %}
+            <img src="{{ url_for('static', filename='uploads/' + establishment.logo_filename) }}" class="rounded-circle shadow mb-3 border border-3 border-white" style="width: 110px; height: 110px; object-fit: cover;">
         {% else %}
-            <div class="badge bg-info text-white fs-6 shadow-sm mb-4"><i class="bi bi-stars"></i> Novo no Agenda Fácil</div>
+            <div class="rounded-circle bg-secondary d-inline-flex align-items-center justify-content-center text-white fw-bold mb-3 shadow border border-3 border-white" style="width: 110px; height: 110px; font-size: 2.5rem;">{{ establishment.name[0] }}</div>
+        {% endif %}
+        
+        <h1 class="display-5 fw-bold mb-2 text-dark">{{ establishment.name }}</h1>
+        
+        {% if establishment.rating_count > 0 %}
+            <div class="badge bg-warning text-dark fs-6 shadow-sm mb-4 px-3 py-2 rounded-pill"><i class="bi bi-star-fill"></i> {{ "%.1f"|format(establishment.average_rating) }} ({{ establishment.rating_count }} avaliações)</div>
+        {% else %}
+            <div class="badge bg-info text-white fs-6 shadow-sm mb-4 px-3 py-2 rounded-pill"><i class="bi bi-stars"></i> Novo no Agenda Fácil</div>
         {% endif %}
     </div>
-    <div class="row justify-content-center gap-3">
-        {% for s in services %}
-        <div class="col-md-4">
-            <div class="card shadow-sm border-0 h-100 p-3 text-center hover-shadow transition">
-                <h4 class="fw-bold">{{ s.name }}</h4><p class="text-success fw-bold fs-5">R$ {{ "%.2f"|format(s.price) }}</p><p class="text-muted"><i class="bi bi-clock"></i> {{ s.duration }} min</p>
-                <a href="{{ url_for('schedule_service', url_prefix=establishment.url_prefix, service_id=s.id) }}" class="btn btn-primary w-100 fw-bold rounded-pill">Agendar</a>
+
+    <div class="accordion shadow-sm rounded-4 overflow-hidden border-0" id="accordionCategorias">
+        {% for c in categories if c.services %}
+            <div class="accordion-item border-0 border-bottom">
+                <h2 class="accordion-header">
+                    <button class="accordion-button {% if not loop.first %}collapsed{% endif %} fw-bold fs-5 bg-white text-dark py-3" type="button" data-bs-toggle="collapse" data-bs-target="#cat-{{ c.id }}">
+                        <i class="bi bi-tag-fill text-primary me-2"></i> {{ c.name }} 
+                        <span class="badge bg-light text-secondary border ms-2 rounded-pill" style="font-size: 0.8rem;">{{ c.services|length }}</span>
+                    </button>
+                </h2>
+                <div id="cat-{{ c.id }}" class="accordion-collapse collapse {% if loop.first %}show{% endif %}" data-bs-parent="#accordionCategorias">
+                    <div class="accordion-body bg-light p-3 p-md-4">
+                        <div class="row g-3">
+                            {% for s in c.services %}
+                            <div class="col-md-6">
+                                <div class="card shadow-sm border-0 h-100 p-3 text-center hover-shadow transition rounded-4 bg-white">
+                                    <h5 class="fw-bold text-dark mb-2">{{ s.name }}</h5>
+                                    <div class="d-flex justify-content-center align-items-center gap-3 mb-3">
+                                        <span class="text-success fw-bold fs-5">R$ {{ "%.2f"|format(s.price) }}</span>
+                                        <span class="text-muted small border-start border-2 ps-3"><i class="bi bi-clock"></i> {{ s.duration }} min</span>
+                                    </div>
+                                    <a href="{{ url_for('schedule_service', url_prefix=establishment.url_prefix, service_id=s.id) }}" class="btn btn-primary w-100 fw-bold rounded-pill">Agendar</a>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
             </div>
-        </div>
         {% endfor %}
     </div>
+    
 </div>
 {% endblock %}
