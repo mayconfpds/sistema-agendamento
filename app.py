@@ -109,6 +109,8 @@ class DaySchedule(db.Model):
     work_end = db.Column(db.Time, nullable=False, default=time(18, 0))
     lunch_start = db.Column(db.Time, nullable=True)
     lunch_end = db.Column(db.Time, nullable=True)
+    pause2_start = db.Column(db.Time, nullable=True)
+    pause2_end = db.Column(db.Time, nullable=True)
 
 class Admin(UserMixin, db.Model):
     __tablename__ = 'admins'
@@ -386,9 +388,12 @@ def update_settings():
                 ds.is_active = (request.form.get(f'active_{sid}') == 'on')
                 ws, we = request.form.get(f'work_start_{sid}'), request.form.get(f'work_end_{sid}')
                 ls, le = request.form.get(f'lunch_start_{sid}'), request.form.get(f'lunch_end_{sid}')
+                p2s, p2e = request.form.get(f'pause2_start_{sid}'), request.form.get(f'pause2_end_{sid}')
                 if ws and we: ds.work_start = datetime.strptime(ws, '%H:%M').time(); ds.work_end = datetime.strptime(we, '%H:%M').time()
                 if ls and le: ds.lunch_start = datetime.strptime(ls, '%H:%M').time(); ds.lunch_end = datetime.strptime(le, '%H:%M').time()
                 else: ds.lunch_start = None; ds.lunch_end = None
+                if p2s and p2e: ds.pause2_start = datetime.strptime(p2s, '%H:%M').time(); ds.pause2_end = datetime.strptime(p2e, '%H:%M').time()
+                else: ds.pause2_start = None; ds.pause2_end = None
         flash('Horários atualizados!', 'success')
     db.session.commit()
     return redirect(url_for('admin_dashboard'))
@@ -487,7 +492,15 @@ def get_available_times():
             lunch_e = datetime.combine(sel_date, day_sched.lunch_end)
             if (curr >= lunch_s and curr < lunch_e) or (end > lunch_s and end <= lunch_e) or (curr < lunch_s and end > lunch_e):
                in_lunch = True
-        if in_lunch:
+               
+        in_pause2 = False
+        if day_sched.pause2_start and day_sched.pause2_end:
+            p2_s = datetime.combine(sel_date, day_sched.pause2_start)
+            p2_e = datetime.combine(sel_date, day_sched.pause2_end)
+            if (curr >= p2_s and curr < p2_e) or (end > p2_s and end <= p2_e) or (curr < p2_s and end > p2_e):
+               in_pause2 = True
+
+        if in_lunch or in_pause2:
             curr += timedelta(minutes=15); continue
 
         overlap_count = 0
