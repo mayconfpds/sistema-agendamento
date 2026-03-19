@@ -185,8 +185,19 @@ def notification_worker():
 
 try:
     with app.app_context():
-        if not inspect(db.engine).has_table("establishments"): db.create_all()
-except: pass 
+        inspector = inspect(db.engine)
+        if not inspector.has_table("establishments"): 
+            db.create_all()
+        else:
+            # Auto-Correção: Força a criação das colunas da Pausa 2 se elas não existirem
+            columns = [c['name'] for c in inspector.get_columns('day_schedules')]
+            if 'pause2_start' not in columns:
+                with db.engine.connect() as conn:
+                    conn.execute(db.text('ALTER TABLE day_schedules ADD COLUMN pause2_start TIME;'))
+                    conn.execute(db.text('ALTER TABLE day_schedules ADD COLUMN pause2_end TIME;'))
+                    conn.commit()
+except Exception as e:
+    print(f"Erro na verificação do banco: {e}") 
 
 if not os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
     threading.Thread(target=notification_worker, daemon=True).start()
