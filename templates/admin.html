@@ -67,10 +67,22 @@
                                 <td><div class="fw-bold text-primary">{{ a.appointment_date.strftime('%d/%m') }}</div><div>{{ a.appointment_time.strftime('%H:%M') }}</div><div class="small text-muted">{{ a.total_duration }}min</div></td>
                                 <td><div class="fw-bold">{{ a.service_names }}</div><div class="text-success fw-bold small">R$ {{ "%.2f"|format(a.total_price) }}</div><div class="mt-1">{{ a.client_name }} <br> <i class="bi bi-whatsapp text-success"></i> {{ a.client_phone }}</div></td>
                                 <td>
-                                    <div class="d-flex gap-1 flex-column flex-md-row">
-                                        <form method="POST" action="{{ url_for('delete_appointment', id=a.id) }}" onsubmit="return confirm('Apenas cancelar?');"><button class="btn btn-sm btn-outline-danger w-100" title="Cancelar Agendamento"><i class="bi bi-trash"></i> Cancelar</button></form>
-                                        <form method="POST" action="{{ url_for('mark_no_show', id=a.id) }}" onsubmit="return confirm('Isso bloqueará este cliente de novos agendamentos.');"><button class="btn btn-sm btn-warning w-100 text-dark fw-bold" title="Bloquear Cliente"><i class="bi bi-person-x-fill"></i> Deu Bolo!</button></form>
-                                    </div>
+                                    {% if a.status != 'concluido' %}
+                                        <div class="mb-2">
+                                            <form method="POST" action="{{ url_for('complete_appointment', id=a.id) }}"><button class="btn btn-sm btn-success w-100 fw-bold"><i class="bi bi-check-circle"></i> Concluir Atendimento</button></form>
+                                        </div>
+                                        <div class="d-flex gap-1 flex-column flex-md-row">
+                                            <form method="POST" action="{{ url_for('delete_appointment', id=a.id) }}" class="w-100"><button class="btn btn-sm btn-outline-danger w-100" onclick="return confirm('Apenas cancelar?');"><i class="bi bi-trash"></i> Cancelar</button></form>
+                                            <form method="POST" action="{{ url_for('mark_no_show', id=a.id) }}" class="w-100"><button class="btn btn-sm btn-warning w-100 text-dark fw-bold" onclick="return confirm('Bloquear este cliente?');"><i class="bi bi-person-x-fill"></i> Falta</button></form>
+                                        </div>
+                                    {% else %}
+                                        <span class="badge bg-success mb-1"><i class="bi bi-check-all"></i> Concluído</span><br>
+                                        {% if a.rating %}
+                                            <span class="text-warning fs-5">{% for i in range(a.rating) %}★{% endfor %}</span>
+                                        {% else %}
+                                            <span class="small text-muted fst-italic">Aguardando nota...</span>
+                                        {% endif %}
+                                    {% endif %}
                                 </td>
                             </tr>
                             {% else %}<tr><td colspan="3" class="text-center py-4 text-muted">Agenda livre.</td></tr>{% endfor %}

@@ -5,7 +5,12 @@
         <div class="col-lg-6">
             <div class="card shadow-lg border-0 p-4 rounded-4">
                 <div class="text-center mb-4 border-bottom pb-3">
-                    <h4 class="fw-bold text-dark">{{ establishment.name }}</h4>
+                    <h4 class="fw-bold text-dark mb-2">{{ establishment.name }}</h4>
+                    {% if establishment.rating_count > 0 %}
+                        <div class="badge bg-warning text-dark"><i class="bi bi-star-fill"></i> {{ "%.1f"|format(establishment.average_rating) }} ({{ establishment.rating_count }})</div>
+                    {% else %}
+                        <div class="badge bg-info text-white"><i class="bi bi-stars"></i> Novo no Agenda Fácil</div>
+                    {% endif %}
                 </div>
                 
                 <form id="form" method="POST" action="{{ url_for('create_appointment', url_prefix=establishment.url_prefix) }}">

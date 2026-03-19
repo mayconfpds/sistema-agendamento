@@ -98,6 +98,16 @@ class Establishment(db.Model):
         if self.is_active or not self.trial_ends: return 0
         delta = self.trial_ends - get_now_brazil()
         return max(0, delta.days)
+    
+    @property
+    def rating_count(self):
+        return Appointment.query.filter_by(establishment_id=self.id).filter(Appointment.rating != None).count()
+
+    @property
+    def average_rating(self):
+        appts = Appointment.query.filter_by(establishment_id=self.id).filter(Appointment.rating != None).all()
+        if not appts: return 0
+        return sum(a.rating for a in appts) / len(appts)
 
 class DaySchedule(db.Model):
     __tablename__ = 'day_schedules'
@@ -146,6 +156,8 @@ class Appointment(db.Model):
     total_duration = db.Column(db.Integer, default=0, nullable=False)
     total_price = db.Column(db.Float, default=0.0, nullable=False)
     establishment_id = db.Column(db.Integer, db.ForeignKey('establishments.id'), nullable=False)
+    status = db.Column(db.String(20), default='pendente')
+    rating = db.Column(db.Integer, nullable=True)
     services = db.relationship('Service', secondary=appointment_services, lazy='subquery', backref=db.backref('appointments', lazy=True))
 
     @property
@@ -195,6 +207,13 @@ try:
                 with db.engine.connect() as conn:
                     conn.execute(db.text('ALTER TABLE day_schedules ADD COLUMN pause2_start TIME;'))
                     conn.execute(db.text('ALTER TABLE day_schedules ADD COLUMN pause2_end TIME;'))
+                    conn.commit()
+                    # Auto-Correção para Avaliações
+            columns_appt = [c['name'] for c in inspector.get_columns('appointments')]
+            if 'status' not in columns_appt:
+                with db.engine.connect() as conn:
+                    conn.execute(db.text("ALTER TABLE appointments ADD COLUMN status VARCHAR(20) DEFAULT 'pendente';"))
+                    conn.execute(db.text("ALTER TABLE appointments ADD COLUMN rating INTEGER;"))
                     conn.commit()
 except Exception as e:
     print(f"Erro na verificação do banco: {e}") 
@@ -430,6 +449,53 @@ def delete_service(id):
 def delete_appointment(id):
     a = Appointment.query.get(id); db.session.delete(a); db.session.commit()
     return redirect(url_for('admin_dashboard'))
+
+@app.route('/admin/agendamentos/concluir/<int:id>', methods=['POST'])
+@login_required
+def complete_appointment(id):
+    if not current_user.establishment.has_access: return redirect(url_for('payment'))
+    a = Appointment.query.get_or_404(id)
+    if a.establishment_id != current_user.establishment_id: return "Erro", 403
+    a.status = 'concluido'
+    db.session.commit()
+    
+    link_av = request.host_url.replace('http://', 'https://') + f'avaliar/{a.id}'
+    subj = f"Como foi o atendimento no(a) {a.establishment.name}?"
+    body = f"Olá {a.client_name}!\n\nO seu atendimento foi concluído. Queremos saber a sua opinião!\n\nÉ super rápido: você só precisa clicar no link abaixo e dar uma nota de 1 a 5 estrelas (não precisa escrever nada).\n\n{link_av}\n\nObrigado!"
+    send_email(subj, a.client_email, body)
+    
+    flash('Atendimento concluído! E-mail de avaliação enviado.', 'success')
+    return redirect(url_for('admin_dashboard'))
+
+@app.route('/avaliar/<int:id>', methods=['GET', 'POST'])
+def rate_appointment(id):
+    a = Appointment.query.get_or_404(id)
+    if a.rating: return "<div style='text-align:center; padding:50px; font-family:sans-serif;'><h1>Você já avaliou!</h1><p>Muito obrigado pela sua nota.</p></div>"
+    if request.method == 'POST':
+        a.rating = int(request.form.get('rating', 5))
+        db.session.commit()
+        return "<div style='text-align:center; padding:50px; font-family:sans-serif; color:green;'><h1>⭐⭐⭐⭐⭐<br>Avaliação enviada!</h1><p>Obrigado por nos ajudar a melhorar.</p></div>"
+    
+    html = f"""
+    <html><meta name="viewport" content="width=device-width, initial-scale=1.0"><body style="font-family:sans-serif; text-align:center; padding:20px; background:#f8f9fa;">
+    <div style="background:white; padding:30px; border-radius:10px; box-shadow:0 4px 6px rgba(0,0,0,0.1); max-width:400px; margin:auto;">
+        <h2 style="color:#333;">Avalie o seu atendimento</h2>
+        <p style="color:#666; font-size:14px;">Serviço: <b>{a.service_names}</b><br>Local: <b>{a.establishment.name}</b></p>
+        <p style="font-size:13px; color:#888; margin-bottom:20px;">* Apenas escolha as estrelas abaixo. Não é preciso escrever comentários.</p>
+        <form method="POST">
+            <select name="rating" style="font-size:18px; padding:12px; width:100%; border-radius:5px; margin-bottom:20px; border:1px solid #ccc;">
+                <option value="5">⭐⭐⭐⭐⭐ Excelente</option>
+                <option value="4">⭐⭐⭐⭐ Muito Bom</option>
+                <option value="3">⭐⭐⭐ Bom</option>
+                <option value="2">⭐⭐ Regular</option>
+                <option value="1">⭐ Ruim</option>
+            </select>
+            <button type="submit" style="padding:15px; width:100%; background:#0d6efd; color:white; border:none; border-radius:8px; font-size:16px; font-weight:bold; cursor:pointer;">Enviar Nota</button>
+        </form>
+    </div>
+    </body></html>
+    """
+    return html
 
 @app.route('/admin/agendamentos/falta/<int:id>', methods=['POST'])
 @login_required

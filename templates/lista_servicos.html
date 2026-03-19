@@ -4,7 +4,12 @@
     <div class="text-center mb-5">
         {% if establishment.logo_filename %}<img src="{{ url_for('static', filename='uploads/' + establishment.logo_filename) }}" class="rounded-circle shadow mb-3" style="width: 100px; height: 100px; object-fit: cover;">
         {% else %}<div class="rounded-circle bg-secondary d-inline-flex align-items-center justify-content-center text-white fw-bold mb-3 shadow" style="width: 100px; height: 100px; font-size: 2rem;">{{ establishment.name[0] }}</div>{% endif %}
-        <h1 class="display-5 fw-bold">{{ establishment.name }}</h1>
+        <h1 class="display-5 fw-bold mb-2">{{ establishment.name }}</h1>
+        {% if establishment.rating_count > 0 %}
+            <div class="badge bg-warning text-dark fs-6 shadow-sm mb-4"><i class="bi bi-star-fill"></i> {{ "%.1f"|format(establishment.average_rating) }} ({{ establishment.rating_count }} avaliações)</div>
+        {% else %}
+            <div class="badge bg-info text-white fs-6 shadow-sm mb-4"><i class="bi bi-stars"></i> Novo no Agenda Fácil</div>
+        {% endif %}
     </div>
     <div class="row justify-content-center gap-3">
         {% for s in services %}
