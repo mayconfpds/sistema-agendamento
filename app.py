@@ -339,7 +339,7 @@ def create_appointment(url_prefix):
     if start_dt < now:
         flash('Horário inválido.', 'danger'); return redirect(url_for('establishment_services', url_prefix=url_prefix))
         
-    appts_on_day = Appointment.query.filter_by(appointment_date=d, establishment_id=est.id).all()
+    appts_on_day = Appointment.query.filter_by(appointment_date=d, establishment_id=est.id).filter(Appointment.status != 'concluido').all()
     overlap_count = 0
     for a in appts_on_day:
         s = datetime.combine(d, a.appointment_time)
@@ -551,7 +551,7 @@ def get_available_times():
     day_sched = DaySchedule.query.filter_by(establishment_id=est.id, day_index=sel_date.weekday()).first()
     if not day_sched or not day_sched.is_active: return jsonify([])
     
-    appts = Appointment.query.filter_by(appointment_date=sel_date, establishment_id=est.id).all()
+    appts = Appointment.query.filter_by(appointment_date=sel_date, establishment_id=est.id).filter(Appointment.status != 'concluido').all()
     
     avail = []
     curr = datetime.combine(sel_date, day_sched.work_start)
