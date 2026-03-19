@@ -392,6 +392,38 @@ def admin_dashboard():
     today_count = Appointment.query.filter(Appointment.establishment_id == est.id, Appointment.appointment_date == today).count()
     return render_template('admin.html', appointments=appts, services=services, establishment=est, schedules=schedules, blacklists=blacklists, today_count=today_count)
 
+@app.route('/admin/historico')
+@login_required
+def historico_atendimentos():
+    if not current_user.establishment.has_access: return redirect(url_for('payment'))
+    est = current_user.establishment
+    
+    start_date_str = request.args.get('start_date')
+    end_date_str = request.args.get('end_date')
+    
+    query = Appointment.query.filter_by(establishment_id=est.id)
+    
+    # Filtro por datas
+    if start_date_str:
+        try:
+            start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+            query = query.filter(Appointment.appointment_date >= start_date)
+        except: pass
+    if end_date_str:
+        try:
+            end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+            query = query.filter(Appointment.appointment_date <= end_date)
+        except: pass
+        
+    # Organiza do mais recente para o mais antigo
+    appts = query.order_by(Appointment.appointment_date.desc(), Appointment.appointment_time.desc()).all()
+    
+    # Calcula os totais do período filtrado
+    total_revenue = sum(a.total_price for a in appts if a.status == 'concluido')
+    total_appts = len(appts)
+    
+    return render_template('historico.html', appointments=appts, establishment=est, start_date=start_date_str, end_date=end_date_str, total_revenue=total_revenue, total_appts=total_appts)
+
 @app.route('/admin/configurar', methods=['POST'])
 @login_required
 def update_settings():
