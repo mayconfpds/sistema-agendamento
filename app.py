@@ -134,6 +134,13 @@ class Admin(UserMixin, db.Model):
     def set_password(self, password): self.password_hash = generate_password_hash(password)
     def check_password(self, password): return check_password_hash(self.password_hash, password)
 
+class Category(db.Model):
+    __tablename__ = 'categories'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    establishment_id = db.Column(db.Integer, db.ForeignKey('establishments.id'), nullable=False)
+    services = db.relationship('Service', backref='category', lazy=True)
+
 class Service(db.Model):
     __tablename__ = 'services'
     id = db.Column(db.Integer, primary_key=True)
@@ -141,6 +148,7 @@ class Service(db.Model):
     duration = db.Column(db.Integer, nullable=False)
     price = db.Column(db.Float, nullable=False, default=0.0)
     establishment_id = db.Column(db.Integer, db.ForeignKey('establishments.id'), nullable=False)
+    category_id = db.Column(db.Integer, db.ForeignKey('categories.id'), nullable=True) # Nova linha!
 
 class Client(db.Model):
     __tablename__ = 'clients'
@@ -239,6 +247,28 @@ try:
                     conn.commit()
             if not inspector.has_table("clients"):
                 Client.__table__.create(db.engine)
+                
+            # Auto-Correção para Categorias
+            if not inspector.has_table("categories"):
+                Category.__table__.create(db.engine)
+                
+            columns_srv = [c['name'] for c in inspector.get_columns('services')]
+            if 'category_id' not in columns_srv:
+                with db.engine.connect() as conn:
+                    conn.execute(db.text("ALTER TABLE services ADD COLUMN category_id INTEGER;"))
+                    conn.commit()
+                
+                # Migração Inteligente: Cria a categoria "Geral" para salões antigos e move os serviços
+                for est in Establishment.query.all():
+                    geral = Category.query.filter_by(establishment_id=est.id, name='Geral').first()
+                    if not geral:
+                        geral = Category(name='Geral', establishment_id=est.id)
+                        db.session.add(geral)
+                        db.session.commit() # Salva para gerar o ID
+                    
+                    # Coloca todos os serviços órfãos nesta nova categoria
+                    Service.query.filter_by(establishment_id=est.id, category_id=None).update({'category_id': geral.id})
+                db.session.commit()
 except Exception as e:
     print(f"Erro na verificação do banco: {e}") 
 
@@ -411,10 +441,11 @@ def admin_dashboard():
     today = get_now_brazil().date()
     appts = Appointment.query.filter(Appointment.establishment_id == est.id, Appointment.appointment_date >= today, Appointment.status.notin_(['arquivado', 'falta', 'cancelado'])).order_by(Appointment.appointment_date, Appointment.appointment_time).all()
     services = Service.query.filter_by(establishment_id=est.id).all()
+    categories = Category.query.filter_by(establishment_id=est.id).all()
     schedules = DaySchedule.query.filter_by(establishment_id=est.id).order_by(DaySchedule.day_index).all()
     blacklists = Blacklist.query.filter_by(establishment_id=est.id).all()
     today_count = Appointment.query.filter(Appointment.establishment_id == est.id, Appointment.appointment_date == today).count()
-    return render_template('admin.html', appointments=appts, services=services, establishment=est, schedules=schedules, blacklists=blacklists, today_count=today_count)
+    return render_template('admin.html', appointments=appts, services=services, categories=categories, establishment=est, schedules=schedules, blacklists=blacklists, today_count=today_count)
 
 @app.route('/admin/historico')
 @login_required
@@ -575,14 +606,43 @@ def update_settings():
     db.session.commit()
     return redirect(url_for('admin_dashboard'))
 
-@app.route('/admin/servicos/novo', methods=['POST'])
+@app.route('/admin/categoria/adicionar', methods=['POST'])
+@login_required
+def add_category():
+    name = request.form.get('name')
+    if name:
+        c = Category(name=name, establishment_id=current_user.establishment_id)
+        db.session.add(c); db.session.commit()
+        flash('Categoria criada com sucesso!', 'success')
+    return redirect(url_for('admin_dashboard'))
+
+@app.route('/admin/categoria/excluir/<int:id>', methods=['POST'])
+@login_required
+def delete_category(id):
+    c = Category.query.get_or_404(id)
+    if c.establishment_id == current_user.establishment_id:
+        geral = Category.query.filter_by(establishment_id=current_user.establishment_id, name='Geral').first()
+        if c.id == geral.id:
+            flash('A categoria Geral não pode ser excluída.', 'danger')
+        else:
+            # Salva os serviços órfãos movendo-os para a categoria Geral
+            Service.query.filter_by(category_id=c.id).update({'category_id': geral.id})
+            db.session.delete(c); db.session.commit()
+            flash('Categoria excluída. Os serviços foram movidos para a categoria Geral.', 'success')
+    return redirect(url_for('admin_dashboard'))
+
+@app.route('/admin/servico/adicionar', methods=['POST'])
 @login_required
 def add_service():
-    if not current_user.establishment.has_access: return redirect(url_for('payment'))
-    try: p = float(request.form.get('price', '0').replace(',', '.'))
-    except: p = 0.0
-    svc = Service(name=request.form.get('name'), duration=int(request.form.get('duration')), price=p, establishment_id=current_user.establishment_id)
-    db.session.add(svc); db.session.commit()
+    name = request.form.get('name')
+    price = request.form.get('price')
+    duration = request.form.get('duration') # <-- O seu campo de volta!
+    category_id = request.form.get('category_id')
+    
+    if name and price and duration and category_id:
+        s = Service(name=name, price=float(price.replace(',', '.')), duration=int(duration), category_id=category_id, establishment_id=current_user.establishment_id)
+        db.session.add(s); db.session.commit()
+        flash('Serviço adicionado!', 'success')
     return redirect(url_for('admin_dashboard'))
 
 @app.route('/admin/servicos/excluir/<int:id>', methods=['POST'])

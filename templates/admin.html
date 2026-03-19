@@ -117,21 +117,59 @@
         
         <div class="col-lg-5">
             <div class="card shadow-sm border-0 mb-4">
-                <div class="card-header bg-white fw-bold">Serviços Oferecidos</div>
+                <div class="card-header bg-white fw-bold d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-folder text-primary"></i> Categorias</span>
+                </div>
+                <div class="card-body bg-light">
+                    <form method="POST" action="{{ url_for('add_category') }}" class="input-group input-group-sm mb-3">
+                        <input type="text" name="name" class="form-control" placeholder="Nova (Ex: Cabelo)" required>
+                        <button class="btn btn-primary fw-bold"><i class="bi bi-plus"></i></button>
+                    </form>
+                    <div class="d-flex flex-wrap gap-1">
+                        {% for c in categories %}
+                            <span class="badge bg-white text-dark border d-flex align-items-center gap-1 p-2 shadow-sm">
+                                {{ c.name }}
+                                {% if c.name != 'Geral' %}
+                                <form method="POST" action="{{ url_for('delete_category', id=c.id) }}" class="m-0" onsubmit="return confirm('Excluir categoria? Os serviços irão para a categoria Geral.');">
+                                    <button type="submit" class="btn-close" style="font-size: 0.5rem;"></button>
+                                </form>
+                                {% endif %}
+                            </span>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-header bg-white fw-bold"><i class="bi bi-scissors text-primary"></i> Serviços Oferecidos</div>
                 <div class="card-body">
-                    <form action="{{ url_for('add_service') }}" method="POST" class="mb-3">
-                        <div class="input-group input-group-sm">
+                    <form action="{{ url_for('add_service') }}" method="POST" class="mb-3 row g-1">
+                        <div class="col-12 mb-1">
+                            <select name="category_id" class="form-select form-select-sm" required>
+                                <option value="" disabled selected>Escolha a Categoria...</option>
+                                {% for c in categories %}
+                                    <option value="{{ c.id }}">{{ c.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-12 input-group input-group-sm">
                             <input type="text" name="name" class="form-control" placeholder="Nome" required>
                             <input type="number" name="duration" class="form-control" placeholder="Min" style="max-width: 70px;" required>
-                            <input type="text" name="price" class="form-control" placeholder="R$" style="max-width: 90px;" required>
+                            <input type="text" name="price" class="form-control" placeholder="R$" style="max-width: 80px;" required>
                             <button class="btn btn-success"><i class="bi bi-plus"></i></button>
                         </div>
                     </form>
-                    <ul class="list-group list-group-flush small">
+                    <ul class="list-group list-group-flush small" style="max-height: 400px; overflow-y: auto;">
                         {% for s in services %}
                         <li class="list-group-item d-flex justify-content-between align-items-center px-0">
-                            <div><strong>{{ s.name }}</strong> ({{ s.duration }}m)<br><span class="text-success fw-bold">R$ {{ "%.2f"|format(s.price) }}</span></div>
-                            <form method="POST" action="{{ url_for('delete_service', id=s.id) }}" onsubmit="return confirm('Excluir?');"><button class="btn btn-link text-danger p-0"><i class="bi bi-trash"></i></button></form>
+                            <div>
+                                <span class="badge bg-secondary mb-1" style="font-size: 0.65rem;">{{ s.category.name if s.category else 'Geral' }}</span><br>
+                                <strong>{{ s.name }}</strong> ({{ s.duration }}m)<br>
+                                <span class="text-success fw-bold">R$ {{ "%.2f"|format(s.price) }}</span>
+                            </div>
+                            <form method="POST" action="{{ url_for('delete_service', id=s.id) }}" onsubmit="return confirm('Excluir serviço?');">
+                                <button class="btn btn-link text-danger p-0"><i class="bi bi-trash"></i></button>
+                            </form>
                         </li>
                         {% endfor %}
                     </ul>
