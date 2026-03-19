@@ -81,6 +81,9 @@ class Establishment(db.Model):
     
     trial_ends = db.Column(db.DateTime, nullable=True)
     
+    loyalty_points_goal = db.Column(db.Integer, default=0) # 0 significa desativado
+    loyalty_reward = db.Column(db.String(150), nullable=True)
+    
     schedules = db.relationship('DaySchedule', backref='establishment', lazy=True, cascade="all, delete-orphan")
     admins = db.relationship('Admin', backref='establishment', lazy=True)
     services = db.relationship('Service', backref='establishment', lazy=True)
@@ -139,6 +142,14 @@ class Service(db.Model):
     price = db.Column(db.Float, nullable=False, default=0.0)
     establishment_id = db.Column(db.Integer, db.ForeignKey('establishments.id'), nullable=False)
 
+class Client(db.Model):
+    __tablename__ = 'clients'
+    id = db.Column(db.Integer, primary_key=True)
+    phone = db.Column(db.String(20), nullable=False)
+    name = db.Column(db.String(150), nullable=False)
+    points = db.Column(db.Integer, default=0)
+    establishment_id = db.Column(db.Integer, db.ForeignKey('establishments.id'), nullable=False)
+
 appointment_services = db.Table('appointment_services',
     db.Column('appointment_id', db.Integer, db.ForeignKey('appointments.id'), primary_key=True),
     db.Column('service_id', db.Integer, db.ForeignKey('services.id'), primary_key=True)
@@ -163,6 +174,10 @@ class Appointment(db.Model):
     @property
     def service_names(self):
         return " + ".join([s.name for s in self.services])
+    
+    @property
+    def client_loyalty(self):
+        return Client.query.filter_by(establishment_id=self.establishment_id, phone=self.client_phone).first()
 
 class Blacklist(db.Model):
     __tablename__ = 'blacklists'
@@ -181,7 +196,7 @@ def notification_worker():
                 inspector = inspect(db.engine)
                 if not inspector.has_table("appointments"): 
                     time_module.sleep(10); continue
-                upcoming = Appointment.query.filter(Appointment.notified == False).all()
+                upcoming = Appointment.query.filter(Appointment.notified == False, Appointment.status != 'concluido').all()
                 now = get_now_brazil()
                 for appt in upcoming:
                     appt_dt = datetime.combine(appt.appointment_date, appt.appointment_time)
@@ -208,13 +223,22 @@ try:
                     conn.execute(db.text('ALTER TABLE day_schedules ADD COLUMN pause2_start TIME;'))
                     conn.execute(db.text('ALTER TABLE day_schedules ADD COLUMN pause2_end TIME;'))
                     conn.commit()
-                    # Auto-Correção para Avaliações
+            # Auto-Correção para Avaliações
             columns_appt = [c['name'] for c in inspector.get_columns('appointments')]
             if 'status' not in columns_appt:
                 with db.engine.connect() as conn:
                     conn.execute(db.text("ALTER TABLE appointments ADD COLUMN status VARCHAR(20) DEFAULT 'pendente';"))
                     conn.execute(db.text("ALTER TABLE appointments ADD COLUMN rating INTEGER;"))
                     conn.commit()
+            # Auto-Correção para Fidelidade
+            columns_est = [c['name'] for c in inspector.get_columns('establishments')]
+            if 'loyalty_points_goal' not in columns_est:
+                with db.engine.connect() as conn:
+                    conn.execute(db.text("ALTER TABLE establishments ADD COLUMN loyalty_points_goal INTEGER DEFAULT 0;"))
+                    conn.execute(db.text("ALTER TABLE establishments ADD COLUMN loyalty_reward VARCHAR(150);"))
+                    conn.commit()
+            if not inspector.has_table("clients"):
+                Client.__table__.create(db.engine)
 except Exception as e:
     print(f"Erro na verificação do banco: {e}") 
 
@@ -435,6 +459,9 @@ def update_settings():
         est.contact_email = request.form.get('contact_email')
         try: est.capacity = int(request.form.get('capacity', 1))
         except: pass
+        try: est.loyalty_points_goal = int(request.form.get('loyalty_points_goal', 0))
+        except: est.loyalty_points_goal = 0
+        est.loyalty_reward = request.form.get('loyalty_reward')
         if 'logo' in request.files:
             file = request.files['logo']
             if file and allowed_file(file.filename):
@@ -489,14 +516,42 @@ def complete_appointment(id):
     a = Appointment.query.get_or_404(id)
     if a.establishment_id != current_user.establishment_id: return "Erro", 403
     a.status = 'concluido'
+    
+    # --- SISTEMA DE FIDELIDADE ---
+    est = a.establishment
+    msg_fidelidade = ""
+    if est.loyalty_points_goal and est.loyalty_points_goal > 0:
+        cliente = Client.query.filter_by(establishment_id=est.id, phone=a.client_phone).first()
+        if not cliente:
+            cliente = Client(phone=a.client_phone, name=a.client_name, establishment_id=est.id, points=0)
+            db.session.add(cliente)
+        
+        cliente.points += 1
+        pontos_restantes = est.loyalty_points_goal - cliente.points
+        
+        if pontos_restantes > 0:
+            msg_fidelidade = f"\n\n🎁 Fidelidade: Você ganhou 1 ponto! Faltam apenas {pontos_restantes} ponto(s) para resgatar o seu prémio: {est.loyalty_reward}."
+        else:
+            msg_fidelidade = f"\n\n🎉 PARABÉNS! Você atingiu {cliente.points} pontos e GANHOU O SEU PRÉMIO: {est.loyalty_reward}! Mostre este e-mail na sua próxima visita."
+            
     db.session.commit()
     
     link_av = request.host_url.replace('http://', 'https://') + f'avaliar/{a.id}'
-    subj = f"Como foi o atendimento no(a) {a.establishment.name}?"
-    body = f"Olá {a.client_name}!\n\nO seu atendimento foi concluído. Queremos saber a sua opinião!\n\nÉ super rápido: você só precisa clicar no link abaixo e dar uma nota de 1 a 5 estrelas (não precisa escrever nada).\n\n{link_av}\n\nObrigado!"
+    subj = f"Como foi o atendimento no(a) {est.name}?"
+    body = f"Olá {a.client_name}!\n\nO seu atendimento foi concluído. Queremos saber a sua opinião!\n\nÉ super rápido: você só precisa clicar no link abaixo e dar uma nota de 1 a 5 estrelas.\n\n{link_av}{msg_fidelidade}\n\nObrigado!"
     send_email(subj, a.client_email, body)
     
-    flash('Atendimento concluído! E-mail de avaliação enviado.', 'success')
+    flash('Atendimento concluído! Ponto contabilizado.', 'success')
+    return redirect(url_for('admin_dashboard'))
+
+@app.route('/admin/cliente/<int:id>/zerar_pontos', methods=['POST'])
+@login_required
+def reset_loyalty(id):
+    cliente = Client.query.get_or_404(id)
+    if cliente.establishment_id == current_user.establishment_id:
+        cliente.points = 0
+        db.session.commit()
+        flash('Prémio entregue! Os pontos do cliente foram zerados.', 'success')
     return redirect(url_for('admin_dashboard'))
 
 @app.route('/avaliar/<int:id>', methods=['GET', 'POST'])
