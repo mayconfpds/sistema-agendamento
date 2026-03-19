@@ -481,6 +481,10 @@ def relatorios_gerenciais():
     
     qtd_total_marcacoes = len(appts)
     taxa_faltas = (len(faltas) / qtd_total_marcacoes * 100) if qtd_total_marcacoes > 0 else 0
+    
+    avaliacoes = [a.rating for a in concluidos if a.rating]
+    avaliacao_media = sum(avaliacoes) / len(avaliacoes) if avaliacoes else 0.0
+    qtd_avaliacoes = len(avaliacoes)
 
     # --- 2. Agrupamento Dinâmico para o Gráfico de Faturamento ---
     dias_diferenca = (end_date - start_date).days
@@ -526,6 +530,7 @@ def relatorios_gerenciais():
         establishment=est, start_date=start_date_str, end_date=end_date_str,
         faturamento_total=faturamento_total, ticket_medio=ticket_medio, 
         qtd_concluidos=qtd_concluidos, taxa_faltas=taxa_faltas,
+        avaliacao_media=avaliacao_media, qtd_avaliacoes=qtd_avaliacoes,
         labels_tempo=labels_tempo, dados_tempo=dados_tempo,
         labels_servicos=labels_servicos, dados_servicos=dados_servicos,
         saude_labels=saude_labels, saude_dados=saude_dados
