@@ -263,7 +263,7 @@ try:
             # Auto-Correção para Promoções e Combos
             if 'is_combo' not in columns_srv:
                 with db.engine.connect() as conn:
-                    conn.execute(db.text("ALTER TABLE services ADD COLUMN is_combo BOOLEAN DEFAULT 0;"))
+                    conn.execute(db.text("ALTER TABLE services ADD COLUMN is_combo BOOLEAN DEFAULT FALSE;"))
                     conn.execute(db.text("ALTER TABLE services ADD COLUMN original_price FLOAT;"))
                     conn.commit()
                 
