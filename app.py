@@ -582,6 +582,21 @@ def relatorios_gerenciais():
     avaliacao_media = sum(avaliacoes) / len(avaliacoes) if avaliacoes else 0.0
     qtd_avaliacoes = len(avaliacoes)
 
+    # --- NOVO: 5. Cálculo de Comissões e Lucro Líquido (Plano Gestão) ---
+    total_comissoes = 0
+    comissoes_por_profissional = {}
+    
+    if est.plan_type == 'gestao':
+        for a in concluidos:
+            if a.professional_id and a.commission_value > 0:
+                total_comissoes += a.commission_value
+                prof_name = a.professional.name if a.professional else "Desconhecido"
+                if prof_name not in comissoes_por_profissional:
+                    comissoes_por_profissional[prof_name] = 0
+                comissoes_por_profissional[prof_name] += a.commission_value
+                
+    receita_liquida = faturamento_total - total_comissoes
+
     # --- 2. Agrupamento Dinâmico para o Gráfico de Faturamento ---
     dias_diferenca = (end_date - start_date).days
     faturamento_tempo = {}
@@ -629,7 +644,8 @@ def relatorios_gerenciais():
         avaliacao_media=avaliacao_media, qtd_avaliacoes=qtd_avaliacoes,
         labels_tempo=labels_tempo, dados_tempo=dados_tempo,
         labels_servicos=labels_servicos, dados_servicos=dados_servicos,
-        saude_labels=saude_labels, saude_dados=saude_dados
+        saude_labels=saude_labels, saude_dados=saude_dados,
+        total_comissoes=total_comissoes, receita_liquida=receita_liquida, comissoes_por_profissional=comissoes_por_profissional
     )
 
 @app.route('/admin/configurar', methods=['POST'])

@@ -32,7 +32,7 @@
     <div class="row mb-4 g-3">
         <div class="col-md-3 col-6">
             <div class="card bg-success text-white shadow-sm border-0 p-3 h-100 rounded-4">
-                <h6 class="mb-1 text-white-50 small"><i class="bi bi-cash-stack"></i> Faturação (Concluídos)</h6>
+                <h6 class="mb-1 text-white-50 small"><i class="bi bi-cash-stack"></i> Faturação Bruta</h6>
                 <h3 class="fw-bold mb-0">R$ {{ "%.2f"|format(faturamento_total) }}</h3>
             </div>
         </div>
@@ -58,8 +58,40 @@
         </div>
     </div>
 
+    {% if establishment.plan_type == 'gestao' %}
+    <div class="row mb-4 g-3">
+        <div class="col-md-4">
+            <div class="card bg-dark text-white shadow-sm border-0 p-3 h-100 rounded-4 text-center d-flex justify-content-center">
+                <h6 class="mb-1 text-warning small"><i class="bi bi-graph-up-arrow"></i> Lucro Líquido do Salão</h6>
+                <h2 class="fw-bold mb-0 text-white">R$ {{ "%.2f"|format(receita_liquida) }}</h2>
+                <div class="small mt-1" style="font-size: 0.75rem; opacity: 0.6;">Faturamento Bruto descontando as comissões</div>
+            </div>
+        </div>
+        <div class="col-md-8">
+            <div class="card shadow-sm border-0 h-100 rounded-4">
+                <div class="card-header bg-white py-3 border-bottom text-danger fw-bold d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-wallet2"></i> Folha de Pagamento (Comissões)</span>
+                    <span class="badge bg-danger rounded-pill">Total: R$ {{ "%.2f"|format(total_comissoes) }}</span>
+                </div>
+                <div class="card-body p-0">
+                    <ul class="list-group list-group-flush small" style="max-height: 150px; overflow-y: auto;">
+                        {% for prof, valor in comissoes_por_profissional.items() %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center py-3">
+                            <span class="fw-bold text-dark"><i class="bi bi-person-badge text-muted me-2"></i> {{ prof }}</span>
+                            <span class="text-danger fw-bold">Pagar: R$ {{ "%.2f"|format(valor) }}</span>
+                        </li>
+                        {% else %}
+                        <li class="list-group-item text-center text-muted py-4 border-0">Nenhuma comissão a pagar neste período.</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     <div class="card shadow-sm border-0 mb-4 rounded-4">
-        <div class="card-header bg-white py-3 border-bottom-0"><h6 class="fw-bold mb-0 text-secondary">Evolução da Faturação</h6></div>
+        <div class="card-header bg-white py-3 border-bottom-0"><h6 class="fw-bold mb-0 text-secondary">Evolução da Faturação Bruta</h6></div>
         <div class="card-body">
             <div style="position: relative; height:40vh; width:100%">
                 <canvas id="graficoFaturamento"></canvas>
@@ -114,7 +146,6 @@ function setFilter(type) {
 
 // === DESENHANDO OS GRÁFICOS ===
 
-// 1. Gráfico de Faturação (Linha do Tempo)
 const ctxFaturamento = document.getElementById('graficoFaturamento').getContext('2d');
 new Chart(ctxFaturamento, {
     type: 'line',
@@ -126,19 +157,13 @@ new Chart(ctxFaturamento, {
             borderColor: '#198754',
             backgroundColor: 'rgba(25, 135, 84, 0.2)',
             borderWidth: 3,
-            tension: 0.4, // Curva suave
+            tension: 0.4, 
             fill: true
         }]
     },
-    options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: { y: { beginAtZero: true } }
-    }
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
 });
 
-// 2. Gráfico de Curva ABC (Rosca)
 const ctxServicos = document.getElementById('graficoServicos').getContext('2d');
 new Chart(ctxServicos, {
     type: 'doughnut',
@@ -150,16 +175,9 @@ new Chart(ctxServicos, {
             borderWidth: 2
         }]
     },
-    options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-            legend: { position: 'right', labels: { boxWidth: 12 } }
-        }
-    }
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { boxWidth: 12 } } } }
 });
 
-// 3. Gráfico de Saúde da Agenda (Pizza)
 const ctxSaude = document.getElementById('graficoSaude').getContext('2d');
 new Chart(ctxSaude, {
     type: 'pie',
@@ -167,17 +185,11 @@ new Chart(ctxSaude, {
         labels: {{ saude_labels | tojson }},
         datasets: [{
             data: {{ saude_dados | tojson }},
-            backgroundColor: ['#198754', '#6c757d', '#dc3545'], // Verde, Cinza, Vermelho
+            backgroundColor: ['#198754', '#6c757d', '#dc3545'], 
             borderWidth: 2
         }]
     },
-    options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-            legend: { position: 'bottom', labels: { boxWidth: 12 } }
-        }
-    }
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12 } } } }
 });
 </script>
 {% endblock %}
