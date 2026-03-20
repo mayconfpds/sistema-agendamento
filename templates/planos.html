@@ -4,7 +4,12 @@
 <div class="container py-5">
     <div class="text-center mb-5">
         <h1 class="fw-bold text-dark">Escolha o plano ideal para o seu negócio</h1>
-        <p class="text-muted fs-5">Todos os planos incluem <strong>7 dias de teste totalmente grátis</strong>. Cancele quando quiser.</p>
+        
+        {% if current_user.is_authenticated and not current_user.establishment.has_access %}
+            <p class="text-danger fs-5 mt-2"><i class="bi bi-exclamation-triangle-fill"></i> <strong>Seu período de teste grátis terminou.</strong><br>Escolha o plano abaixo para assinar e reativar o seu painel instantaneamente.</p>
+        {% else %}
+            <p class="text-muted fs-5">Todos os planos incluem <strong>7 dias de teste totalmente grátis</strong>. Cancele quando quiser.</p>
+        {% endif %}
     </div>
 
     <div class="row justify-content-center g-4">
@@ -23,7 +28,12 @@
                         <li class="mb-3"><i class="bi bi-check-circle-fill text-success me-2"></i> Sistema de Fidelidade</li>
                         <li class="mb-3 text-muted"><i class="bi bi-x-circle-fill text-secondary me-2"></i> Gestão de Equipe e Comissões</li>
                     </ul>
-                    <a href="{{ url_for('register_business', plan='solo') }}" class="btn btn-outline-primary py-3 fw-bold rounded-pill w-100">Começar Teste Grátis</a>
+                    
+                    {% if current_user.is_authenticated and not current_user.establishment.has_access %}
+                        <a href="{{ url_for('payment', plan='solo') }}" class="btn btn-outline-primary py-3 fw-bold rounded-pill w-100">Assinar Plano Solo</a>
+                    {% else %}
+                        <a href="{{ url_for('register_business', plan='solo') }}" class="btn btn-outline-primary py-3 fw-bold rounded-pill w-100">Começar Teste Grátis</a>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -44,7 +54,12 @@
                         <li class="mb-3"><i class="bi bi-check-circle-fill text-success me-2"></i> Agendas independentes</li>
                         <li class="mb-3"><i class="bi bi-check-circle-fill text-success me-2"></i> Relatórios Financeiros Avançados</li>
                     </ul>
-                    <a href="{{ url_for('register_business', plan='gestao') }}" class="btn btn-primary py-3 fw-bold rounded-pill w-100 shadow-sm">Começar Teste Grátis</a>
+                    
+                    {% if current_user.is_authenticated and not current_user.establishment.has_access %}
+                        <a href="{{ url_for('payment', plan='gestao') }}" class="btn btn-primary py-3 fw-bold rounded-pill w-100 shadow-sm">Assinar Plano Gestão</a>
+                    {% else %}
+                        <a href="{{ url_for('register_business', plan='gestao') }}" class="btn btn-primary py-3 fw-bold rounded-pill w-100 shadow-sm">Começar Teste Grátis</a>
+                    {% endif %}
                 </div>
             </div>
         </div>
