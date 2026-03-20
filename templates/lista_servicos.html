@@ -18,33 +18,39 @@
     </div>
 
     <div class="accordion shadow-sm rounded-4 overflow-hidden border-0" id="accordionCategorias">
-        {% for c in categories if c.services %}
+        {% for c in categories %}
+            {% if c.services|length > 0 %}
             <div class="accordion-item border-0 border-bottom">
-                <h2 class="accordion-header">
-                    <button class="accordion-button {% if not loop.first %}collapsed{% endif %} fw-bold fs-5 bg-white text-dark py-3" type="button" data-bs-toggle="collapse" data-bs-target="#cat-{{ c.id }}">
+                <h2 class="accordion-header" id="heading-{{ c.id }}">
+                    <button class="accordion-button {% if not loop.first %}collapsed{% endif %} fw-bold fs-5 bg-white text-dark py-3" type="button" data-bs-toggle="collapse" data-bs-target="#cat-{{ c.id }}" aria-expanded="{% if loop.first %}true{% else %}false{% endif %}" aria-controls="cat-{{ c.id }}">
                         <i class="bi bi-tag-fill text-primary me-2"></i> {{ c.name }} 
                         <span class="badge bg-light text-secondary border ms-2 rounded-pill" style="font-size: 0.8rem;">{{ c.services|length }}</span>
                     </button>
                 </h2>
-                <div id="cat-{{ c.id }}" class="accordion-collapse collapse {% if loop.first %}show{% endif %}">
+                <div id="cat-{{ c.id }}" class="accordion-collapse collapse {% if loop.first %}show{% endif %}" aria-labelledby="heading-{{ c.id }}" data-bs-parent="#accordionCategorias">
                     <div class="accordion-body bg-light p-3 p-md-4">
-                        <div class="row g-3">
+                        
+                        <div class="d-flex flex-column gap-3">
                             {% for s in c.services %}
-                            <div class="col-md-6">
-                                <div class="card shadow-sm border-0 p-3 text-center hover-shadow transition rounded-4 bg-white">
-                                    <h5 class="fw-bold text-dark mb-2">{{ s.name }}</h5>
-                                    <div class="d-flex justify-content-center align-items-center gap-3 mb-3">
-                                        <span class="text-success fw-bold fs-5">R$ {{ "%.2f"|format(s.price) }}</span>
-                                        <span class="text-muted small border-start border-2 ps-3"><i class="bi bi-clock"></i> {{ s.duration }} min</span>
+                            <div class="card shadow-sm border-0 w-100 rounded-3">
+                                <div class="card-body d-flex flex-column flex-md-row justify-content-between align-items-center gap-3 p-3">
+                                    <div class="text-center text-md-start">
+                                        <h5 class="fw-bold text-dark mb-1">{{ s.name }}</h5>
+                                        <div class="text-muted small"><i class="bi bi-clock"></i> {{ s.duration }} min</div>
                                     </div>
-                                    <a href="{{ url_for('schedule_service', url_prefix=establishment.url_prefix, service_id=s.id) }}" class="btn btn-primary w-100 fw-bold rounded-pill">Agendar</a>
+                                    <div class="d-flex align-items-center gap-3">
+                                        <span class="text-success fw-bold fs-5 mb-0">R$ {{ "%.2f"|format(s.price) }}</span>
+                                        <a href="{{ url_for('schedule_service', url_prefix=establishment.url_prefix, service_id=s.id) }}" class="btn btn-primary fw-bold rounded-pill px-4">Agendar</a>
+                                    </div>
                                 </div>
                             </div>
                             {% endfor %}
                         </div>
+
                     </div>
                 </div>
             </div>
+            {% endif %}
         {% endfor %}
     </div>
     
