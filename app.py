@@ -32,7 +32,8 @@ BREVO_SENDER_EMAIL = os.environ.get('BREVO_SENDER_EMAIL', 'seu_email@gmail.com')
 BREVO_SENDER_NAME = "Agenda Fácil"
 
 stripe.api_key = os.environ.get('STRIPE_API_KEY')
-STRIPE_PRICE_ID = os.environ.get('STRIPE_PRICE_ID')
+STRIPE_PRICE_SOLO = os.environ.get('STRIPE_PRICE_SOLO')
+STRIPE_PRICE_GESTAO = os.environ.get('STRIPE_PRICE_GESTAO')
 
 UPLOAD_FOLDER = os.path.join(basedir, 'static', 'uploads')
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
@@ -78,11 +79,11 @@ class Establishment(db.Model):
     logo_filename = db.Column(db.String(100), nullable=True)
     is_active = db.Column(db.Boolean, default=False)
     capacity = db.Column(db.Integer, default=1, nullable=False)
-    plan_type = db.Column(db.String(20), default='solo') # Novo: 'solo' ou 'gestao'
+    plan_type = db.Column(db.String(20), default='solo')
     
     trial_ends = db.Column(db.DateTime, nullable=True)
     
-    loyalty_points_goal = db.Column(db.Integer, default=0) # 0 significa desativado
+    loyalty_points_goal = db.Column(db.Integer, default=0)
     loyalty_reward = db.Column(db.String(150), nullable=True)
     
     schedules = db.relationship('DaySchedule', backref='establishment', lazy=True, cascade="all, delete-orphan")
@@ -146,7 +147,7 @@ class Professional(db.Model):
     __tablename__ = 'professionals'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
-    commission_rate = db.Column(db.Float, default=0.0) # Ex: 50.0 para 50%
+    commission_rate = db.Column(db.Float, default=0.0) 
     is_active = db.Column(db.Boolean, default=True)
     establishment_id = db.Column(db.Integer, db.ForeignKey('establishments.id'), nullable=False)
     appointments = db.relationship('Appointment', backref='professional', lazy=True)
@@ -158,7 +159,7 @@ class Service(db.Model):
     duration = db.Column(db.Integer, nullable=False)
     price = db.Column(db.Float, nullable=False, default=0.0)
     establishment_id = db.Column(db.Integer, db.ForeignKey('establishments.id'), nullable=False)
-    category_id = db.Column(db.Integer, db.ForeignKey('categories.id'), nullable=True) # Nova linha!
+    category_id = db.Column(db.Integer, db.ForeignKey('categories.id'), nullable=True)
     is_combo = db.Column(db.Boolean, default=False)
     original_price = db.Column(db.Float, nullable=True)
 
@@ -188,8 +189,8 @@ class Appointment(db.Model):
     total_price = db.Column(db.Float, default=0.0, nullable=False)
     establishment_id = db.Column(db.Integer, db.ForeignKey('establishments.id'), nullable=False)
     status = db.Column(db.String(20), default='pendente')
-    professional_id = db.Column(db.Integer, db.ForeignKey('professionals.id'), nullable=True) # Novo
-    commission_value = db.Column(db.Float, default=0.0) # Novo
+    professional_id = db.Column(db.Integer, db.ForeignKey('professionals.id'), nullable=True)
+    commission_value = db.Column(db.Float, default=0.0)
     rating = db.Column(db.Integer, nullable=True)
     services = db.relationship('Service', secondary=appointment_services, lazy='subquery', backref=db.backref('appointments', lazy=True))
 
@@ -238,21 +239,18 @@ try:
         if not inspector.has_table("establishments"): 
             db.create_all()
         else:
-            # Auto-Correção: Força a criação das colunas da Pausa 2 se elas não existirem
             columns = [c['name'] for c in inspector.get_columns('day_schedules')]
             if 'pause2_start' not in columns:
                 with db.engine.connect() as conn:
                     conn.execute(db.text('ALTER TABLE day_schedules ADD COLUMN pause2_start TIME;'))
                     conn.execute(db.text('ALTER TABLE day_schedules ADD COLUMN pause2_end TIME;'))
                     conn.commit()
-            # Auto-Correção para Avaliações
             columns_appt = [c['name'] for c in inspector.get_columns('appointments')]
             if 'status' not in columns_appt:
                 with db.engine.connect() as conn:
                     conn.execute(db.text("ALTER TABLE appointments ADD COLUMN status VARCHAR(20) DEFAULT 'pendente';"))
                     conn.execute(db.text("ALTER TABLE appointments ADD COLUMN rating INTEGER;"))
                     conn.commit()
-            # Auto-Correção para Fidelidade
             columns_est = [c['name'] for c in inspector.get_columns('establishments')]
             if 'loyalty_points_goal' not in columns_est:
                 with db.engine.connect() as conn:
@@ -261,50 +259,37 @@ try:
                     conn.commit()
             if not inspector.has_table("clients"):
                 Client.__table__.create(db.engine)
-                
-            # Auto-Correção para Categorias
             if not inspector.has_table("categories"):
                 Category.__table__.create(db.engine)
-                
             columns_srv = [c['name'] for c in inspector.get_columns('services')]
             if 'category_id' not in columns_srv:
                 with db.engine.connect() as conn:
                     conn.execute(db.text("ALTER TABLE services ADD COLUMN category_id INTEGER;"))
                     conn.commit()
-                    
-            # Auto-Correção para Promoções e Combos
             if 'is_combo' not in columns_srv:
                 with db.engine.connect() as conn:
                     conn.execute(db.text("ALTER TABLE services ADD COLUMN is_combo BOOLEAN DEFAULT FALSE;"))
                     conn.execute(db.text("ALTER TABLE services ADD COLUMN original_price FLOAT;"))
                     conn.commit()
-                    
-            # Auto-Correção para o Plano Gestão e Profissionais
             columns_est = [c['name'] for c in inspector.get_columns('establishments')]
             if 'plan_type' not in columns_est:
                 with db.engine.connect() as conn:
                     conn.execute(db.text("ALTER TABLE establishments ADD COLUMN plan_type VARCHAR(20) DEFAULT 'solo';"))
                     conn.commit()
-
             if not inspector.has_table("professionals"):
                 Professional.__table__.create(db.engine)
-
             columns_appt = [c['name'] for c in inspector.get_columns('appointments')]
             if 'professional_id' not in columns_appt:
                 with db.engine.connect() as conn:
                     conn.execute(db.text("ALTER TABLE appointments ADD COLUMN professional_id INTEGER;"))
                     conn.execute(db.text("ALTER TABLE appointments ADD COLUMN commission_value FLOAT DEFAULT 0.0;"))
                     conn.commit()
-                
-                # Migração Inteligente: Cria a categoria "Geral" para salões antigos e move os serviços
                 for est in Establishment.query.all():
                     geral = Category.query.filter_by(establishment_id=est.id, name='Geral').first()
                     if not geral:
                         geral = Category(name='Geral', establishment_id=est.id)
                         db.session.add(geral)
-                        db.session.commit() # Salva para gerar o ID
-                    
-                    # Coloca todos os serviços órfãos nesta nova categoria
+                        db.session.commit()
                     Service.query.filter_by(establishment_id=est.id, category_id=None).update({'category_id': geral.id})
                 db.session.commit()
 except Exception as e:
@@ -320,14 +305,26 @@ def payment():
     if current_user.establishment.is_active: 
         return redirect(url_for('admin_dashboard'))
     
+    plan_chosen = request.args.get('plan')
+    if plan_chosen in ['solo', 'gestao']:
+        current_user.establishment.plan_type = plan_chosen
+        db.session.commit()
+    
     try:
-        # Corrige erro do Render passar http:// para a Stripe
         success_url = request.host_url.replace('http://', 'https://') + 'pagamento/sucesso'
         cancel_url = request.host_url.replace('http://', 'https://') + 'pagamento/cancelado'
 
+        if current_user.establishment.plan_type == 'gestao':
+            price_id = STRIPE_PRICE_GESTAO
+        else:
+            price_id = STRIPE_PRICE_SOLO
+
+        if not price_id:
+            return "Erro: Os IDs da Stripe não foram configurados no Render.", 500
+
         session = stripe.checkout.Session.create(
             payment_method_types=['card'], 
-            line_items=[{'price': STRIPE_PRICE_ID, 'quantity': 1}],
+            line_items=[{'price': price_id, 'quantity': 1}],
             mode='subscription', 
             allow_promotion_codes=True, 
             success_url=success_url,
@@ -336,8 +333,7 @@ def payment():
         )
         return redirect(session.url, code=303)
     except Exception as e:
-        # FIM DO BURACO NEGRO: Mostra o erro real na tela ao invés de jogar pro login
-        return f"<div style='font-family:sans-serif; padding:40px; text-align:center;'> <h2 style='color:red;'>Erro na comunicação com a Stripe</h2> <p>Por favor, verifique se as chaves <b>STRIPE_API_KEY</b> e <b>STRIPE_PRICE_ID</b> estão corretas no Render.</p> <p style='background:#f4f4f4; padding:15px; border-radius:8px;'>Detalhe do Erro: <b>{str(e)}</b></p> <a href='/logout'>Sair</a> </div>", 500
+        return f"<div style='font-family:sans-serif; padding:40px; text-align:center;'> <h2 style='color:red;'>Erro na comunicação com a Stripe</h2> <p style='background:#f4f4f4; padding:15px; border-radius:8px;'>Detalhe do Erro: <b>{str(e)}</b></p> <a href='/logout'>Sair</a> </div>", 500
 
 @app.route('/pagamento/sucesso')
 @login_required
@@ -355,7 +351,7 @@ def index(): return render_template('index.html')
 
 @app.route('/planos')
 def planos():
-    if current_user.is_authenticated:
+    if current_user.is_authenticated and current_user.establishment.has_access:
         return redirect(url_for('admin_dashboard'))
     return render_template('planos.html')
 
@@ -366,6 +362,9 @@ def register_business():
         username = request.form.get('username')
         is_master = (username == 'admin_demo') 
         
+        # Correção 2: Puxar o plano com blindagem extra (do form ou da url)
+        plan_chosen = request.form.get('plan_type') or request.args.get('plan') or 'solo'
+        
         est = Establishment(
             name=request.form.get('business_name'), 
             url_prefix=request.form.get('url_prefix').lower().strip(), 
@@ -373,7 +372,8 @@ def register_business():
             contact_email=request.form.get('contact_email'), 
             is_active=is_master, 
             capacity=1,
-            trial_ends=get_now_brazil() + timedelta(days=7) # +7 DIAS DE TESTE
+            plan_type=plan_chosen,
+            trial_ends=get_now_brazil() + timedelta(days=7)
         )
         db.session.add(est); db.session.commit()
         for i in range(7): db.session.add(DaySchedule(establishment_id=est.id, day_index=i, is_active=(i < 5), work_start=time(9,0), work_end=time(18,0)))
@@ -382,7 +382,6 @@ def register_business():
         db.session.add(adm); db.session.commit()
         
         login_user(adm)
-        # Login vai direto para o painel para iniciar os 7 dias
         return redirect(url_for('admin_dashboard'))
         
     return render_template('register.html')
@@ -402,7 +401,6 @@ def schedule_service(url_prefix, service_id):
     main_service = Service.query.get_or_404(service_id)
     other_services = Service.query.filter(Service.establishment_id == est.id, Service.id != service_id).order_by(Service.name).all()
     
-    # NOVO: Puxar a equipa apenas se for do Plano Gestão
     professionals = []
     if est.plan_type == 'gestao':
         professionals = Professional.query.filter_by(establishment_id=est.id).all()
@@ -444,7 +442,6 @@ def create_appointment(url_prefix):
     if start_dt < now:
         flash('Horário inválido.', 'danger'); return redirect(url_for('establishment_services', url_prefix=url_prefix))
 
-    # --- NOVA LÓGICA DE PROFISSIONAIS E COMISSÕES ---
     prof_id = request.form.get('professional_id')
     professional_id = None
     commission_value = 0.0
@@ -455,7 +452,6 @@ def create_appointment(url_prefix):
             professional_id = prof.id
             commission_value = total_price * (prof.commission_rate / 100.0)
 
-    # Checagem de disponibilidade considerando a agenda EXATA daquele profissional
     appts_on_day = Appointment.query.filter_by(appointment_date=d, establishment_id=est.id).filter(Appointment.status == 'pendente')
     if professional_id:
         appts_on_day = appts_on_day.filter_by(professional_id=professional_id)
@@ -468,13 +464,11 @@ def create_appointment(url_prefix):
         if max(start_dt, s) < min(end_dt, e):
             overlap_count += 1
             
-    # Se escolheu um profissional, a capacidade dele é 1. Se foi "Qualquer um", usa a do salão.
     current_capacity = 1 if professional_id else est.capacity
     if overlap_count >= current_capacity:
         flash('Ops! Esse horário acabou de ser ocupado. Tente outro.', 'danger')
         return redirect(url_for('schedule_service', url_prefix=url_prefix, service_id=selected_services[0].id))
 
-    # Salva o agendamento com os dados da comissão prontos!
     appt = Appointment(client_name=request.form.get('client_name'), client_phone=client_phone, client_email=request.form.get('client_email'), appointment_date=d, appointment_time=t, establishment_id=est.id, total_duration=total_dur, total_price=total_price, professional_id=professional_id, commission_value=commission_value)
     for s in selected_services: appt.services.append(s)
     
@@ -493,7 +487,7 @@ def login():
         adm = Admin.query.filter_by(username=request.form.get('username')).first()
         if adm and adm.check_password(request.form.get('password')):
             login_user(adm)
-            if not adm.establishment.has_access: return redirect(url_for('payment'))
+            if not adm.establishment.has_access: return redirect(url_for('planos'))
             return redirect(url_for('admin_dashboard'))
         flash('Login inválido.', 'danger')
     return render_template('login.html')
@@ -505,8 +499,7 @@ def logout(): logout_user(); return redirect(url_for('login'))
 @app.route('/admin')
 @login_required
 def admin_dashboard():
-    # HARD TRIAL (Paywall): Se acabou o teste e nao tem plano, força o checkout
-    if not current_user.establishment.has_access: return redirect(url_for('payment'))
+    if not current_user.establishment.has_access: return redirect(url_for('planos'))
     est = current_user.establishment
     today = get_now_brazil().date()
     appts = Appointment.query.filter(Appointment.establishment_id == est.id, Appointment.appointment_date >= today, Appointment.status.notin_(['arquivado', 'falta', 'cancelado'])).order_by(Appointment.appointment_date, Appointment.appointment_time).all()
@@ -514,14 +507,14 @@ def admin_dashboard():
     categories = Category.query.filter_by(establishment_id=est.id).all()
     schedules = DaySchedule.query.filter_by(establishment_id=est.id).order_by(DaySchedule.day_index).all()
     blacklists = Blacklist.query.filter_by(establishment_id=est.id).all()
-    professionals = Professional.query.filter_by(establishment_id=est.id).all() # NOVA LINHA
+    professionals = Professional.query.filter_by(establishment_id=est.id).all() 
     today_count = Appointment.query.filter(Appointment.establishment_id == est.id, Appointment.appointment_date == today).count()
     return render_template('admin.html', appointments=appts, services=services, categories=categories, establishment=est, schedules=schedules, blacklists=blacklists, professionals=professionals, today_count=today_count)
 
 @app.route('/admin/historico')
 @login_required
 def historico_atendimentos():
-    if not current_user.establishment.has_access: return redirect(url_for('payment'))
+    if not current_user.establishment.has_access: return redirect(url_for('planos'))
     est = current_user.establishment
     
     start_date_str = request.args.get('start_date')
@@ -529,7 +522,6 @@ def historico_atendimentos():
     
     query = Appointment.query.filter_by(establishment_id=est.id)
     
-    # Filtro por datas
     if start_date_str:
         try:
             start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
@@ -541,10 +533,7 @@ def historico_atendimentos():
             query = query.filter(Appointment.appointment_date <= end_date)
         except: pass
         
-    # Organiza do mais recente para o mais antigo
     appts = query.order_by(Appointment.appointment_date.desc(), Appointment.appointment_time.desc()).all()
-    
-    # Calcula os totais do período filtrado
     total_revenue = sum(a.total_price for a in appts if a.status in ['concluido', 'arquivado'])
     total_appts = len(appts)
     
@@ -553,10 +542,9 @@ def historico_atendimentos():
 @app.route('/admin/relatorios')
 @login_required
 def relatorios_gerenciais():
-    if not current_user.establishment.has_access: return redirect(url_for('payment'))
+    if not current_user.establishment.has_access: return redirect(url_for('planos'))
     est = current_user.establishment
     
-    # Filtro de datas (Por padrão, mostra os últimos 30 dias)
     hoje = get_now_brazil().date()
     start_date_str = request.args.get('start_date', (hoje - timedelta(days=30)).strftime('%Y-%m-%d'))
     end_date_str = request.args.get('end_date', hoje.strftime('%Y-%m-%d'))
@@ -573,7 +561,6 @@ def relatorios_gerenciais():
         Appointment.appointment_date <= end_date
     ).all()
 
-    # --- 1. KPIs Principais ---
     concluidos = [a for a in appts if a.status in ['concluido', 'arquivado']]
     faltas = [a for a in appts if a.status == 'falta']
     
@@ -588,39 +575,39 @@ def relatorios_gerenciais():
     avaliacao_media = sum(avaliacoes) / len(avaliacoes) if avaliacoes else 0.0
     qtd_avaliacoes = len(avaliacoes)
 
-    # --- NOVO: 5. Cálculo de Comissões e Lucro Líquido (Plano Gestão) ---
     total_comissoes = 0
     comissoes_por_profissional = {}
     
     if est.plan_type == 'gestao':
         for a in concluidos:
-            if a.professional_id and a.commission_value > 0:
-                total_comissoes += a.commission_value
-                prof_name = a.professional.name if a.professional else "Desconhecido"
-                if prof_name not in comissoes_por_profissional:
-                    comissoes_por_profissional[prof_name] = 0
-                comissoes_por_profissional[prof_name] += a.commission_value
+            if a.professional_id:
+                # Correção 3: Auto-calcula comissões retroativas de atendimentos já feitos
+                if (a.commission_value is None or a.commission_value == 0.0) and a.professional and a.professional.commission_rate > 0:
+                    a.commission_value = a.total_price * (a.professional.commission_rate / 100.0)
+                    db.session.commit()
+                
+                if a.commission_value > 0:
+                    total_comissoes += a.commission_value
+                    prof_name = a.professional.name if a.professional else "Desconhecido"
+                    if prof_name not in comissoes_por_profissional:
+                        comissoes_por_profissional[prof_name] = 0
+                    comissoes_por_profissional[prof_name] += a.commission_value
                 
     receita_liquida = faturamento_total - total_comissoes
 
-    # --- 2. Agrupamento Dinâmico para o Gráfico de Faturamento ---
     dias_diferenca = (end_date - start_date).days
     faturamento_tempo = {}
     
     for a in concluidos:
         data = a.appointment_date
-        # Regra do Agrupamento
-        if dias_diferenca <= 31: chave = data.strftime('%d/%m') # Dia a dia
-        elif dias_diferenca <= 90: chave = f"Semana {data.isocalendar()[1]}" # Por Semana
-        else: chave = data.strftime('%b/%Y') # Por Mês/Ano
-        
+        if dias_diferenca <= 31: chave = data.strftime('%d/%m') 
+        elif dias_diferenca <= 90: chave = f"Semana {data.isocalendar()[1]}" 
+        else: chave = data.strftime('%b/%Y') 
         faturamento_tempo[chave] = faturamento_tempo.get(chave, 0) + a.total_price
 
-    # Organiza os dados para o Chart.js
     labels_tempo = list(faturamento_tempo.keys())
     dados_tempo = list(faturamento_tempo.values())
 
-    # --- 3. Ranking de Serviços (Curva ABC) ---
     ranking_servicos = {}
     for a in concluidos:
         for s in a.services:
@@ -629,12 +616,10 @@ def relatorios_gerenciais():
             ranking_servicos[s.name]['qtd'] += 1
             ranking_servicos[s.name]['receita'] += s.price
 
-    # Ordena pelos que deram mais receita (Top 5)
     servicos_top = sorted(ranking_servicos.items(), key=lambda x: x[1]['receita'], reverse=True)[:5]
     labels_servicos = [s[0] for s in servicos_top]
     dados_servicos = [s[1]['receita'] for s in servicos_top]
 
-    # --- 4. Saúde da Agenda (Retenção vs Furos) ---
     saude_labels = ['Concluídos', 'Cancelados', 'Faltas']
     saude_dados = [
         len(concluidos),
@@ -657,7 +642,7 @@ def relatorios_gerenciais():
 @app.route('/admin/configurar', methods=['POST'])
 @login_required
 def update_settings():
-    if not current_user.establishment.has_access: return redirect(url_for('payment'))
+    if not current_user.establishment.has_access: return redirect(url_for('planos'))
     est = current_user.establishment
     ft = request.form.get('form_type')
     if ft == 'contact':
@@ -713,7 +698,6 @@ def delete_category(id):
         if c.id == geral.id:
             flash('A categoria Geral não pode ser excluída.', 'danger')
         else:
-            # Salva os serviços órfãos movendo-os para a categoria Geral
             Service.query.filter_by(category_id=c.id).update({'category_id': geral.id})
             db.session.delete(c); db.session.commit()
             flash('Categoria excluída. Os serviços foram movidos para a categoria Geral.', 'success')
@@ -726,15 +710,11 @@ def add_service():
     price = request.form.get('price')
     duration = request.form.get('duration')
     category_id = request.form.get('category_id')
-    
-    # Novos campos de Promoção
     is_combo = True if request.form.get('is_combo') == 'on' else False
     original_price = request.form.get('original_price')
     
     if name and price and duration and category_id:
         s = Service(name=name, price=float(price.replace(',', '.')), duration=int(duration), category_id=category_id, establishment_id=current_user.establishment_id)
-        
-        # Lógica da Promoção
         s.is_combo = is_combo
         if is_combo and original_price:
             s.original_price = float(original_price.replace(',', '.'))
@@ -761,24 +741,25 @@ def delete_appointment(id):
 @app.route('/admin/agendamentos/concluir/<int:id>', methods=['POST'])
 @login_required
 def complete_appointment(id):
-    if not current_user.establishment.has_access: return redirect(url_for('payment'))
+    if not current_user.establishment.has_access: return redirect(url_for('planos'))
     a = Appointment.query.get_or_404(id)
     if a.establishment_id != current_user.establishment_id: return "Erro", 403
     
     est = a.establishment
     
-    # NOVO: Define quem atendeu e calcula a comissão exata neste momento
+    # Correção 3: Força o registo e cálculo da comissão de quem atendeu
     if est.plan_type == 'gestao':
         prof_id = request.form.get('professional_id')
         if prof_id:
-            prof = Professional.query.get(int(prof_id))
-            if prof and prof.establishment_id == est.id:
-                a.professional_id = prof.id
+            a.professional_id = int(prof_id)
+            
+        if a.professional_id:
+            prof = Professional.query.get(a.professional_id)
+            if prof:
                 a.commission_value = a.total_price * (prof.commission_rate / 100.0)
     
     a.status = 'concluido'
     
-    # --- SISTEMA DE FIDELIDADE ---
     msg_fidelidade = ""
     if est.loyalty_points_goal and est.loyalty_points_goal > 0:
         cliente = Client.query.filter_by(establishment_id=est.id, phone=a.client_phone).first()
@@ -796,12 +777,13 @@ def complete_appointment(id):
             
     db.session.commit()
     
+    # Correção 4: E-mail blindado 
     link_av = request.host_url.replace('http://', 'https://') + f'avaliar/{a.id}'
     subj = f"Como foi o atendimento no(a) {est.name}?"
     body = f"Olá {a.client_name}!\n\nO seu atendimento foi concluído. Queremos saber a sua opinião!\n\nÉ super rápido: você só precisa clicar no link abaixo e dar uma nota de 1 a 5 estrelas.\n\n{link_av}{msg_fidelidade}\n\nObrigado!"
     send_email(subj, a.client_email, body)
     
-    flash('Atendimento concluído! Ponto contabilizado.', 'success')
+    flash('Atendimento concluído e notificação enviada!', 'success')
     return redirect(url_for('admin_dashboard'))
 
 @app.route('/admin/agendamentos/arquivar/<int:id>', methods=['POST'])
@@ -856,7 +838,7 @@ def rate_appointment(id):
 @app.route('/admin/agendamentos/falta/<int:id>', methods=['POST'])
 @login_required
 def mark_no_show(id):
-    if not current_user.establishment.has_access: return redirect(url_for('payment'))
+    if not current_user.establishment.has_access: return redirect(url_for('planos'))
     a = Appointment.query.get_or_404(id)
     if a.establishment_id != current_user.establishment_id: return "Erro", 403
     if not Blacklist.query.filter_by(establishment_id=a.establishment_id, client_phone=a.client_phone).first():
@@ -870,7 +852,7 @@ def mark_no_show(id):
 @app.route('/admin/blacklist/add', methods=['POST'])
 @login_required
 def add_blacklist():
-    if not current_user.establishment.has_access: return redirect(url_for('payment'))
+    if not current_user.establishment.has_access: return redirect(url_for('planos'))
     phone = request.form.get('phone', '').strip()
     if phone:
         exists = Blacklist.query.filter_by(establishment_id=current_user.establishment_id, client_phone=phone).first()
@@ -901,8 +883,6 @@ def add_professional():
     if name and commission:
         p = Professional(name=name, commission_rate=float(commission.replace(',', '.')), establishment_id=current_user.establishment_id)
         db.session.add(p); db.session.commit()
-        
-        # A Mágica da Capacidade: O número de cadeiras é igual ao número de barbeiros
         est = current_user.establishment
         count = Professional.query.filter_by(establishment_id=est.id).count()
         est.capacity = max(1, count)
@@ -916,15 +896,12 @@ def delete_professional(id):
     p = Professional.query.get_or_404(id)
     if p.establishment_id == current_user.establishment_id:
         db.session.delete(p); db.session.commit()
-        
-        # Recalcula a capacidade ao demitir
         est = current_user.establishment
         count = Professional.query.filter_by(establishment_id=est.id).count()
         est.capacity = max(1, count)
         db.session.commit()
     return redirect(url_for('admin_dashboard'))
 
-# --- MODO DESENVOLVEDOR (Apenas ID 1) ---
 @app.route('/admin/ativar-gestao')
 @login_required
 def ativar_gestao():
@@ -948,7 +925,7 @@ def get_available_times():
     est_id = request.args.get('est_id')
     d_str = request.args.get('date')
     dur_str = request.args.get('duration')
-    prof_id = request.args.get('prof_id') # NOVO: Lê o profissional escolhido
+    prof_id = request.args.get('prof_id') 
     
     if not est_id or not d_str or not dur_str: return jsonify([])
     try: 
@@ -960,7 +937,6 @@ def get_available_times():
     day_sched = DaySchedule.query.filter_by(establishment_id=est.id, day_index=sel_date.weekday()).first()
     if not day_sched or not day_sched.is_active: return jsonify([])
     
-    # NOVO: Filtra os agendamentos já existentes apenas do profissional selecionado
     query = Appointment.query.filter_by(appointment_date=sel_date, establishment_id=est.id).filter(Appointment.status == 'pendente')
     if prof_id and prof_id != 'any':
         query = query.filter_by(professional_id=int(prof_id))
@@ -971,7 +947,6 @@ def get_available_times():
     limit = datetime.combine(sel_date, day_sched.work_end)
     now = get_now_brazil()
     
-    # Se quer um profissional específico, a capacidade de choque é 1 pessoa.
     current_capacity = 1 if (prof_id and prof_id != 'any') else est.capacity
     
     while curr + timedelta(minutes=total_dur) <= limit:
