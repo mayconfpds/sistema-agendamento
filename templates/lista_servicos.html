@@ -27,22 +27,43 @@
                         <span class="badge bg-light text-secondary border ms-2 rounded-pill" style="font-size: 0.8rem;">{{ c.services|length }}</span>
                     </button>
                 </h2>
+                
                 <div id="cat-{{ c.id }}" class="accordion-collapse collapse {% if loop.first %}show{% endif %}" aria-labelledby="heading-{{ c.id }}" data-bs-parent="#accordionCategorias">
                     <div class="accordion-body bg-light p-3 p-md-4">
                         
                         <div class="d-flex flex-column gap-3">
                             {% for s in c.services %}
-                            <div class="card shadow-sm border-0 w-100 rounded-3">
+                            <div class="card shadow-sm w-100 rounded-3 overflow-hidden {% if s.is_combo %}border-warning border-2{% else %}border-0{% endif %}">
                                 <div class="card-body d-flex flex-column flex-md-row justify-content-between align-items-center gap-3 p-3">
+                                    
                                     <div class="text-center text-md-start">
-                                        <h5 class="fw-bold text-dark mb-1">{{ s.name }}</h5>
+                                        <h5 class="fw-bold text-dark mb-1">
+                                            {{ s.name }}
+                                            {% if s.is_combo %}
+                                                <span class="badge bg-warning text-dark ms-1 align-middle shadow-sm" style="font-size: 0.65rem;"><i class="bi bi-stars"></i> PROMO</span>
+                                            {% endif %}
+                                        </h5>
                                         <div class="text-muted small"><i class="bi bi-clock"></i> {{ s.duration }} min</div>
                                     </div>
+                                    
                                     <div class="d-flex align-items-center gap-3">
-                                        <span class="text-success fw-bold fs-5 mb-0">R$ {{ "%.2f"|format(s.price) }}</span>
+                                        <div class="text-end">
+                                            {% if s.is_combo and s.original_price %}
+                                                <div class="text-muted text-decoration-line-through" style="font-size: 0.8rem; margin-bottom: -4px;">R$ {{ "%.2f"|format(s.original_price) }}</div>
+                                            {% endif %}
+                                            <span class="text-success fw-bold fs-5 mb-0">R$ {{ "%.2f"|format(s.price) }}</span>
+                                        </div>
                                         <a href="{{ url_for('schedule_service', url_prefix=establishment.url_prefix, service_id=s.id) }}" class="btn btn-primary fw-bold rounded-pill px-4">Agendar</a>
                                     </div>
+
                                 </div>
+                                
+                                {% if s.is_combo and s.original_price and s.original_price > s.price %}
+                                <div class="card-footer bg-warning-subtle border-0 text-center py-2">
+                                    <small class="text-dark fw-bold"><i class="bi bi-piggy-bank-fill text-success"></i> Excelente escolha! Você economiza R$ {{ "%.2f"|format(s.original_price - s.price) }} neste pacote.</small>
+                                </div>
+                                {% endif %}
+
                             </div>
                             {% endfor %}
                         </div>
