@@ -2,6 +2,15 @@
 {% block title %}Painel Admin{% endblock %}
 {% block content %}
 <div class="container py-4">
+{% if current_user.id == 1 %}
+    <div class="alert alert-dark border-dark shadow-sm d-flex justify-content-between align-items-center mb-4 py-2">
+        <span class="text-light small"><i class="bi bi-terminal text-warning"></i> <strong>Modo Admin:</strong> Controle de Planos</span>
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('desativar_gestao') }}" class="btn btn-sm btn-light fw-bold py-0" style="font-size: 0.8rem;">Forçar Solo</a>
+            <a href="{{ url_for('ativar_gestao') }}" class="btn btn-sm btn-warning fw-bold py-0" style="font-size: 0.8rem;">Forçar Gestão</a>
+        </div>
+    </div>
+    {% endif %}
 
     {% if not current_user.establishment.is_active and current_user.establishment.trial_ends %}
     <div class="alert alert-warning border-warning shadow-sm d-flex flex-column flex-md-row justify-content-between align-items-center mb-4 rounded-3">

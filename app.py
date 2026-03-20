@@ -918,22 +918,23 @@ def delete_professional(id):
         db.session.commit()
     return redirect(url_for('admin_dashboard'))
 
-# ROTA SECRETA DE TESTE (Removeremos quando lançar oficialmente)
+# --- MODO DESENVOLVEDOR (Apenas ID 1) ---
 @app.route('/admin/ativar-gestao')
 @login_required
 def ativar_gestao():
-    current_user.establishment.plan_type = 'gestao'
-    db.session.commit()
-    flash('Plano Gestão ativado para testes!', 'success')
+    if current_user.id == 1:
+        current_user.establishment.plan_type = 'gestao'
+        db.session.commit()
+        flash('Modo DEV: Plano Gestão ativado!', 'success')
     return redirect(url_for('admin_dashboard'))
 
-# ROTA SECRETA PARA VOLTAR AO PLANO SOLO
 @app.route('/admin/desativar-gestao')
 @login_required
 def desativar_gestao():
-    current_user.establishment.plan_type = 'solo'
-    db.session.commit()
-    flash('Plano Solo reativado para testes!', 'info')
+    if current_user.id == 1:
+        current_user.establishment.plan_type = 'solo'
+        db.session.commit()
+        flash('Modo DEV: Plano Solo ativado!', 'info')
     return redirect(url_for('admin_dashboard'))
 
 @app.route('/api/horarios_disponiveis')
