@@ -78,6 +78,7 @@ class Establishment(db.Model):
     logo_filename = db.Column(db.String(100), nullable=True)
     is_active = db.Column(db.Boolean, default=False)
     capacity = db.Column(db.Integer, default=1, nullable=False)
+    plan_type = db.Column(db.String(20), default='solo') # Novo: 'solo' ou 'gestao'
     
     trial_ends = db.Column(db.DateTime, nullable=True)
     
@@ -141,6 +142,15 @@ class Category(db.Model):
     establishment_id = db.Column(db.Integer, db.ForeignKey('establishments.id'), nullable=False)
     services = db.relationship('Service', backref='category', lazy=True)
 
+class Professional(db.Model):
+    __tablename__ = 'professionals'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    commission_rate = db.Column(db.Float, default=0.0) # Ex: 50.0 para 50%
+    is_active = db.Column(db.Boolean, default=True)
+    establishment_id = db.Column(db.Integer, db.ForeignKey('establishments.id'), nullable=False)
+    appointments = db.relationship('Appointment', backref='professional', lazy=True)
+
 class Service(db.Model):
     __tablename__ = 'services'
     id = db.Column(db.Integer, primary_key=True)
@@ -178,6 +188,8 @@ class Appointment(db.Model):
     total_price = db.Column(db.Float, default=0.0, nullable=False)
     establishment_id = db.Column(db.Integer, db.ForeignKey('establishments.id'), nullable=False)
     status = db.Column(db.String(20), default='pendente')
+    professional_id = db.Column(db.Integer, db.ForeignKey('professionals.id'), nullable=True) # Novo
+    commission_value = db.Column(db.Float, default=0.0) # Novo
     rating = db.Column(db.Integer, nullable=True)
     services = db.relationship('Service', secondary=appointment_services, lazy='subquery', backref=db.backref('appointments', lazy=True))
 
@@ -265,6 +277,23 @@ try:
                 with db.engine.connect() as conn:
                     conn.execute(db.text("ALTER TABLE services ADD COLUMN is_combo BOOLEAN DEFAULT FALSE;"))
                     conn.execute(db.text("ALTER TABLE services ADD COLUMN original_price FLOAT;"))
+                    conn.commit()
+                    
+            # Auto-Correção para o Plano Gestão e Profissionais
+            columns_est = [c['name'] for c in inspector.get_columns('establishments')]
+            if 'plan_type' not in columns_est:
+                with db.engine.connect() as conn:
+                    conn.execute(db.text("ALTER TABLE establishments ADD COLUMN plan_type VARCHAR(20) DEFAULT 'solo';"))
+                    conn.commit()
+
+            if not inspector.has_table("professionals"):
+                Professional.__table__.create(db.engine)
+
+            columns_appt = [c['name'] for c in inspector.get_columns('appointments')]
+            if 'professional_id' not in columns_appt:
+                with db.engine.connect() as conn:
+                    conn.execute(db.text("ALTER TABLE appointments ADD COLUMN professional_id INTEGER;"))
+                    conn.execute(db.text("ALTER TABLE appointments ADD COLUMN commission_value FLOAT DEFAULT 0.0;"))
                     conn.commit()
                 
                 # Migração Inteligente: Cria a categoria "Geral" para salões antigos e move os serviços
