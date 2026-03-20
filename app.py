@@ -149,6 +149,8 @@ class Service(db.Model):
     price = db.Column(db.Float, nullable=False, default=0.0)
     establishment_id = db.Column(db.Integer, db.ForeignKey('establishments.id'), nullable=False)
     category_id = db.Column(db.Integer, db.ForeignKey('categories.id'), nullable=True) # Nova linha!
+    is_combo = db.Column(db.Boolean, default=False)
+    original_price = db.Column(db.Float, nullable=True)
 
 class Client(db.Model):
     __tablename__ = 'clients'
@@ -256,6 +258,13 @@ try:
             if 'category_id' not in columns_srv:
                 with db.engine.connect() as conn:
                     conn.execute(db.text("ALTER TABLE services ADD COLUMN category_id INTEGER;"))
+                    conn.commit()
+                    
+            # Auto-Correção para Promoções e Combos
+            if 'is_combo' not in columns_srv:
+                with db.engine.connect() as conn:
+                    conn.execute(db.text("ALTER TABLE services ADD COLUMN is_combo BOOLEAN DEFAULT 0;"))
+                    conn.execute(db.text("ALTER TABLE services ADD COLUMN original_price FLOAT;"))
                     conn.commit()
                 
                 # Migração Inteligente: Cria a categoria "Geral" para salões antigos e move os serviços
@@ -637,13 +646,23 @@ def delete_category(id):
 def add_service():
     name = request.form.get('name')
     price = request.form.get('price')
-    duration = request.form.get('duration') # <-- O seu campo de volta!
+    duration = request.form.get('duration')
     category_id = request.form.get('category_id')
+    
+    # Novos campos de Promoção
+    is_combo = True if request.form.get('is_combo') == 'on' else False
+    original_price = request.form.get('original_price')
     
     if name and price and duration and category_id:
         s = Service(name=name, price=float(price.replace(',', '.')), duration=int(duration), category_id=category_id, establishment_id=current_user.establishment_id)
+        
+        # Lógica da Promoção
+        s.is_combo = is_combo
+        if is_combo and original_price:
+            s.original_price = float(original_price.replace(',', '.'))
+            
         db.session.add(s); db.session.commit()
-        flash('Serviço adicionado!', 'success')
+        flash('Serviço adicionado com sucesso!', 'success')
     return redirect(url_for('admin_dashboard'))
 
 @app.route('/admin/servicos/excluir/<int:id>', methods=['POST'])

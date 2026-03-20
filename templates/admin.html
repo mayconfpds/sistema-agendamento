@@ -143,28 +143,52 @@
             <div class="card shadow-sm border-0 mb-4">
                 <div class="card-header bg-white fw-bold"><i class="bi bi-scissors text-primary"></i> Serviços Oferecidos</div>
                 <div class="card-body">
-                    <form action="{{ url_for('add_service') }}" method="POST" class="mb-3 row g-1">
-                        <div class="col-12 mb-1">
-                            <select name="category_id" class="form-select form-select-sm" required>
-                                <option value="" disabled selected>Escolha a Categoria...</option>
-                                {% for c in categories %}
-                                    <option value="{{ c.id }}">{{ c.name }}</option>
-                                {% endfor %}
-                            </select>
+                    <form action="{{ url_for('add_service') }}" method="POST" class="mb-3 border-bottom pb-3">
+                        <div class="row g-1">
+                            <div class="col-12 mb-1">
+                                <select name="category_id" class="form-select form-select-sm" required>
+                                    <option value="" disabled selected>Escolha a Categoria...</option>
+                                    {% for c in categories %}
+                                        <option value="{{ c.id }}">{{ c.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-12 input-group input-group-sm">
+                                <input type="text" name="name" class="form-control" placeholder="Nome" required>
+                                <input type="number" name="duration" class="form-control" placeholder="Min" style="max-width: 70px;" required>
+                                <input type="text" name="price" class="form-control" placeholder="R$" style="max-width: 80px;" required>
+                                <button class="btn btn-success"><i class="bi bi-plus"></i></button>
+                            </div>
                         </div>
-                        <div class="col-12 input-group input-group-sm">
-                            <input type="text" name="name" class="form-control" placeholder="Nome" required>
-                            <input type="number" name="duration" class="form-control" placeholder="Min" style="max-width: 70px;" required>
-                            <input type="text" name="price" class="form-control" placeholder="R$" style="max-width: 80px;" required>
-                            <button class="btn btn-success"><i class="bi bi-plus"></i></button>
+                        
+                        <div class="mt-2 bg-light p-2 rounded border border-light">
+                            <div class="form-check form-switch small text-primary fw-bold mb-0">
+                                <input class="form-check-input" type="checkbox" role="switch" id="isCombo" name="is_combo" onchange="document.getElementById('originalPriceDiv').classList.toggle('d-none')">
+                                <label class="form-check-label" for="isCombo"><i class="bi bi-stars"></i> É um Pacote / Promoção?</label>
+                            </div>
+                            <div class="input-group input-group-sm mt-2 d-none" id="originalPriceDiv">
+                                <span class="input-group-text bg-white text-muted border-end-0">Preço Antigo: R$</span>
+                                <input type="text" name="original_price" class="form-control border-start-0" placeholder="Ex: 90,00">
+                            </div>
                         </div>
                     </form>
+                    
                     <ul class="list-group list-group-flush small" style="max-height: 400px; overflow-y: auto;">
                         {% for s in services %}
                         <li class="list-group-item d-flex justify-content-between align-items-center px-0">
                             <div>
-                                <span class="badge bg-secondary mb-1" style="font-size: 0.65rem;">{{ s.category.name if s.category else 'Geral' }}</span><br>
+                                <span class="badge bg-secondary mb-1" style="font-size: 0.65rem;">{{ s.category.name if s.category else 'Geral' }}</span>
+                                
+                                {% if s.is_combo %}
+                                    <span class="badge bg-warning text-dark mb-1 ms-1 shadow-sm" style="font-size: 0.65rem;"><i class="bi bi-stars"></i> Promoção</span>
+                                {% endif %}
+                                <br>
+                                
                                 <strong>{{ s.name }}</strong> ({{ s.duration }}m)<br>
+                                
+                                {% if s.is_combo and s.original_price %}
+                                    <span class="text-muted text-decoration-line-through small me-1">R$ {{ "%.2f"|format(s.original_price) }}</span>
+                                {% endif %}
                                 <span class="text-success fw-bold">R$ {{ "%.2f"|format(s.price) }}</span>
                             </div>
                             <form method="POST" action="{{ url_for('delete_service', id=s.id) }}" onsubmit="return confirm('Excluir serviço?');">
