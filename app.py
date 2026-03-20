@@ -349,6 +349,12 @@ def payment_success():
 @login_required
 def payment_cancel(): return redirect(url_for('logout'))
 
+@app.route('/planos')
+def planos():
+    if current_user.is_authenticated:
+        return redirect(url_for('admin_dashboard'))
+    return render_template('planos.html')
+
 # --- ROTAS PRINCIPAIS ---
 @app.route('/')
 def index(): return render_template('index.html')
