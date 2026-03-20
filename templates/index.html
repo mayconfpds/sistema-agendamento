@@ -5,14 +5,14 @@
     <section class="bg-gradient-to-b from-white to-gray-50 overflow-hidden pt-12 md:pt-16 pb-16 md:pb-20">
         <div class="max-w-7xl mx-auto px-6 lg:px-8 grid lg:grid-cols-2 gap-12 items-center">
             <div class="text-center lg:text-left">
-                <div class="inline-block bg-blue-100 text-blue-700 text-xs font-bold px-3 py-1 rounded-full mb-6">🚀 Teste Grátis por 7 Dias</div>
+                <div class="inline-block bg-blue-100 text-blue-700 text-xs font-bold px-3 py-1 rounded-full mb-6 shadow-sm">🚀 Teste Grátis durante 7 Dias</div>
                 
-                <h1 class="text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight text-gray-900 leading-tight mb-4 md:mb-6">Transforme agendamentos em <span class="text-blue-600">mais lucro</span>.</h1>
+                <h1 class="text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight text-gray-900 leading-tight mb-4 md:mb-6">Transforme a sua agenda e a sua equipa em <span class="text-blue-600">mais lucro</span>.</h1>
                 
                 <p class="text-base md:text-lg text-gray-600 mb-8 leading-relaxed max-w-lg mx-auto lg:mx-0">
-                    A ferramenta definitiva para barbearias, salões e clínicas.
-                    <br><span class="text-blue-600 font-bold text-xl md:text-2xl">Teste grátis por 7 dias</span>. Depois, escolha o plano ideal para si.
-                    <br>Tenha um link profissional, receba agendamentos 24h e elimine a troca de mensagens no WhatsApp.
+                    A plataforma definitiva que cresce consigo. Desde profissionais independentes a grandes salões e clínicas.
+                    <br><br><span class="text-blue-600 font-bold text-xl md:text-2xl">Teste grátis sem compromisso</span>.
+                    <br>Automatize marcações 24h, calcule comissões num clique e acabe de vez com a confusão no WhatsApp.
                 </p>
                 <div class="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
                     <a href="{{ url_for('planos') }}" class="bg-blue-600 text-white px-8 py-4 rounded-xl font-bold text-lg hover:bg-blue-700 transition shadow-lg transform hover:-translate-y-1">Começar Teste Grátis</a>
@@ -20,7 +20,7 @@
                 </div>
             </div>
             <div class="relative mt-12 lg:mt-0 perspective-1000">
-                <div class="relative bg-gray-900 rounded-2xl p-2 shadow-2xl transform rotate-y-12 transition hover:rotate-y-0 duration-700">
+                <div class="relative bg-gray-900 rounded-2xl p-2 shadow-2xl transform rotate-y-3 lg:rotate-y-12 transition hover:rotate-y-0 duration-700">
                     <div class="relative rounded-xl overflow-hidden bg-white aspect-video group">
                         <img src="{{ url_for('static', filename='painel.png') }}" class="w-full h-full object-cover" onerror="this.onerror=null; this.src='https://placehold.co/1280x800/E2E8F0/475569?text=Insira+painel.png+na+pasta+static';">
                     </div>
@@ -29,54 +29,122 @@
         </div>
     </section>
 
-    <section class="py-16 md:py-20 bg-white">
+    <section class="py-12 md:py-16 bg-white border-t border-gray-100">
         <div class="max-w-7xl mx-auto px-6 text-center">
-            <h2 class="text-2xl md:text-3xl font-bold text-gray-900 mb-10 md:mb-12">Ideal para profissionais exigentes</h2>
+            <h2 class="text-2xl md:text-3xl font-bold text-gray-900 mb-10 md:mb-12">Ideal para negócios que querem crescer:</h2>
             <div class="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-8">
-                <div class="p-6 rounded-2xl bg-gray-50 hover:bg-blue-50 transition border border-gray-100 hover:border-blue-200">
-                    <div class="text-3xl md:text-4xl mb-4">💈</div><h3 class="font-bold text-gray-900 text-sm md:text-base">Barbearias</h3>
+                <div class="p-6 rounded-2xl bg-gray-50 hover:bg-blue-50 transition border border-gray-100 hover:border-blue-200 shadow-sm">
+                    <div class="text-3xl md:text-4xl mb-4">💈</div>
+                    <h3 class="font-bold text-gray-900 text-sm md:text-base mb-1">Barbearias</h3>
+                    <p class="text-xs text-gray-500 hidden md:block">Gira os seus barbeiros e cadeiras sem stress.</p>
                 </div>
-                <div class="p-6 rounded-2xl bg-gray-50 hover:bg-pink-50 transition border border-gray-100 hover:border-pink-200">
-                    <div class="text-3xl md:text-4xl mb-4">💇‍♀️</div><h3 class="font-bold text-gray-900 text-sm md:text-base">Salões</h3>
+                <div class="p-6 rounded-2xl bg-gray-50 hover:bg-pink-50 transition border border-gray-100 hover:border-pink-200 shadow-sm">
+                    <div class="text-3xl md:text-4xl mb-4">💇‍♀️</div>
+                    <h3 class="font-bold text-gray-900 text-sm md:text-base mb-1">Salões</h3>
+                    <p class="text-xs text-gray-500 hidden md:block">Controle pacotes de serviços e comissões.</p>
                 </div>
-                <div class="p-6 rounded-2xl bg-gray-50 hover:bg-green-50 transition border border-gray-100 hover:border-green-200">
-                    <div class="text-3xl md:text-4xl mb-4">💆‍♂️</div><h3 class="font-bold text-gray-900 text-sm md:text-base">Clínicas</h3>
+                <div class="p-6 rounded-2xl bg-gray-50 hover:bg-green-50 transition border border-gray-100 hover:border-green-200 shadow-sm">
+                    <div class="text-3xl md:text-4xl mb-4">💆‍♂️</div>
+                    <h3 class="font-bold text-gray-900 text-sm md:text-base mb-1">Clínicas</h3>
+                    <p class="text-xs text-gray-500 hidden md:block">Pausas organizadas e relatórios precisos.</p>
                 </div>
-                <div class="p-6 rounded-2xl bg-gray-50 hover:bg-purple-50 transition border border-gray-100 hover:border-purple-200">
-                    <div class="text-3xl md:text-4xl mb-4">💅</div><h3 class="font-bold text-gray-900 text-sm md:text-base">Estética</h3>
+                <div class="p-6 rounded-2xl bg-gray-50 hover:bg-purple-50 transition border border-gray-100 hover:border-purple-200 shadow-sm">
+                    <div class="text-3xl md:text-4xl mb-4">💅</div>
+                    <h3 class="font-bold text-gray-900 text-sm md:text-base mb-1">Estética</h3>
+                    <p class="text-xs text-gray-500 hidden md:block">Fidelize clientes com pontos automáticos.</p>
                 </div>
             </div>
         </div>
     </section>
 
-    <section class="py-16 md:py-20 bg-gray-900 text-white">
+    <section class="py-16 md:py-24 bg-gray-900 text-white">
         <div class="max-w-7xl mx-auto px-6">
-            <div class="text-center mb-12 md:mb-16"><h2 class="text-2xl md:text-3xl lg:text-4xl font-bold mb-4">Tudo o que você precisa para crescer</h2></div>
-            <div class="grid md:grid-cols-3 gap-6 md:gap-8">
-                <div class="bg-gray-800 p-8 rounded-2xl border border-gray-700 hover:border-blue-500 transition group">
-                    <div class="w-12 h-12 bg-blue-500/20 rounded-lg flex items-center justify-center mb-6 text-blue-400 group-hover:bg-blue-500 group-hover:text-white transition"><i class="bi bi-link-45deg text-2xl"></i></div>
-                    <h3 class="text-xl font-bold mb-3">Link Personalizado</h3>
-                    <p class="text-gray-400 text-sm leading-relaxed">Pare de perguntar "qual horário você quer?". Envie seu link e deixe o cliente escolher.</p>
+            <div class="text-center mb-12 md:mb-16">
+                <span class="text-blue-400 font-bold tracking-wider uppercase text-sm mb-2 block">O seu novo ERP</span>
+                <h2 class="text-3xl md:text-4xl lg:text-5xl font-bold mb-4">Tudo o que o seu negócio precisa, num só lugar.</h2>
+            </div>
+            
+            <div class="grid md:grid-cols-2 gap-6 md:gap-8">
+                <div class="bg-gray-800 p-8 rounded-3xl border border-gray-700 hover:border-blue-500 transition group flex flex-col sm:flex-row gap-6 items-start">
+                    <div class="w-14 h-14 shrink-0 bg-blue-500/20 rounded-xl flex items-center justify-center text-blue-400 group-hover:bg-blue-500 group-hover:text-white transition">
+                        <i class="bi bi-calendar-check text-2xl"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-bold mb-2">Agenda Inteligente 24/7</h3>
+                        <p class="text-gray-400 text-sm leading-relaxed">Pare de perguntar "qual o horário que prefere?". Envie o seu link personalizado, deixe o cliente escolher e veja a sua agenda encher mesmo enquanto dorme.</p>
+                    </div>
                 </div>
-                <div class="bg-gray-800 p-8 rounded-2xl border border-gray-700 hover:border-green-500 transition group">
-                    <div class="w-12 h-12 bg-green-500/20 rounded-lg flex items-center justify-center mb-6 text-green-400 group-hover:bg-green-500 group-hover:text-white transition"><i class="bi bi-clock-history text-2xl"></i></div>
-                    <h3 class="text-xl font-bold mb-3">Agenda 24 horas</h3>
-                    <p class="text-gray-400 text-sm leading-relaxed">Seu negócio aberto mesmo quando você está dormindo.</p>
+                
+                <div class="bg-gray-800 p-8 rounded-3xl border border-gray-700 hover:border-green-500 transition group flex flex-col sm:flex-row gap-6 items-start relative overflow-hidden">
+                    <div class="absolute top-0 right-0 bg-green-500 text-xs font-bold px-3 py-1 rounded-bl-lg text-white shadow-sm">NOVO</div>
+                    <div class="w-14 h-14 shrink-0 bg-green-500/20 rounded-xl flex items-center justify-center text-green-400 group-hover:bg-green-500 group-hover:text-white transition">
+                        <i class="bi bi-wallet2 text-2xl"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-bold mb-2">Gestão de Equipa e Comissões</h3>
+                        <p class="text-gray-400 text-sm leading-relaxed">Fazer contas ao final do mês é coisa do passado. O sistema calcula automaticamente as comissões de cada profissional assim que o serviço é concluído. O seu lucro líquido na palma da mão.</p>
+                    </div>
                 </div>
-                <div class="bg-gray-800 p-8 rounded-2xl border border-gray-700 hover:border-purple-500 transition group">
-                    <div class="w-12 h-12 bg-purple-500/20 rounded-lg flex items-center justify-center mb-6 text-purple-400 group-hover:bg-purple-500 group-hover:text-white transition"><i class="bi bi-calendar-check text-2xl"></i></div>
-                    <h3 class="text-xl font-bold mb-3">Controle Total</h3>
-                    <p class="text-gray-400 text-sm leading-relaxed">Defina horários de almoço, dias de folga, bloqueio de clientes e duração de cada serviço.</p>
+
+                <div class="bg-gray-800 p-8 rounded-3xl border border-gray-700 hover:border-red-500 transition group flex flex-col sm:flex-row gap-6 items-start">
+                    <div class="w-14 h-14 shrink-0 bg-red-500/20 rounded-xl flex items-center justify-center text-red-400 group-hover:bg-red-500 group-hover:text-white transition">
+                        <i class="bi bi-person-x text-2xl"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-bold mb-2">Proteção contra Faltas (No-Show)</h3>
+                        <p class="text-gray-400 text-sm leading-relaxed">Clientes que marcam e não aparecem dão prejuízo. A nossa ferramenta bloqueia números indesejados automaticamente e educa os seus clientes através de lembretes no WhatsApp.</p>
+                    </div>
+                </div>
+
+                <div class="bg-gray-800 p-8 rounded-3xl border border-gray-700 hover:border-purple-500 transition group flex flex-col sm:flex-row gap-6 items-start relative overflow-hidden">
+                    <div class="absolute top-0 right-0 bg-purple-500 text-xs font-bold px-3 py-1 rounded-bl-lg text-white shadow-sm">NOVO</div>
+                    <div class="w-14 h-14 shrink-0 bg-purple-500/20 rounded-xl flex items-center justify-center text-purple-400 group-hover:bg-purple-500 group-hover:text-white transition">
+                        <i class="bi bi-stars text-2xl"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-bold mb-2">Fidelização e Promoções</h3>
+                        <p class="text-gray-400 text-sm leading-relaxed">Faça os clientes voltarem mais vezes. Crie pacotes promocionais com preços cortados e ative o sistema de pontos que premeia automaticamente os seus clientes mais fiéis.</p>
+                    </div>
                 </div>
             </div>
         </div>
     </section>
 
-    <section class="py-16 md:py-24 bg-blue-600 text-center">
-        <div class="max-w-4xl mx-auto px-6">
-            <h2 class="text-2xl md:text-3xl lg:text-4xl font-bold text-white mb-8">Pronto para profissionalizar seu negócio?</h2>
-            <a href="{{ url_for('planos') }}" class="inline-block bg-white text-blue-600 px-10 py-4 rounded-full font-bold text-lg hover:bg-gray-100 transition shadow-lg">Iniciar Teste Grátis</a>
-            <p class="mt-6 text-blue-200 text-sm">Configuração em menos de 2 minutos. Sem compromisso.</p>
+    <section class="py-16 bg-gray-50 border-t border-gray-200">
+        <div class="max-w-4xl mx-auto px-6 text-center">
+            <h2 class="text-3xl font-bold text-gray-900 mb-6">Um sistema. Dois caminhos para o sucesso.</h2>
+            <p class="text-lg text-gray-600 mb-10">Conheça as nossas opções desenhadas especificamente para o momento atual do seu negócio.</p>
+            
+            <div class="grid md:grid-cols-2 gap-8 text-left">
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
+                    <h4 class="font-bold text-xl text-gray-900 mb-2">Plano Solo <span class="text-gray-500 text-sm font-normal">| R$ 34,90/mês</span></h4>
+                    <p class="text-gray-600 text-sm">Perfeito para o profissional independente. Agenda ilimitada, vitrine de serviços, lembretes e programa de fidelização.</p>
+                </div>
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-blue-200 relative">
+                    <div class="absolute -top-3 -right-3 bg-blue-600 text-white text-xs font-bold px-2 py-1 rounded-lg">MAIS COMPLETO</div>
+                    <h4 class="font-bold text-xl text-blue-700 mb-2">Plano Gestão <span class="text-gray-500 text-sm font-normal">| R$ 79,90/mês</span></h4>
+                    <p class="text-gray-600 text-sm">O poder total para salões. Múltiplos profissionais, cálculo automático da folha de pagamento e saúde financeira do negócio.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="py-16 md:py-24 bg-blue-600 text-center relative overflow-hidden">
+        <div class="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
+            <div class="absolute -top-24 -left-24 w-96 h-96 rounded-full bg-white blur-3xl"></div>
+            <div class="absolute top-1/2 right-0 w-64 h-64 rounded-full bg-white blur-3xl"></div>
+        </div>
+        
+        <div class="max-w-4xl mx-auto px-6 relative z-10">
+            <h2 class="text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-6">Pronto para elevar o nível do seu negócio?</h2>
+            <p class="text-blue-100 text-lg md:text-xl mb-10 max-w-2xl mx-auto">Configure a sua vitrine em menos de 2 minutos. Sem cartão de crédito exigido para iniciar o teste.</p>
+            
+            <a href="{{ url_for('planos') }}" class="inline-block bg-white text-blue-600 px-10 py-5 rounded-full font-extrabold text-lg hover:bg-gray-100 transition shadow-2xl transform hover:scale-105">
+                Criar a minha conta grátis
+            </a>
+            <div class="mt-6 flex justify-center items-center gap-2 text-blue-200 text-sm font-medium">
+                <i class="bi bi-shield-check text-lg"></i> Teste 100% livre de riscos
+            </div>
         </div>
     </section>
 </div>

@@ -747,7 +747,7 @@ def complete_appointment(id):
     
     est = a.establishment
     
-    # Correção 3: Força o registo e cálculo da comissão de quem atendeu
+    # Cálculo da comissão para o Plano Gestão
     if est.plan_type == 'gestao':
         prof_id = request.form.get('professional_id')
         if prof_id:
@@ -758,8 +758,10 @@ def complete_appointment(id):
             if prof:
                 a.commission_value = a.total_price * (prof.commission_rate / 100.0)
     
+    # --- CÓDIGO ANTIGO VALIDADO DE CONCLUSÃO E E-MAIL ---
     a.status = 'concluido'
     
+    # --- SISTEMA DE FIDELIDADE ---
     msg_fidelidade = ""
     if est.loyalty_points_goal and est.loyalty_points_goal > 0:
         cliente = Client.query.filter_by(establishment_id=est.id, phone=a.client_phone).first()
@@ -777,13 +779,12 @@ def complete_appointment(id):
             
     db.session.commit()
     
-    # Correção 4: E-mail blindado 
     link_av = request.host_url.replace('http://', 'https://') + f'avaliar/{a.id}'
     subj = f"Como foi o atendimento no(a) {est.name}?"
     body = f"Olá {a.client_name}!\n\nO seu atendimento foi concluído. Queremos saber a sua opinião!\n\nÉ super rápido: você só precisa clicar no link abaixo e dar uma nota de 1 a 5 estrelas.\n\n{link_av}{msg_fidelidade}\n\nObrigado!"
     send_email(subj, a.client_email, body)
     
-    flash('Atendimento concluído e notificação enviada!', 'success')
+    flash('Atendimento concluído! Ponto contabilizado.', 'success')
     return redirect(url_for('admin_dashboard'))
 
 @app.route('/admin/agendamentos/arquivar/<int:id>', methods=['POST'])
