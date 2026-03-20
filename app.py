@@ -742,10 +742,21 @@ def complete_appointment(id):
     if not current_user.establishment.has_access: return redirect(url_for('payment'))
     a = Appointment.query.get_or_404(id)
     if a.establishment_id != current_user.establishment_id: return "Erro", 403
+    
+    est = a.establishment
+    
+    # NOVO: Define quem atendeu e calcula a comissão exata neste momento
+    if est.plan_type == 'gestao':
+        prof_id = request.form.get('professional_id')
+        if prof_id:
+            prof = Professional.query.get(int(prof_id))
+            if prof and prof.establishment_id == est.id:
+                a.professional_id = prof.id
+                a.commission_value = a.total_price * (prof.commission_rate / 100.0)
+    
     a.status = 'concluido'
     
     # --- SISTEMA DE FIDELIDADE ---
-    est = a.establishment
     msg_fidelidade = ""
     if est.loyalty_points_goal and est.loyalty_points_goal > 0:
         cliente = Client.query.filter_by(establishment_id=est.id, phone=a.client_phone).first()
