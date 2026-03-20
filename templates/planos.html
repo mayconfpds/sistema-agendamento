@@ -1,0 +1,53 @@
+{% extends 'layout.html' %}
+{% block title %}Escolha seu Plano{% endblock %}
+{% block content %}
+<div class="container py-5">
+    <div class="text-center mb-5">
+        <h1 class="fw-bold text-dark">Escolha o plano ideal para o seu negócio</h1>
+        <p class="text-muted fs-5">Todos os planos incluem <strong>7 dias de teste totalmente grátis</strong>. Cancele quando quiser.</p>
+    </div>
+
+    <div class="row justify-content-center g-4">
+        <div class="col-md-5 col-lg-4">
+            <div class="card shadow-sm border-0 h-100 rounded-4">
+                <div class="card-body p-4 p-md-5 d-flex flex-column">
+                    <h4 class="fw-bold text-dark mb-1">Plano Solo</h4>
+                    <p class="text-muted small mb-4">Para profissionais independentes</p>
+                    <div class="mb-4">
+                        <span class="display-5 fw-bold text-dark">R$ 34,90</span><span class="text-muted">/mês</span>
+                    </div>
+                    <ul class="list-unstyled mb-4 flex-grow-1">
+                        <li class="mb-3"><i class="bi bi-check-circle-fill text-success me-2"></i> Agendamentos ilimitados</li>
+                        <li class="mb-3"><i class="bi bi-check-circle-fill text-success me-2"></i> Lembretes no WhatsApp</li>
+                        <li class="mb-3"><i class="bi bi-check-circle-fill text-success me-2"></i> Vitrine de Serviços</li>
+                        <li class="mb-3"><i class="bi bi-check-circle-fill text-success me-2"></i> Sistema de Fidelidade</li>
+                        <li class="mb-3 text-muted"><i class="bi bi-x-circle-fill text-secondary me-2"></i> Gestão de Equipe e Comissões</li>
+                    </ul>
+                    <a href="{{ url_for('register_business', plan='solo') }}" class="btn btn-outline-primary py-3 fw-bold rounded-pill w-100">Começar Teste Grátis</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-5 col-lg-4">
+            <div class="card shadow-lg border-primary border-2 h-100 rounded-4 position-relative">
+                <div class="position-absolute top-0 start-50 translate-middle badge rounded-pill bg-primary px-3 py-2 text-uppercase fw-bold shadow-sm" style="font-size: 0.75rem;">Mais Escolhido</div>
+                <div class="card-body p-4 p-md-5 d-flex flex-column">
+                    <h4 class="fw-bold text-primary mb-1">Plano Gestão</h4>
+                    <p class="text-muted small mb-4">Para barbearias e salões com equipe</p>
+                    <div class="mb-4">
+                        <span class="display-5 fw-bold text-dark">R$ 79,90</span><span class="text-muted">/mês</span>
+                    </div>
+                    <ul class="list-unstyled mb-4 flex-grow-1">
+                        <li class="mb-3"><i class="bi bi-check-circle-fill text-primary me-2"></i> <strong>Tudo do Plano Solo, mais:</strong></li>
+                        <li class="mb-3"><i class="bi bi-check-circle-fill text-success me-2"></i> Cadastro de Profissionais ilimitados</li>
+                        <li class="mb-3"><i class="bi bi-check-circle-fill text-success me-2"></i> Cálculo automático de Comissões</li>
+                        <li class="mb-3"><i class="bi bi-check-circle-fill text-success me-2"></i> Agendas independentes</li>
+                        <li class="mb-3"><i class="bi bi-check-circle-fill text-success me-2"></i> Relatórios Financeiros Avançados</li>
+                    </ul>
+                    <a href="{{ url_for('register_business', plan='gestao') }}" class="btn btn-primary py-3 fw-bold rounded-pill w-100 shadow-sm">Começar Teste Grátis</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

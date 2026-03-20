@@ -4,12 +4,17 @@
 <div class="row justify-content-center mt-5 mb-5">
     <div class="col-md-8 col-lg-6">
         <div class="card shadow-lg border-0 rounded-4 overflow-hidden">
-            <div class="card-header bg-blue-600 text-white text-center py-4">
+            <div class="card-header bg-blue-600 text-white text-center py-4 position-relative">
                 <h3 class="fw-bold mb-0">Crie sua conta e teste grátis</h3>
                 <p class="text-blue-100 text-sm mb-0 mt-1"><i class="bi bi-check-circle-fill"></i> 7 dias de acesso total. Sem cartão de crédito.</p>
+                
+                {% set plan_name = 'Plano Gestão' if request.args.get('plan') == 'gestao' else 'Plano Solo' %}
+                <span class="position-absolute top-0 end-0 bg-warning text-dark px-3 py-1 rounded-bl-3 fw-bold small shadow-sm">{{ plan_name }}</span>
             </div>
             <div class="card-body p-4 p-md-5 bg-white">
                 <form method="POST" action="{{ url_for('register_business') }}">
+                    <input type="hidden" name="plan_type" value="{{ request.args.get('plan', 'solo') }}">
+                    
                     <h5 class="mb-3 text-primary fw-bold small text-uppercase ls-1">Dados do Negócio</h5>
                     <div class="mb-3"><label class="form-label small fw-bold">Nome do Estabelecimento</label><input type="text" class="form-control" name="business_name" required></div>
                     <div class="mb-3"><label class="form-label small fw-bold">Link Personalizado</label><div class="input-group"><span class="input-group-text bg-light border-end-0">agendafacil.com/b/</span><input type="text" class="form-control border-start-0 ps-0" name="url_prefix" pattern="[a-z0-9-]+" required></div></div>
