@@ -84,7 +84,11 @@
                         <td>
                             {% if a.status in ['concluido', 'arquivado'] %}
                                 <span class="badge bg-success">Concluído</span>
-                                {% if a.rating %}<div class="text-warning small mt-1">{% for i in range(a.rating) %}★{% endfor %}</div>{% endif %}
+                                {% if a.rating %}
+                                    <div class="text-warning small mt-1">
+                                        {% for i in range(a.rating) %}★{% endfor %}
+                                    </div>
+                                {% endif %}
                             {% elif a.status == 'falta' %}
                                 <span class="badge bg-danger">Falta (No-show)</span>
                             {% elif a.status == 'cancelado' %}
@@ -102,35 +106,4 @@
         </div>
     </div>
 </div>
-{% endblock %}
-
-<script>
-// Lógica inteligente para os botões de filtro rápido
-function setFilter(type) {
-    const today = new Date();
-    let start = new Date();
-    let end = new Date();
-
-    if (type === 'hoje') {
-        // As variáveis start e end já estão no dia de hoje
-    } else if (type === 'semana') {
-        const day = today.getDay();
-        const diff = today.getDate() - day + (day === 0 ? -6 : 1); 
-        start = new Date(today.setDate(diff));
-        end = new Date(start);
-        end.setDate(end.getDate() + 6);
-    } else if (type === 'mes') {
-        start = new Date(today.getFullYear(), today.getMonth(), 1);
-        end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-    } else if (type === 'ano') {
-        start = new Date(today.getFullYear(), 0, 1);
-        end = new Date(today.getFullYear(), 11, 31);
-    }
-
-    // Formata para o padrão que o campo de data aceita (YYYY-MM-DD)
-    document.getElementById('start_date').value = start.toISOString().split('T')[0];
-    document.getElementById('end_date').value = end.toISOString().split('T')[0];
-    document.forms[0].submit();
-}
-</script>
 {% endblock %}
