@@ -395,7 +395,13 @@ def schedule_service(url_prefix, service_id):
     if not est.has_access: return "Inativo", 403
     main_service = Service.query.get_or_404(service_id)
     other_services = Service.query.filter(Service.establishment_id == est.id, Service.id != service_id).order_by(Service.name).all()
-    return render_template('agendamento.html', main_service=main_service, other_services=other_services, establishment=est)
+    
+    # NOVO: Puxar a equipa apenas se for do Plano Gestão
+    professionals = []
+    if est.plan_type == 'gestao':
+        professionals = Professional.query.filter_by(establishment_id=est.id).all()
+        
+    return render_template('agendamento.html', main_service=main_service, other_services=other_services, establishment=est, professionals=professionals)
 
 @app.route('/b/<url_prefix>/confirmar', methods=['POST'])
 def create_appointment(url_prefix):
@@ -431,8 +437,24 @@ def create_appointment(url_prefix):
     
     if start_dt < now:
         flash('Horário inválido.', 'danger'); return redirect(url_for('establishment_services', url_prefix=url_prefix))
-        
-    appts_on_day = Appointment.query.filter_by(appointment_date=d, establishment_id=est.id).filter(Appointment.status == 'pendente').all()
+
+    # --- NOVA LÓGICA DE PROFISSIONAIS E COMISSÕES ---
+    prof_id = request.form.get('professional_id')
+    professional_id = None
+    commission_value = 0.0
+    
+    if prof_id and prof_id != 'any':
+        prof = Professional.query.get(int(prof_id))
+        if prof and prof.establishment_id == est.id:
+            professional_id = prof.id
+            commission_value = total_price * (prof.commission_rate / 100.0)
+
+    # Checagem de disponibilidade considerando a agenda EXATA daquele profissional
+    appts_on_day = Appointment.query.filter_by(appointment_date=d, establishment_id=est.id).filter(Appointment.status == 'pendente')
+    if professional_id:
+        appts_on_day = appts_on_day.filter_by(professional_id=professional_id)
+    appts_on_day = appts_on_day.all()
+    
     overlap_count = 0
     for a in appts_on_day:
         s = datetime.combine(d, a.appointment_time)
@@ -440,11 +462,14 @@ def create_appointment(url_prefix):
         if max(start_dt, s) < min(end_dt, e):
             overlap_count += 1
             
-    if overlap_count >= est.capacity:
+    # Se escolheu um profissional, a capacidade dele é 1. Se foi "Qualquer um", usa a do salão.
+    current_capacity = 1 if professional_id else est.capacity
+    if overlap_count >= current_capacity:
         flash('Ops! Esse horário acabou de ser ocupado. Tente outro.', 'danger')
         return redirect(url_for('schedule_service', url_prefix=url_prefix, service_id=selected_services[0].id))
 
-    appt = Appointment(client_name=request.form.get('client_name'), client_phone=client_phone, client_email=request.form.get('client_email'), appointment_date=d, appointment_time=t, establishment_id=est.id, total_duration=total_dur, total_price=total_price)
+    # Salva o agendamento com os dados da comissão prontos!
+    appt = Appointment(client_name=request.form.get('client_name'), client_phone=client_phone, client_email=request.form.get('client_email'), appointment_date=d, appointment_time=t, establishment_id=est.id, total_duration=total_dur, total_price=total_price, professional_id=professional_id, commission_value=commission_value)
     for s in selected_services: appt.services.append(s)
     
     db.session.add(appt); db.session.commit()
@@ -889,6 +914,8 @@ def get_available_times():
     est_id = request.args.get('est_id')
     d_str = request.args.get('date')
     dur_str = request.args.get('duration')
+    prof_id = request.args.get('prof_id') # NOVO: Lê o profissional escolhido
+    
     if not est_id or not d_str or not dur_str: return jsonify([])
     try: 
         sel_date = datetime.strptime(d_str, '%Y-%m-%d').date()
@@ -899,12 +926,19 @@ def get_available_times():
     day_sched = DaySchedule.query.filter_by(establishment_id=est.id, day_index=sel_date.weekday()).first()
     if not day_sched or not day_sched.is_active: return jsonify([])
     
-    appts = Appointment.query.filter_by(appointment_date=sel_date, establishment_id=est.id).filter(Appointment.status == 'pendente').all()
+    # NOVO: Filtra os agendamentos já existentes apenas do profissional selecionado
+    query = Appointment.query.filter_by(appointment_date=sel_date, establishment_id=est.id).filter(Appointment.status == 'pendente')
+    if prof_id and prof_id != 'any':
+        query = query.filter_by(professional_id=int(prof_id))
+    appts = query.all()
     
     avail = []
     curr = datetime.combine(sel_date, day_sched.work_start)
     limit = datetime.combine(sel_date, day_sched.work_end)
     now = get_now_brazil()
+    
+    # Se quer um profissional específico, a capacidade de choque é 1 pessoa.
+    current_capacity = 1 if (prof_id and prof_id != 'any') else est.capacity
     
     while curr + timedelta(minutes=total_dur) <= limit:
         end = curr + timedelta(minutes=total_dur)
@@ -916,7 +950,7 @@ def get_available_times():
             lunch_s = datetime.combine(sel_date, day_sched.lunch_start)
             lunch_e = datetime.combine(sel_date, day_sched.lunch_end)
             if (curr >= lunch_s and curr < lunch_e) or (end > lunch_s and end <= lunch_e) or (curr < lunch_s and end > lunch_e):
-               in_lunch = True
+                in_lunch = True
                
         in_pause2 = False
         if day_sched.pause2_start and day_sched.pause2_end:
@@ -934,7 +968,8 @@ def get_available_times():
             e = s + timedelta(minutes=a.total_duration)
             if max(curr, s) < min(end, e): overlap_count += 1
         
-        if overlap_count < est.capacity: avail.append(curr.strftime('%H:%M'))
+        if overlap_count < current_capacity: avail.append(curr.strftime('%H:%M'))
+        
         curr += timedelta(minutes=15)
     return jsonify(avail)
 

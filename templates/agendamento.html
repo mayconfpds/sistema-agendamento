@@ -38,6 +38,18 @@
                         <div class="text-end small text-muted">Tempo estimado: <span id="display-dur">0</span> min</div>
                     </div>
 
+                    {% if professionals %}
+                    <div class="mb-4">
+                        <label class="fw-bold small text-primary"><i class="bi bi-person-badge"></i> Com quem deseja agendar?</label>
+                        <select class="form-select border-primary shadow-sm mt-1" id="professional" name="professional_id" onchange="fetchSlots()" required>
+                            <option value="any">Qualquer profissional disponível</option>
+                            {% for p in professionals %}
+                                <option value="{{ p.id }}">{{ p.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    {% endif %}
+
                     <div class="mb-3"><label class="fw-bold small">Seu Nome</label><input type="text" name="client_name" class="form-control" required></div>
                     <div class="row g-2 mb-3">
                         <div class="col-6"><label class="fw-bold small">WhatsApp</label><input type="tel" name="client_phone" class="form-control" required></div>
@@ -93,12 +105,17 @@ document.getElementById('date').min = `${year}-${month}-${day}`;
 async function fetchSlots() {
     const dVal = document.getElementById('date').value;
     if(!dVal) return;
+    
+    // NOVO: Puxa a escolha do cliente para filtrar os horários dinamicamente
+    const profSelect = document.getElementById('professional');
+    const profId = profSelect ? profSelect.value : '';
+    
     const div = document.getElementById('slots');
     div.innerHTML = '<span class="spinner-border spinner-border-sm text-primary"></span> Carregando...';
     document.getElementById('btn').disabled = true;
     document.getElementById('time').value = '';
     
-    const res = await fetch(`/api/horarios_disponiveis?est_id={{ establishment.id }}&date=${dVal}&duration=${totalDur}`);
+    const res = await fetch(`/api/horarios_disponiveis?est_id={{ establishment.id }}&date=${dVal}&duration=${totalDur}&prof_id=${profId}`);
     const times = await res.json();
     
     div.innerHTML = '';
