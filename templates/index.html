@@ -11,11 +11,11 @@
                 
                 <p class="text-base md:text-lg text-gray-600 mb-8 leading-relaxed max-w-lg mx-auto lg:mx-0">
                     A ferramenta definitiva para barbearias, salões e clínicas.
-                    <br><span class="text-blue-600 font-bold text-xl md:text-2xl">Teste grátis por 7 dias</span>. Depois, apenas R$ 34,90/mês.
+                    <br><span class="text-blue-600 font-bold text-xl md:text-2xl">Teste grátis por 7 dias</span>. Depois, escolha o plano ideal para si.
                     <br>Tenha um link profissional, receba agendamentos 24h e elimine a troca de mensagens no WhatsApp.
                 </p>
                 <div class="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
-                    <a href="{{ url_for('register_business') }}" class="bg-blue-600 text-white px-8 py-4 rounded-xl font-bold text-lg hover:bg-blue-700 transition shadow-lg transform hover:-translate-y-1">Começar Teste Grátis</a>
+                    <a href="{{ url_for('planos') }}" class="bg-blue-600 text-white px-8 py-4 rounded-xl font-bold text-lg hover:bg-blue-700 transition shadow-lg transform hover:-translate-y-1">Começar Teste Grátis</a>
                     <a href="{{ url_for('login') }}" class="px-8 py-4 rounded-xl font-bold text-gray-700 hover:bg-gray-200 transition border border-gray-300">Já sou Cliente</a>
                 </div>
             </div>
@@ -29,7 +29,6 @@
         </div>
     </section>
 
-    <!-- SEÇÃO PARA QUEM É -->
     <section class="py-16 md:py-20 bg-white">
         <div class="max-w-7xl mx-auto px-6 text-center">
             <h2 class="text-2xl md:text-3xl font-bold text-gray-900 mb-10 md:mb-12">Ideal para profissionais exigentes</h2>
@@ -76,7 +75,7 @@
     <section class="py-16 md:py-24 bg-blue-600 text-center">
         <div class="max-w-4xl mx-auto px-6">
             <h2 class="text-2xl md:text-3xl lg:text-4xl font-bold text-white mb-8">Pronto para profissionalizar seu negócio?</h2>
-            <a href="{{ url_for('register_business') }}" class="inline-block bg-white text-blue-600 px-10 py-4 rounded-full font-bold text-lg hover:bg-gray-100 transition shadow-lg">Iniciar Teste Grátis</a>
+            <a href="{{ url_for('planos') }}" class="inline-block bg-white text-blue-600 px-10 py-4 rounded-full font-bold text-lg hover:bg-gray-100 transition shadow-lg">Iniciar Teste Grátis</a>
             <p class="mt-6 text-blue-200 text-sm">Configuração em menos de 2 minutos. Sem compromisso.</p>
         </div>
     </section>
