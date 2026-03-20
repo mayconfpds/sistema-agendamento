@@ -3,7 +3,6 @@
 {% block content %}
 <div class="container py-4">
 
-    <!-- BANNER DE TESTE GRÁTIS (SEM BOTÃO DE PAGAMENTO - HARD TRIAL) -->
     {% if not current_user.establishment.is_active and current_user.establishment.trial_ends %}
     <div class="alert alert-warning border-warning shadow-sm d-flex flex-column flex-md-row justify-content-between align-items-center mb-4 rounded-3">
         <div class="d-flex align-items-center">
@@ -29,6 +28,7 @@
             <input type="hidden" name="form_type" value="contact"> 
             <div class="col-md-3"><label class="small fw-bold">WhatsApp:</label><input type="text" name="contact_phone" class="form-control form-control-sm" value="{{ establishment.contact_phone or '' }}"></div>
             <div class="col-md-3"><label class="small fw-bold">E-mail (Notificações):</label><input type="email" name="contact_email" class="form-control form-control-sm" value="{{ establishment.contact_email or '' }}"></div>
+            
             {% if establishment.plan_type == 'solo' %}
             <div class="col-md-2">
                 <label class="small fw-bold">Profissionais:</label>
@@ -44,6 +44,7 @@
                 <input type="text" class="form-control form-control-sm bg-light fw-bold text-success" value="{{ establishment.capacity }} na Agenda" readonly title="A capacidade é controlada automaticamente pelos profissionais cadastrados.">
             </div>
             {% endif %}
+            
             <div class="col-md-2"><label class="small fw-bold">Logo:</label><input type="file" name="logo" class="form-control form-control-sm" accept="image/*"></div>
             <div class="col-md-2 text-end pt-4"><button class="btn btn-primary btn-sm w-100">Salvar</button></div>
             <div class="col-12 mt-3 border-top pt-3">
@@ -56,8 +57,8 @@
     </div>
     
     <div class="row">
-        <div class="col-12 mb-4">
-            <div class="card shadow-sm border-0">
+        <div class="col-lg-7">
+            <div class="card shadow-sm border-0 mb-4">
                 <div class="card-header bg-white fw-bold">Horários de Funcionamento</div>
                 <div class="card-body p-0">
                     <form action="{{ url_for('update_settings') }}" method="POST">
@@ -71,9 +72,7 @@
                     </form>
                 </div>
             </div>
-        </div>
-        
-        <div class="col-lg-7">
+
             <div class="card shadow-sm border-0 mb-4">
                 <div class="card-header bg-white fw-bold d-flex justify-content-between">
                     <span>Próximos Agendamentos</span> <span class="badge bg-primary rounded-pill">{{ today_count }} hoje</span>
@@ -192,14 +191,11 @@
                         <li class="list-group-item d-flex justify-content-between align-items-center px-0">
                             <div>
                                 <span class="badge bg-secondary mb-1" style="font-size: 0.65rem;">{{ s.category.name if s.category else 'Geral' }}</span>
-                                
                                 {% if s.is_combo %}
                                     <span class="badge bg-warning text-dark mb-1 ms-1 shadow-sm" style="font-size: 0.65rem;"><i class="bi bi-stars"></i> Promoção</span>
                                 {% endif %}
                                 <br>
-                                
                                 <strong>{{ s.name }}</strong> ({{ s.duration }}m)<br>
-                                
                                 {% if s.is_combo and s.original_price %}
                                     <span class="text-muted text-decoration-line-through small me-1">R$ {{ "%.2f"|format(s.original_price) }}</span>
                                 {% endif %}
@@ -214,11 +210,12 @@
                 </div>
             </div>
 
-            <div class="card shadow-sm border-0 mt-4">
-                <div class="card-header bg-white py-3 border-bottom"><h6 class="mb-0 fw-bold text-danger"><i class="bi bi-person-x"></i> Clientes Bloqueados (No-Show)</h6></div>
-{% if establishment.plan_type == 'gestao' %}
-            <div class="card shadow-sm border-0 mt-4">
-                <div class="card-header bg-white py-3 border-bottom"><h6 class="mb-0 fw-bold text-success"><i class="bi bi-people-fill"></i> Minha Equipe (Comissões)</h6></div>
+            {% if establishment.plan_type == 'gestao' %}
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0 fw-bold text-success"><i class="bi bi-people-fill"></i> Minha Equipe (Comissões)</h6>
+                    <a href="{{ url_for('desativar_gestao') }}" class="btn btn-sm btn-outline-secondary py-0" title="Voltar ao Plano Solo (Apenas Teste)"><i class="bi bi-arrow-counterclockwise"></i> Plano Solo</a>
+                </div>
                 <div class="card-body">
                     <form action="{{ url_for('add_professional') }}" method="POST" class="mb-3">
                         <div class="input-group input-group-sm">
@@ -245,7 +242,7 @@
                 </div>
             </div>
             {% else %}
-            <div class="card shadow-sm border-0 mt-4 bg-dark text-white rounded-4 overflow-hidden">
+            <div class="card shadow-sm border-0 mb-4 bg-dark text-white rounded-4 overflow-hidden">
                 <div class="card-body text-center p-4">
                     <h5 class="fw-bold text-warning mb-2"><i class="bi bi-star-fill"></i> Plano Gestão</h5>
                     <p class="small mb-3 text-light">Cadastre a sua equipe, calcule comissões automaticamente e tenha agendas independentes para cada barbeiro.</p>
@@ -253,6 +250,9 @@
                 </div>
             </div>
             {% endif %}
+
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-header bg-white py-3 border-bottom"><h6 class="mb-0 fw-bold text-danger"><i class="bi bi-person-x"></i> Clientes Bloqueados (No-Show)</h6></div>
                 <div class="card-body">
                     <form action="{{ url_for('add_blacklist') }}" method="POST" class="mb-3">
                         <div class="input-group input-group-sm">
@@ -274,6 +274,7 @@
                     </ul>
                 </div>
             </div>
+
         </div>
     </div>
 </div>

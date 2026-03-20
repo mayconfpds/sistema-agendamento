@@ -875,6 +875,15 @@ def ativar_gestao():
     flash('Plano Gestão ativado para testes!', 'success')
     return redirect(url_for('admin_dashboard'))
 
+# ROTA SECRETA PARA VOLTAR AO PLANO SOLO
+@app.route('/admin/desativar-gestao')
+@login_required
+def desativar_gestao():
+    current_user.establishment.plan_type = 'solo'
+    db.session.commit()
+    flash('Plano Solo reativado para testes!', 'info')
+    return redirect(url_for('admin_dashboard'))
+
 @app.route('/api/horarios_disponiveis')
 def get_available_times():
     est_id = request.args.get('est_id')
