@@ -483,8 +483,9 @@ def admin_dashboard():
     categories = Category.query.filter_by(establishment_id=est.id).all()
     schedules = DaySchedule.query.filter_by(establishment_id=est.id).order_by(DaySchedule.day_index).all()
     blacklists = Blacklist.query.filter_by(establishment_id=est.id).all()
+    professionals = Professional.query.filter_by(establishment_id=est.id).all() # NOVA LINHA
     today_count = Appointment.query.filter(Appointment.establishment_id == est.id, Appointment.appointment_date == today).count()
-    return render_template('admin.html', appointments=appts, services=services, categories=categories, establishment=est, schedules=schedules, blacklists=blacklists, today_count=today_count)
+    return render_template('admin.html', appointments=appts, services=services, categories=categories, establishment=est, schedules=schedules, blacklists=blacklists, professionals=professionals, today_count=today_count)
 
 @app.route('/admin/historico')
 @login_required
@@ -615,8 +616,9 @@ def update_settings():
     if ft == 'contact':
         est.contact_phone = request.form.get('contact_phone')
         est.contact_email = request.form.get('contact_email')
-        try: est.capacity = int(request.form.get('capacity', 1))
-        except: pass
+        if est.plan_type == 'solo':
+            try: est.capacity = int(request.form.get('capacity', 1))
+            except: pass
         try: est.loyalty_points_goal = int(request.form.get('loyalty_points_goal', 0))
         except: est.loyalty_points_goal = 0
         est.loyalty_reward = request.form.get('loyalty_reward')
@@ -830,6 +832,47 @@ def remove_blacklist(id):
         db.session.delete(b)
         db.session.commit()
         flash('Número desbloqueado.', 'success')
+    return redirect(url_for('admin_dashboard'))
+
+@app.route('/admin/profissional/adicionar', methods=['POST'])
+@login_required
+def add_professional():
+    if current_user.establishment.plan_type != 'gestao': return redirect(url_for('admin_dashboard'))
+    name = request.form.get('name')
+    commission = request.form.get('commission_rate')
+    if name and commission:
+        p = Professional(name=name, commission_rate=float(commission.replace(',', '.')), establishment_id=current_user.establishment_id)
+        db.session.add(p); db.session.commit()
+        
+        # A Mágica da Capacidade: O número de cadeiras é igual ao número de barbeiros
+        est = current_user.establishment
+        count = Professional.query.filter_by(establishment_id=est.id).count()
+        est.capacity = max(1, count)
+        db.session.commit()
+        flash('Profissional adicionado à equipe!', 'success')
+    return redirect(url_for('admin_dashboard'))
+
+@app.route('/admin/profissional/excluir/<int:id>', methods=['POST'])
+@login_required
+def delete_professional(id):
+    p = Professional.query.get_or_404(id)
+    if p.establishment_id == current_user.establishment_id:
+        db.session.delete(p); db.session.commit()
+        
+        # Recalcula a capacidade ao demitir
+        est = current_user.establishment
+        count = Professional.query.filter_by(establishment_id=est.id).count()
+        est.capacity = max(1, count)
+        db.session.commit()
+    return redirect(url_for('admin_dashboard'))
+
+# ROTA SECRETA DE TESTE (Removeremos quando lançar oficialmente)
+@app.route('/admin/ativar-gestao')
+@login_required
+def ativar_gestao():
+    current_user.establishment.plan_type = 'gestao'
+    db.session.commit()
+    flash('Plano Gestão ativado para testes!', 'success')
     return redirect(url_for('admin_dashboard'))
 
 @app.route('/api/horarios_disponiveis')
