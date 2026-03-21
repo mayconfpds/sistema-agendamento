@@ -420,9 +420,13 @@ def create_appointment(url_prefix):
 
     now = get_now_brazil()
     user_appts = Appointment.query.filter_by(establishment_id=est.id, client_phone=client_phone).all()
-    if any(datetime.combine(a.appointment_date, a.appointment_time) >= now and a.status == 'pendente' for a in user_appts):
-        flash('Você já possui um agendamento futuro conosco. Conclua-o antes de agendar novamente.', 'warning')
-        return redirect(url_for('establishment_services', url_prefix=url_prefix))
+            
+     # NOVA LÓGICA: Permite até 4 agendamentos simultâneos (ex: Pai + 3 filhos)
+    futuros_pendentes = [a for a in user_appts if datetime.combine(a.appointment_date, a.appointment_time) >= now and a.status == 'pendente']
+                        
+    if len(futuros_pendentes) >= 4:
+        flash('Limite de horários simultâneos atingido (Máx: 4). Conclua os agendamentos atuais ou contacte o estabelecimento.', 'warning')
+    return redirect(url_for('establishment_services', url_prefix=url_prefix))
 
     d = datetime.strptime(request.form.get('appointment_date'), '%Y-%m-%d').date()
     t = datetime.strptime(request.form.get('appointment_time'), '%H:%M').time()
