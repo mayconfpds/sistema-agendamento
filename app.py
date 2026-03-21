@@ -426,7 +426,7 @@ def create_appointment(url_prefix):
                         
     if len(futuros_pendentes) >= 4:
         flash('Limite de horários simultâneos atingido (Máx: 4). Conclua os agendamentos atuais ou contacte o estabelecimento.', 'warning')
-    return redirect(url_for('establishment_services', url_prefix=url_prefix))
+        return redirect(url_for('establishment_services', url_prefix=url_prefix))
 
     d = datetime.strptime(request.form.get('appointment_date'), '%Y-%m-%d').date()
     t = datetime.strptime(request.form.get('appointment_time'), '%H:%M').time()
