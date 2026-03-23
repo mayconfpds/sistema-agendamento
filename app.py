@@ -502,17 +502,50 @@ def logout(): logout_user(); return redirect(url_for('login'))
 
 @app.route('/admin')
 @login_required
+@app.route('/admin')
+@login_required
 def admin_dashboard():
     if not current_user.establishment.has_access: return redirect(url_for('planos'))
     est = current_user.establishment
     today = get_now_brazil().date()
-    appts = Appointment.query.filter(Appointment.establishment_id == est.id, Appointment.appointment_date >= today, Appointment.status.notin_(['arquivado', 'falta', 'cancelado'])).order_by(Appointment.appointment_date, Appointment.appointment_time).all()
+    
+    # --- NOVOS FILTROS DE BUSCA E DATA ---
+    search_query = request.args.get('search', '').strip()
+    filter_date_str = request.args.get('filter_date', '')
+    
+    query = Appointment.query.filter(
+        Appointment.establishment_id == est.id,
+        Appointment.status.notin_(['arquivado', 'falta', 'cancelado'])
+    )
+    
+    # Aplica o filtro de data (Se escolheu uma data, mostra só ela)
+    if filter_date_str:
+        try:
+            filter_date = datetime.strptime(filter_date_str, '%Y-%m-%d').date()
+            query = query.filter(Appointment.appointment_date == filter_date)
+        except: pass
+    elif not search_query:
+        # Padrão Inteligente: Se não pesquisou um nome específico, mostra só de hoje em diante
+        query = query.filter(Appointment.appointment_date >= today)
+        
+    # Aplica o filtro de texto (Nome ou WhatsApp)
+    if search_query:
+        search_term = f"%{search_query}%"
+        query = query.filter(db.or_(
+            Appointment.client_name.ilike(search_term), 
+            Appointment.client_phone.ilike(search_term)
+        ))
+        
+    # ORDENAÇÃO PERFEITA: Primeiro a Data (mais próxima), depois o Horário (mais cedo)
+    appts = query.order_by(Appointment.appointment_date.asc(), Appointment.appointment_time.asc()).all()
+    
     services = Service.query.filter_by(establishment_id=est.id).all()
     categories = Category.query.filter_by(establishment_id=est.id).all()
     schedules = DaySchedule.query.filter_by(establishment_id=est.id).order_by(DaySchedule.day_index).all()
     blacklists = Blacklist.query.filter_by(establishment_id=est.id).all()
     professionals = Professional.query.filter_by(establishment_id=est.id).all() 
     today_count = Appointment.query.filter(Appointment.establishment_id == est.id, Appointment.appointment_date == today).count()
+    
     return render_template('admin.html', appointments=appts, services=services, categories=categories, establishment=est, schedules=schedules, blacklists=blacklists, professionals=professionals, today_count=today_count)
 
 @app.route('/admin/historico')
