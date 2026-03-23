@@ -478,7 +478,7 @@ def create_appointment(url_prefix):
     
     db.session.add(appt); db.session.commit()
     
-    send_email(f"Confirmado: {est.name}", appt.client_email, f"Agendado para {d.strftime('%d/%m')} às {t.strftime('%H:%M')}.")
+    send_email(f"Confirmado: {est.name}", appt.client_email, f"Agendado para {d.strftime('%d/%m')} às {t.strftime('%H:%M')}.\n\n Caso precise cancelar entre em contato com o estabelecimento com antecedência")
     if est.contact_email: send_email(f"Novo Cliente", est.contact_email, f"Novo agendamento recebido.")
     
     zap_msg = f"Olá, confirmo meu agendamento para: {d.strftime('%d/%m')} às {t.strftime('%H:%M')}."
