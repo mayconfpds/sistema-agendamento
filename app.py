@@ -502,8 +502,6 @@ def logout(): logout_user(); return redirect(url_for('login'))
 
 @app.route('/admin')
 @login_required
-@app.route('/admin')
-@login_required
 def admin_dashboard():
     if not current_user.establishment.has_access: return redirect(url_for('planos'))
     est = current_user.establishment
