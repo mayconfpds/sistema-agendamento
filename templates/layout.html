@@ -27,19 +27,26 @@
                 </button>
             {% else %}
                 {% if request.endpoint not in ['login', 'register_business', 'planos'] %}
-                    <button class="navbar-toggler border-0 shadow-none" type="button" data-bs-toggle="collapse" data-bs-target="#mobileNav">
+                    
+                    <button class="navbar-toggler border-0 shadow-none" type="button" data-bs-toggle="offcanvas" data-bs-target="#publicMobileNav">
                         <span class="navbar-toggler-icon"></span>
                     </button>
                     
-                    <div class="collapse navbar-collapse" id="mobileNav">
-                        <ul class="navbar-nav ms-auto align-items-lg-center mt-3 mt-lg-0 gap-2">
-                            <li class="nav-item">
-                                <a class="nav-link fw-bold text-dark px-3 text-center text-lg-start" href="{{ url_for('login') }}">Entrar</a>
-                            </li>
-                            <li class="nav-item text-center text-lg-start">
-                                <a href="{{ url_for('planos') }}" class="btn btn-primary rounded-pill px-4 py-2 w-100 w-lg-auto fw-bold">Testar Grátis</a>
-                            </li>
-                        </ul>
+                    <div class="offcanvas-lg offcanvas-end bg-white" tabindex="-1" id="publicMobileNav">
+                        <div class="offcanvas-header border-bottom d-lg-none">
+                            <h5 class="offcanvas-title fw-bold text-primary"><i class="bi bi-calendar-check"></i> Menu</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+                        </div>
+                        <div class="offcanvas-body">
+                            <ul class="navbar-nav ms-auto align-items-lg-center mt-3 mt-lg-0 gap-2 w-100 justify-content-end">
+                                <li class="nav-item">
+                                    <a class="nav-link fw-bold text-dark px-3 text-center text-lg-start" href="{{ url_for('login') }}">Entrar</a>
+                                </li>
+                                <li class="nav-item text-center text-lg-start">
+                                    <a href="{{ url_for('planos') }}" class="btn btn-primary rounded-pill px-4 py-2 w-100 w-lg-auto fw-bold">Testar Grátis</a>
+                                </li>
+                            </ul>
+                        </div>
                     </div>
                 {% endif %}
             {% endif %}
