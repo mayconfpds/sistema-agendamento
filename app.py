@@ -730,12 +730,22 @@ def delete_category(id):
     c = Category.query.get_or_404(id)
     if c.establishment_id == current_user.establishment_id:
         geral = Category.query.filter_by(establishment_id=current_user.establishment_id, name='Geral').first()
+        
+        # CORREÇÃO: Se a categoria "Geral" não existir, cria na mesma hora!
+        if not geral:
+            geral = Category(name='Geral', establishment_id=current_user.establishment_id)
+            db.session.add(geral)
+            db.session.commit()
+            
         if c.id == geral.id:
             flash('A categoria Geral não pode ser excluída.', 'danger')
         else:
+            # Move os serviços para a categoria Geral e apaga a categoria desejada
             Service.query.filter_by(category_id=c.id).update({'category_id': geral.id})
-            db.session.delete(c); db.session.commit()
+            db.session.delete(c)
+            db.session.commit()
             flash('Categoria excluída. Os serviços foram movidos para a categoria Geral.', 'success')
+            
     return redirect(url_for('admin_dashboard'))
 
 @app.route('/admin/servico/adicionar', methods=['POST'])
