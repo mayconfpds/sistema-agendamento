@@ -1028,5 +1028,12 @@ def get_available_times():
         curr += timedelta(minutes=15)
     return jsonify(avail)
 
+@app.route('/admin/ajuda')
+@login_required
+def ajuda():
+    # Não cobramos verificação de pagamento aqui, 
+    # para que até quem está com a conta expirada possa pedir ajuda.
+    return render_template('ajuda.html')
+
 if __name__ == '__main__':
     app.run(debug=True)
