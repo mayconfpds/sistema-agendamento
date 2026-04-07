@@ -1,4 +1,6 @@
 import os
+import json
+import urllib.request
 import random
 import string
 import smtplib
@@ -1071,7 +1073,7 @@ def recuperar_senha():
     if request.method == 'POST':
         email = request.form.get('email')
         
-        # CORREÇÃO: Busca o e-mail na tabela Establishment, e não no Admin
+        # Busca o e-mail na tabela Establishment
         est = Establishment.query.filter_by(contact_email=email).first()
         
         if est:
@@ -1084,33 +1086,38 @@ def recuperar_senha():
                 admin.password_hash = generate_password_hash(nova_senha)
                 db.session.commit()
                 
-                # 3. Envia o e-mail usando o SMTP do Brevo via Variáveis de Ambiente
+                # 3. Envia o e-mail usando a API REST do Brevo (Fura o bloqueio do Render)
                 try:
-                    smtp_server = "smtp-relay.brevo.com"
-                    smtp_port = 587
-                    smtp_login = os.environ.get("BREVO_SMTP_LOGIN")
-                    smtp_password = os.environ.get("BREVO_SMTP_PASSWORD")
+                    brevo_api_key = os.environ.get("BREVO_API_KEY")
                     remetente = os.environ.get("BREVO_SENDER_EMAIL") 
                     
-                    msg = MIMEMultipart()
-                    msg['From'] = remetente
-                    msg['To'] = email
-                    msg['Subject'] = "Recuperação de Senha - Agenda Fácil"
+                    url = "https://api.brevo.com/v3/smtp/email"
                     
-                    # Adicionei também o envio do 'username' no e-mail, caso ele tenha esquecido!
-                    corpo = f"Olá, {est.name}!\n\nA sua nova senha temporária é: {nova_senha}\n\nO seu usuário de login é: {admin.username}\n\nAceda ao painel e anote a sua senha num local seguro."
-                    msg.attach(MIMEText(corpo, 'plain', 'utf-8'))
+                    headers = {
+                        "accept": "application/json",
+                        "api-key": brevo_api_key,
+                        "content-type": "application/json"
+                    }
                     
-                    server = smtplib.SMTP(smtp_server, smtp_port)
-                    server.starttls()
-                    server.login(smtp_login, smtp_password)
-                    server.sendmail(remetente, email, msg.as_string())
-                    server.quit()
+                    corpo_email = f"Olá, {est.name}!\n\nA sua nova senha temporária é: {nova_senha}\n\nO seu usuário de login é: {admin.username}\n\nAceda ao painel e anote a sua senha num local seguro."
+                    
+                    data = {
+                        "sender": {"name": "Suporte Agenda Fácil", "email": remetente},
+                        "to": [{"email": email, "name": est.name}],
+                        "subject": "Recuperação de Senha - Agenda Fácil",
+                        "textContent": corpo_email
+                    }
+                    
+                    # Faz a requisição POST para o Brevo
+                    req = urllib.request.Request(url, data=json.dumps(data).encode('utf-8'), headers=headers, method='POST')
+                    
+                    with urllib.request.urlopen(req) as response:
+                        resposta_brevo = response.read()
                         
                     flash('Uma senha temporária foi enviada para o seu e-mail!', 'success')
                 except Exception as e:
-                    flash('Erro ao enviar o e-mail. Contacte o suporte.', 'danger')
-                    print(f"Erro SMTP Brevo: {e}")
+                    flash('Erro ao conectar com o serviço de e-mail. Contacte o suporte.', 'danger')
+                    print(f"Erro API Brevo: {e}")
             else:
                 flash('Erro interno: Administrador não encontrado para esta conta.', 'danger')
         else:
