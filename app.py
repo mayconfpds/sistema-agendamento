@@ -1,4 +1,9 @@
 import os
+import random
+import string
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 import threading
 import time as time_module
 import socket
@@ -1034,6 +1039,55 @@ def ajuda():
     # Não cobramos verificação de pagamento aqui, 
     # para que até quem está com a conta expirada possa pedir ajuda.
     return render_template('ajuda.html')
+
+@app.route('/recuperar-senha', methods=['GET', 'POST'])
+def recuperar_senha():
+    if request.method == 'POST':
+        email = request.form.get('email')
+        admin = Admin.query.filter_by(email=email).first()
+        
+        if admin:
+            # 1. Gera uma senha temporária de 6 dígitos
+            nova_senha = ''.join(random.choices(string.digits, k=6))
+            
+            # 2. Salva no banco de dados com hash
+            admin.password_hash = generate_password_hash(nova_senha)
+            db.session.commit()
+            
+            # 3. Envia o e-mail usando o SMTP do Brevo via Variáveis de Ambiente
+            try:
+                # Puxa as informações de segurança do painel do Render
+                smtp_server = "smtp-relay.brevo.com"
+                smtp_port = 587
+                smtp_login = os.environ.get("BREVO_SMTP_LOGIN")
+                smtp_password = os.environ.get("BREVO_SMTP_PASSWORD")
+                remetente = os.environ.get("BREVO_SENDER_EMAIL") # O e-mail que você usa para enviar
+                
+                msg = MIMEMultipart()
+                msg['From'] = remetente
+                msg['To'] = admin.email
+                msg['Subject'] = "Recuperação de Senha - Agenda Fácil"
+                
+                corpo = f"Olá, {admin.establishment.name}!\n\nA sua nova senha temporária é: {nova_senha}\n\nAceda ao painel e anote a sua senha num local seguro."
+                msg.attach(MIMEText(corpo, 'plain', 'utf-8'))
+                
+                # Conexão segura TLS com o Brevo
+                server = smtplib.SMTP(smtp_server, smtp_port)
+                server.starttls()
+                server.login(smtp_login, smtp_password)
+                server.sendmail(remetente, admin.email, msg.as_string())
+                server.quit()
+                    
+                flash('Uma senha temporária foi enviada para o seu e-mail!', 'success')
+            except Exception as e:
+                flash('Erro ao enviar o e-mail. Contacte o suporte.', 'danger')
+                print(f"Erro SMTP Brevo: {e}")
+        else:
+            flash('E-mail não encontrado no sistema.', 'danger')
+            
+        return redirect(url_for('login'))
+        
+    return render_template('recuperar_senha.html')
 
 if __name__ == '__main__':
     app.run(debug=True)
