@@ -551,6 +551,32 @@ def admin_dashboard():
     
     return render_template('admin.html', appointments=appts, services=services, categories=categories, establishment=est, schedules=schedules, blacklists=blacklists, professionals=professionals, today_count=today_count)
 
+@app.route('/admin/alterar-senha', methods=['GET', 'POST'])
+@login_required
+def alterar_senha():
+    if request.method == 'POST':
+        senha_atual = request.form.get('senha_atual')
+        nova_senha = request.form.get('nova_senha')
+        confirmar_senha = request.form.get('confirmar_senha')
+
+        # 1. Verifica se a senha atual digitada está correta
+        if not check_password_hash(current_user.password_hash, senha_atual):
+            flash('A senha atual está incorreta.', 'danger')
+        # 2. Verifica se as novas senhas coincidem
+        elif nova_senha != confirmar_senha:
+            flash('As novas senhas não coincidem. Tente novamente.', 'danger')
+        # 3. Exige um mínimo de segurança
+        elif len(nova_senha) < 6:
+            flash('A nova senha deve ter pelo menos 6 caracteres.', 'danger')
+        # 4. Salva a nova senha
+        else:
+            current_user.password_hash = generate_password_hash(nova_senha)
+            db.session.commit()
+            flash('Senha alterada com sucesso!', 'success')
+            return redirect(url_for('admin_dashboard'))
+
+    return render_template('alterar_senha.html')
+
 @app.route('/admin/historico')
 @login_required
 def historico_atendimentos():
@@ -1044,44 +1070,49 @@ def ajuda():
 def recuperar_senha():
     if request.method == 'POST':
         email = request.form.get('email')
-        admin = Admin.query.filter_by(email=email).first()
         
-        if admin:
-            # 1. Gera uma senha temporária de 6 dígitos
-            nova_senha = ''.join(random.choices(string.digits, k=6))
-            
-            # 2. Salva no banco de dados com hash
-            admin.password_hash = generate_password_hash(nova_senha)
-            db.session.commit()
-            
-            # 3. Envia o e-mail usando o SMTP do Brevo via Variáveis de Ambiente
-            try:
-                # Puxa as informações de segurança do painel do Render
-                smtp_server = "smtp-relay.brevo.com"
-                smtp_port = 587
-                smtp_login = os.environ.get("BREVO_SMTP_LOGIN")
-                smtp_password = os.environ.get("BREVO_SMTP_PASSWORD")
-                remetente = os.environ.get("BREVO_SENDER_EMAIL") # O e-mail que você usa para enviar
+        # CORREÇÃO: Busca o e-mail na tabela Establishment, e não no Admin
+        est = Establishment.query.filter_by(contact_email=email).first()
+        
+        if est:
+            admin = Admin.query.filter_by(establishment_id=est.id).first()
+            if admin:
+                # 1. Gera uma senha temporária de 6 dígitos
+                nova_senha = ''.join(random.choices(string.digits, k=6))
                 
-                msg = MIMEMultipart()
-                msg['From'] = remetente
-                msg['To'] = admin.email
-                msg['Subject'] = "Recuperação de Senha - Agenda Fácil"
+                # 2. Salva no banco de dados com hash
+                admin.password_hash = generate_password_hash(nova_senha)
+                db.session.commit()
                 
-                corpo = f"Olá, {admin.establishment.name}!\n\nA sua nova senha temporária é: {nova_senha}\n\nAceda ao painel e anote a sua senha num local seguro."
-                msg.attach(MIMEText(corpo, 'plain', 'utf-8'))
-                
-                # Conexão segura TLS com o Brevo
-                server = smtplib.SMTP(smtp_server, smtp_port)
-                server.starttls()
-                server.login(smtp_login, smtp_password)
-                server.sendmail(remetente, admin.email, msg.as_string())
-                server.quit()
+                # 3. Envia o e-mail usando o SMTP do Brevo via Variáveis de Ambiente
+                try:
+                    smtp_server = "smtp-relay.brevo.com"
+                    smtp_port = 587
+                    smtp_login = os.environ.get("BREVO_SMTP_LOGIN")
+                    smtp_password = os.environ.get("BREVO_SMTP_PASSWORD")
+                    remetente = os.environ.get("BREVO_SENDER_EMAIL") 
                     
-                flash('Uma senha temporária foi enviada para o seu e-mail!', 'success')
-            except Exception as e:
-                flash('Erro ao enviar o e-mail. Contacte o suporte.', 'danger')
-                print(f"Erro SMTP Brevo: {e}")
+                    msg = MIMEMultipart()
+                    msg['From'] = remetente
+                    msg['To'] = email
+                    msg['Subject'] = "Recuperação de Senha - Agenda Fácil"
+                    
+                    # Adicionei também o envio do 'username' no e-mail, caso ele tenha esquecido!
+                    corpo = f"Olá, {est.name}!\n\nA sua nova senha temporária é: {nova_senha}\n\nO seu usuário de login é: {admin.username}\n\nAceda ao painel e anote a sua senha num local seguro."
+                    msg.attach(MIMEText(corpo, 'plain', 'utf-8'))
+                    
+                    server = smtplib.SMTP(smtp_server, smtp_port)
+                    server.starttls()
+                    server.login(smtp_login, smtp_password)
+                    server.sendmail(remetente, email, msg.as_string())
+                    server.quit()
+                        
+                    flash('Uma senha temporária foi enviada para o seu e-mail!', 'success')
+                except Exception as e:
+                    flash('Erro ao enviar o e-mail. Contacte o suporte.', 'danger')
+                    print(f"Erro SMTP Brevo: {e}")
+            else:
+                flash('Erro interno: Administrador não encontrado para esta conta.', 'danger')
         else:
             flash('E-mail não encontrado no sistema.', 'danger')
             

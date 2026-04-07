@@ -1,0 +1,27 @@
+from werkzeug.security import check_password_hash, generate_password_hash
+
+@app.route('/admin/alterar-senha', methods=['GET', 'POST'])
+@login_required
+def alterar_senha():
+    if request.method == 'POST':
+        senha_atual = request.form.get('senha_atual')
+        nova_senha = request.form.get('nova_senha')
+        confirmar_senha = request.form.get('confirmar_senha')
+
+        # 1. Verifica se a senha atual digitada está correta
+        if not check_password_hash(current_user.password_hash, senha_atual):
+            flash('A senha atual está incorreta.', 'danger')
+        # 2. Verifica se as novas senhas coincidem
+        elif nova_senha != confirmar_senha:
+            flash('As novas senhas não coincidem. Tente novamente.', 'danger')
+        # 3. Exige um mínimo de segurança
+        elif len(nova_senha) < 6:
+            flash('A nova senha deve ter pelo menos 6 caracteres.', 'danger')
+        # 4. Salva a nova senha
+        else:
+            current_user.password_hash = generate_password_hash(nova_senha)
+            db.session.commit()
+            flash('Senha alterada com sucesso!', 'success')
+            return redirect(url_for('admin_dashboard'))
+
+    return render_template('alterar_senha.html')
