@@ -1,27 +1,46 @@
-from werkzeug.security import check_password_hash, generate_password_hash
+{% extends 'layout.html' %}
+{% block title %}Alterar Senha{% endblock %}
+{% block content %}
+<div class="container py-4" style="max-width: 800px;">
+    <div class="d-flex align-items-center mb-4 gap-3">
+        <div class="bg-primary bg-opacity-10 p-3 rounded-circle text-primary shadow-sm">
+            <i class="bi bi-shield-lock fs-3"></i>
+        </div>
+        <div>
+            <h2 class="h3 mb-0 fw-bold text-dark">Segurança e Senha</h2>
+            <p class="text-muted mb-0">Atualize a sua senha de acesso ao painel da Agenda Fácil.</p>
+        </div>
+    </div>
 
-@app.route('/admin/alterar-senha', methods=['GET', 'POST'])
-@login_required
-def alterar_senha():
-    if request.method == 'POST':
-        senha_atual = request.form.get('senha_atual')
-        nova_senha = request.form.get('nova_senha')
-        confirmar_senha = request.form.get('confirmar_senha')
-
-        # 1. Verifica se a senha atual digitada está correta
-        if not check_password_hash(current_user.password_hash, senha_atual):
-            flash('A senha atual está incorreta.', 'danger')
-        # 2. Verifica se as novas senhas coincidem
-        elif nova_senha != confirmar_senha:
-            flash('As novas senhas não coincidem. Tente novamente.', 'danger')
-        # 3. Exige um mínimo de segurança
-        elif len(nova_senha) < 6:
-            flash('A nova senha deve ter pelo menos 6 caracteres.', 'danger')
-        # 4. Salva a nova senha
-        else:
-            current_user.password_hash = generate_password_hash(nova_senha)
-            db.session.commit()
-            flash('Senha alterada com sucesso!', 'success')
-            return redirect(url_for('admin_dashboard'))
-
-    return render_template('alterar_senha.html')
+    <div class="row">
+        <div class="col-md-8 col-lg-7">
+            <div class="card shadow-sm border-0">
+                <div class="card-body p-4 p-md-5">
+                    <form method="POST">
+                        <div class="mb-4">
+                            <label class="form-label fw-bold small text-muted">Senha Atual</label>
+                            <input type="password" name="senha_atual" class="form-control form-control-lg bg-light" required>
+                        </div>
+                        
+                        <hr class="text-muted opacity-25 my-4">
+                        
+                        <div class="mb-3">
+                            <label class="form-label fw-bold small text-muted">Nova Senha</label>
+                            <input type="password" name="nova_senha" class="form-control form-control-lg" placeholder="Mínimo 6 caracteres" required minlength="6">
+                        </div>
+                        
+                        <div class="mb-4">
+                            <label class="form-label fw-bold small text-muted">Confirmar Nova Senha</label>
+                            <input type="password" name="confirmar_senha" class="form-control form-control-lg" required minlength="6">
+                        </div>
+                        
+                        <button type="submit" class="btn btn-primary btn-lg w-100 fw-bold shadow-sm">
+                            Guardar Nova Senha
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
