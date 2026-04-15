@@ -1,6 +1,6 @@
 {% extends 'layout.html' %}
 {% block content %}
-<div class="container py-5" style="max-width: 900px;">
+<div class="container py-5" id="container-vitrine" style="max-width: 900px;">
     <div class="text-center mb-5">
         {% if establishment.logo_filename %}
             <img src="{{ url_for('static', filename='uploads/' + establishment.logo_filename) }}" class="rounded-circle shadow mb-3 border border-3 border-white" style="width: 110px; height: 110px; object-fit: cover;">
@@ -76,4 +76,61 @@
     </div>
     
 </div>
+
+<button id="btn-acessibilidade" class="btn btn-dark shadow-lg d-flex justify-content-center align-items-center transition" 
+        style="position: fixed; bottom: 20px; left: 20px; z-index: 9999; border-radius: 50%; width: 55px; height: 55px; border: 2px solid white;" title="Ativar Modo de Leitura">
+    <i class="bi bi-eye fs-3"></i>
+</button>
+
+<style>
+    /* Transição suave */
+    #container-vitrine, #container-vitrine * { transition: font-size 0.2s ease, padding 0.2s ease; }
+    
+    /* Aumentos proporcionais do Modo Leitura */
+    #container-vitrine.modo-leitura { font-size: 1.25rem !important; }
+    #container-vitrine.modo-leitura .display-5 { font-size: 3.5rem !important; }
+    #container-vitrine.modo-leitura .accordion-button { font-size: 1.5rem !important; }
+    #container-vitrine.modo-leitura h5 { font-size: 1.4rem !important; }
+    #container-vitrine.modo-leitura .fs-5 { font-size: 1.5rem !important; }
+    #container-vitrine.modo-leitura .btn { 
+        font-size: 1.2rem !important; 
+        padding: 0.8rem 2rem !important; 
+    }
+    #container-vitrine.modo-leitura .badge { font-size: 1.1rem !important; }
+    #container-vitrine.modo-leitura .small, 
+    #container-vitrine.modo-leitura small { font-size: 1rem !important; }
+    
+    #btn-acessibilidade:hover { transform: scale(1.1); }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    const btnAcessibilidade = document.getElementById('btn-acessibilidade');
+    const containerVitrine = document.getElementById('container-vitrine');
+    const icone = btnAcessibilidade.querySelector('i');
+
+    // Verifica a memória para ver se o idoso já ativou em outra página
+    if (localStorage.getItem('modo_leitura_ativo') === 'sim') {
+        containerVitrine.classList.add('modo-leitura');
+        icone.classList.replace('bi-eye', 'bi-eye-fill');
+        btnAcessibilidade.classList.replace('btn-dark', 'btn-primary');
+    }
+
+    btnAcessibilidade.addEventListener('click', function() {
+        containerVitrine.classList.toggle('modo-leitura');
+        
+        if (containerVitrine.classList.contains('modo-leitura')) {
+            localStorage.setItem('modo_leitura_ativo', 'sim');
+            icone.classList.replace('bi-eye', 'bi-eye-fill');
+            btnAcessibilidade.classList.replace('btn-dark', 'btn-primary');
+        } else {
+            localStorage.setItem('modo_leitura_ativo', 'nao');
+            icone.classList.replace('bi-eye-fill', 'bi-eye');
+            btnAcessibilidade.classList.replace('btn-primary', 'btn-dark');
+        }
+    });
+});
+</script>
 {% endblock %}

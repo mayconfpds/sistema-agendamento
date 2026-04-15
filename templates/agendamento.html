@@ -1,6 +1,6 @@
 {% extends 'layout.html' %}
 {% block content %}
-<div class="container py-4">
+<div class="container py-4" id="container-agendamento">
     <div class="row justify-content-center">
         <div class="col-lg-6">
             <div class="card shadow-lg border-0 p-4 rounded-4">
@@ -52,7 +52,11 @@
 
                     <div class="mb-3"><label class="fw-bold small">Seu Nome</label><input type="text" name="client_name" class="form-control" required></div>
                     <div class="row g-2 mb-3">
-                        <div class="col-6"><label class="fw-bold small">WhatsApp</label><input type="tel" name="client_phone" class="form-control" required></div>
+                        <div class="col-6">
+                            <label class="fw-bold small">WhatsApp</label>
+                            <input type="tel" id="client_phone_mask" class="form-control fw-bold text-primary" placeholder="(00) 00000-0000" maxlength="15" required oninput="aplicarMascara(this)">
+                            <input type="hidden" name="client_phone" id="client_phone_hidden">
+                        </div>
                         <div class="col-6"><label class="fw-bold small">Seu E-mail</label><input type="email" name="client_email" class="form-control" required></div>
                     </div>
                     
@@ -72,9 +76,30 @@
         </div>
     </div>
 </div>
+
+<button id="btn-acessibilidade" class="btn btn-dark shadow-lg d-flex justify-content-center align-items-center" 
+        style="position: fixed; bottom: 20px; left: 20px; z-index: 9999; border-radius: 50%; width: 55px; height: 55px; border: 2px solid white;">
+    <i class="bi bi-eye fs-3"></i>
+</button>
+
+<style>
+    /* O CSS agora foca apenas no container do agendamento */
+    #container-agendamento.modo-leitura { font-size: 1.25rem !important; }
+    #container-agendamento.modo-leitura h4, 
+    #container-agendamento.modo-leitura h6 { font-size: 1.5rem !important; }
+    #container-agendamento.modo-leitura .btn, 
+    #container-agendamento.modo-leitura .form-control,
+    #container-agendamento.modo-leitura .form-select { 
+        font-size: 1.2rem !important; 
+        padding: 0.8rem !important;
+    }
+    #container-agendamento.modo-leitura .form-check-label { font-size: 1.1rem !important; }
+</style>
 {% endblock %}
+
 {% block scripts %}
 <script>
+// --- 1. LÓGICA DE AGENDAMENTO E VALORES ---
 let totalDur = 0;
 
 function updateTotals() {
@@ -106,7 +131,7 @@ async function fetchSlots() {
     const dVal = document.getElementById('date').value;
     if(!dVal) return;
     
-    // NOVO: Puxa a escolha do cliente para filtrar os horários dinamicamente
+    // Puxa a escolha do cliente para filtrar os horários dinamicamente
     const profSelect = document.getElementById('professional');
     const profId = profSelect ? profSelect.value : '';
     
@@ -135,5 +160,60 @@ async function fetchSlots() {
 }
 
 document.getElementById('date').addEventListener('change', fetchSlots);
+
+// --- 2. LÓGICA DE ACESSIBILIDADE (MODO LEITURA) ---
+document.addEventListener("DOMContentLoaded", function() {
+    const btn = document.getElementById('btn-acessibilidade');
+    const container = document.getElementById('container-agendamento');
+    const icone = btn.querySelector('i');
+
+    if (localStorage.getItem('modo_leitura_ativo') === 'sim') {
+        container.classList.add('modo-leitura');
+        icone.classList.replace('bi-eye', 'bi-eye-fill');
+        btn.classList.replace('btn-dark', 'btn-primary');
+    }
+
+    btn.addEventListener('click', function() {
+        container.classList.toggle('modo-leitura');
+        const ativo = container.classList.contains('modo-leitura');
+        localStorage.setItem('modo_leitura_ativo', ativo ? 'sim' : 'nao');
+        icone.classList.toggle('bi-eye', !ativo);
+        icone.classList.toggle('bi-eye-fill', ativo);
+        btn.classList.toggle('btn-dark', !ativo);
+        btn.classList.toggle('btn-primary', ativo);
+    });
+});
+
+// --- 3. MÁSCARA INTELIGENTE DO WHATSAPP ---
+function aplicarMascara(input) {
+    // Remove tudo o que não for dígito
+    let v = input.value.replace(/\D/g, '');
+    
+    // Salva o valor limpo (só números) no input oculto que vai para o servidor
+    document.getElementById('client_phone_hidden').value = v;
+    
+    // Formatação visual fluida (XX) XXXXX-XXXX
+    if (v.length > 10) {
+        v = v.replace(/^(\d{2})(\d{5})(\d{4}).*/, '($1) $2-$3');
+    } else if (v.length > 5) {
+        v = v.replace(/^(\d{2})(\d{4})(\d{0,4}).*/, '($1) $2-$3');
+    } else if (v.length > 2) {
+        v = v.replace(/^(\d{2})(\d{0,5})/, '($1) $2');
+    } else if (v.length > 0) {
+        v = v.replace(/^(\d{0,2})/, '($1');
+    }
+    
+    input.value = v;
+}
+
+// Intercetador de Segurança: Impede o cliente de enviar um número muito curto
+document.getElementById('form').addEventListener('submit', function(e) {
+    const phoneLimpo = document.getElementById('client_phone_hidden').value;
+    if (phoneLimpo.length < 10 || phoneLimpo.length > 11) {
+        e.preventDefault();
+        alert("Por favor, introduza um número de WhatsApp válido com o DDD regional.");
+        document.getElementById('client_phone_mask').focus();
+    }
+});
 </script>
 {% endblock %}

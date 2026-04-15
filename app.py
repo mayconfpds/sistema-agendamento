@@ -10,7 +10,7 @@ import threading
 import time as time_module
 import socket
 import requests
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -25,6 +25,9 @@ socket.setdefaulttimeout(15)
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'chave-v47-trial-br'
 basedir = os.path.abspath(os.path.dirname(__file__))
+
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)
+app.config['REMEMBER_COOKIE_DURATION'] = timedelta(days=30)
 
 database_url = os.environ.get('DATABASE_URL')
 if database_url and database_url.startswith("postgres://"):
@@ -497,7 +500,8 @@ def login():
     if request.method == 'POST':
         adm = Admin.query.filter_by(username=request.form.get('username')).first()
         if adm and adm.check_password(request.form.get('password')):
-            login_user(adm)
+            session.permanent = True
+            login_user(adm, remember=True)
             if not adm.establishment.has_access: return redirect(url_for('planos'))
             return redirect(url_for('admin_dashboard'))
         flash('Login inválido.', 'danger')
@@ -713,6 +717,7 @@ def update_settings():
     if not current_user.establishment.has_access: return redirect(url_for('planos'))
     est = current_user.establishment
     ft = request.form.get('form_type')
+    
     if ft == 'contact':
         est.contact_phone = request.form.get('contact_phone')
         est.contact_email = request.form.get('contact_email')
@@ -722,6 +727,7 @@ def update_settings():
         try: est.loyalty_points_goal = int(request.form.get('loyalty_points_goal', 0))
         except: est.loyalty_points_goal = 0
         est.loyalty_reward = request.form.get('loyalty_reward')
+        
         if 'logo' in request.files:
             file = request.files['logo']
             if file and allowed_file(file.filename):
@@ -729,7 +735,7 @@ def update_settings():
                 uid = f"{est.id}_{int(time_module.time())}_{fname}"
                 file.save(os.path.join(app.config['UPLOAD_FOLDER'], uid))
                 est.logo_filename = uid
-        flash('Salvo com sucesso!', 'success')
+                
     elif ft == 'schedule':
         for sid in request.form.getlist('schedule_id'):
             ds = DaySchedule.query.get(sid)
@@ -743,8 +749,13 @@ def update_settings():
                 else: ds.lunch_start = None; ds.lunch_end = None
                 if p2s and p2e: ds.pause2_start = datetime.strptime(p2s, '%H:%M').time(); ds.pause2_end = datetime.strptime(p2e, '%H:%M').time()
                 else: ds.pause2_start = None; ds.pause2_end = None
-        flash('Horários atualizados!', 'success')
+
     db.session.commit()
+    
+    # Se for uma requisição AJAX, responde silenciosamente
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify({'success': True})
+        
     return redirect(url_for('admin_dashboard'))
 
 @app.route('/admin/categoria/adicionar', methods=['POST'])
@@ -754,6 +765,8 @@ def add_category():
     if name:
         c = Category(name=name, establishment_id=current_user.establishment_id)
         db.session.add(c); db.session.commit()
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({'success': True})
         flash('Categoria criada com sucesso!', 'success')
     return redirect(url_for('admin_dashboard'))
 
@@ -763,20 +776,21 @@ def delete_category(id):
     c = Category.query.get_or_404(id)
     if c.establishment_id == current_user.establishment_id:
         geral = Category.query.filter_by(establishment_id=current_user.establishment_id, name='Geral').first()
-        
-        # CORREÇÃO: Se a categoria "Geral" não existir, cria na mesma hora!
         if not geral:
             geral = Category(name='Geral', establishment_id=current_user.establishment_id)
             db.session.add(geral)
             db.session.commit()
             
         if c.id == geral.id:
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({'success': False, 'error': 'A categoria Geral não pode ser excluída.'})
             flash('A categoria Geral não pode ser excluída.', 'danger')
         else:
-            # Move os serviços para a categoria Geral e apaga a categoria desejada
             Service.query.filter_by(category_id=c.id).update({'category_id': geral.id})
             db.session.delete(c)
             db.session.commit()
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({'success': True})
             flash('Categoria excluída. Os serviços foram movidos para a categoria Geral.', 'success')
             
     return redirect(url_for('admin_dashboard'))
@@ -785,26 +799,72 @@ def delete_category(id):
 @login_required
 def add_service():
     name = request.form.get('name')
-    price = request.form.get('price')
+    price_val = request.form.get('price')
     duration = request.form.get('duration')
     category_id = request.form.get('category_id')
-    is_combo = True if request.form.get('is_combo') == 'on' else False
+    is_combo = str(request.form.get('is_combo')).lower() in ['true', 'on', '1']
     original_price = request.form.get('original_price')
     
-    if name and price and duration and category_id:
-        s = Service(name=name, price=float(price.replace(',', '.')), duration=int(duration), category_id=category_id, establishment_id=current_user.establishment_id)
+    if name and price_val and duration and category_id:
+        s = Service(name=name, price=float(str(price_val).replace(',', '.')), duration=int(duration), category_id=category_id, establishment_id=current_user.establishment_id)
         s.is_combo = is_combo
-        if is_combo and original_price:
-            s.original_price = float(original_price.replace(',', '.'))
+        if is_combo and original_price and str(original_price).strip() != '':
+            s.original_price = float(str(original_price).replace(',', '.'))
             
-        db.session.add(s); db.session.commit()
+        db.session.add(s)
+        db.session.commit()
+        
+        # Se for um envio silencioso (JavaScript AJAX)
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({'success': True})
+            
         flash('Serviço adicionado com sucesso!', 'success')
+    return redirect(url_for('admin_dashboard'))
+
+@app.route('/admin/servico/editar/<int:id>', methods=['POST'])
+@login_required
+def edit_service(id):
+    s = Service.query.get_or_404(id)
+    if s.establishment_id != current_user.establishment_id: 
+        return jsonify({'success': False, 'error': 'Acesso negado'}), 403
+
+    s.name = request.form.get('name', s.name)
+    price_val = request.form.get('price')
+    if price_val: s.price = float(str(price_val).replace(',', '.'))
+    
+    duration = request.form.get('duration')
+    if duration: s.duration = int(duration)
+    
+    category_id = request.form.get('category_id')
+    if category_id: s.category_id = int(category_id)
+    
+    s.is_combo = str(request.form.get('is_combo')).lower() in ['true', 'on', '1']
+    
+    original_price = request.form.get('original_price')
+    if s.is_combo and original_price and str(original_price).strip() != '':
+        s.original_price = float(str(original_price).replace(',', '.'))
+    else:
+        s.original_price = None
+
+    db.session.commit()
+
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify({'success': True})
+
+    flash('Serviço atualizado!', 'success')
     return redirect(url_for('admin_dashboard'))
 
 @app.route('/admin/servicos/excluir/<int:id>', methods=['POST'])
 @login_required
 def delete_service(id):
-    s = Service.query.get(id); db.session.delete(s); db.session.commit()
+    s = Service.query.get_or_404(id)
+    if s.establishment_id == current_user.establishment_id:
+        db.session.delete(s)
+        db.session.commit()
+
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify({'success': True})
+
     return redirect(url_for('admin_dashboard'))
 
 @app.route('/admin/agendamentos/excluir/<int:id>', methods=['POST'])
@@ -814,6 +874,8 @@ def delete_appointment(id):
     if a.establishment_id == current_user.establishment_id:
         a.status = 'cancelado'
         db.session.commit()
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify({'success': True})
     return redirect(url_for('admin_dashboard'))
 
 @app.route('/admin/agendamentos/concluir/<int:id>', methods=['POST'])
@@ -821,25 +883,21 @@ def delete_appointment(id):
 def complete_appointment(id):
     if not current_user.establishment.has_access: return redirect(url_for('planos'))
     a = Appointment.query.get_or_404(id)
-    if a.establishment_id != current_user.establishment_id: return "Erro", 403
+    if a.establishment_id != current_user.establishment_id: 
+        return jsonify({'success': False, 'error': 'Erro de acesso'}), 403
     
     est = a.establishment
-    
-    # Cálculo da comissão para o Plano Gestão
     if est.plan_type == 'gestao':
         prof_id = request.form.get('professional_id')
         if prof_id:
             a.professional_id = int(prof_id)
-            
         if a.professional_id:
             prof = Professional.query.get(a.professional_id)
             if prof:
                 a.commission_value = a.total_price * (prof.commission_rate / 100.0)
     
-    # --- CÓDIGO ANTIGO VALIDADO DE CONCLUSÃO E E-MAIL ---
     a.status = 'concluido'
     
-    # --- SISTEMA DE FIDELIDADE ---
     msg_fidelidade = ""
     if est.loyalty_points_goal and est.loyalty_points_goal > 0:
         cliente = Client.query.filter_by(establishment_id=est.id, phone=a.client_phone).first()
@@ -849,7 +907,6 @@ def complete_appointment(id):
         
         cliente.points += 1
         pontos_restantes = est.loyalty_points_goal - cliente.points
-        
         if pontos_restantes > 0:
             msg_fidelidade = f"\n\n🎁 Fidelidade: Você ganhou 1 ponto! Faltam apenas {pontos_restantes} ponto(s) para resgatar o seu prémio: {est.loyalty_reward}."
         else:
@@ -862,6 +919,8 @@ def complete_appointment(id):
     body = f"Olá {a.client_name}!\n\nO seu atendimento foi concluído. Queremos saber a sua opinião!\n\nÉ super rápido: você só precisa clicar no link abaixo e dar uma nota de 1 a 5 estrelas.\n\n{link_av}{msg_fidelidade}\n\nObrigado!"
     send_email(subj, a.client_email, body)
     
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify({'success': True})
     flash('Atendimento concluído! Ponto contabilizado.', 'success')
     return redirect(url_for('admin_dashboard'))
 
@@ -872,6 +931,8 @@ def archive_appointment(id):
     if a.establishment_id == current_user.establishment_id:
         a.status = 'arquivado'
         db.session.commit()
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify({'success': True})
     return redirect(url_for('admin_dashboard'))
 
 @app.route('/admin/cliente/<int:id>/zerar_pontos', methods=['POST'])
@@ -881,6 +942,8 @@ def reset_loyalty(id):
     if cliente.establishment_id == current_user.establishment_id:
         cliente.points = 0
         db.session.commit()
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({'success': True})
         flash('Prémio entregue! Os pontos do cliente foram zerados.', 'success')
     return redirect(url_for('admin_dashboard'))
 
@@ -919,12 +982,17 @@ def rate_appointment(id):
 def mark_no_show(id):
     if not current_user.establishment.has_access: return redirect(url_for('planos'))
     a = Appointment.query.get_or_404(id)
-    if a.establishment_id != current_user.establishment_id: return "Erro", 403
+    if a.establishment_id != current_user.establishment_id: 
+        return jsonify({'success': False, 'error': 'Erro de acesso'}), 403
+    
     if not Blacklist.query.filter_by(establishment_id=a.establishment_id, client_phone=a.client_phone).first():
         bl = Blacklist(establishment_id=a.establishment_id, client_phone=a.client_phone)
         db.session.add(bl)
     a.status = 'falta'
     db.session.commit()
+    
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify({'success': True})
     flash('Cliente marcado como Falta e bloqueado.', 'warning')
     return redirect(url_for('admin_dashboard'))
 
@@ -938,8 +1006,12 @@ def add_blacklist():
         if not exists:
             db.session.add(Blacklist(client_phone=phone, establishment_id=current_user.establishment_id))
             db.session.commit()
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({'success': True})
             flash('Número bloqueado.', 'success')
         else:
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({'success': False, 'error': 'Número já bloqueado.'})
             flash('Número já bloqueado.', 'warning')
     return redirect(url_for('admin_dashboard'))
 
@@ -950,6 +1022,8 @@ def remove_blacklist(id):
     if b.establishment_id == current_user.establishment_id:
         db.session.delete(b)
         db.session.commit()
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({'success': True})
         flash('Número desbloqueado.', 'success')
     return redirect(url_for('admin_dashboard'))
 
@@ -966,6 +1040,8 @@ def add_professional():
         count = Professional.query.filter_by(establishment_id=est.id).count()
         est.capacity = max(1, count)
         db.session.commit()
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({'success': True})
         flash('Profissional adicionado à equipe!', 'success')
     return redirect(url_for('admin_dashboard'))
 
@@ -979,6 +1055,8 @@ def delete_professional(id):
         count = Professional.query.filter_by(establishment_id=est.id).count()
         est.capacity = max(1, count)
         db.session.commit()
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({'success': True})
     return redirect(url_for('admin_dashboard'))
 
 @app.route('/admin/ativar-gestao')
@@ -1126,6 +1204,19 @@ def recuperar_senha():
         return redirect(url_for('login'))
         
     return render_template('recuperar_senha.html')
+
+@app.route('/api/check_novos_agendamentos')
+@login_required
+def check_novos_agendamentos():
+    # Verifica se o barbeiro tem acesso ativo
+    if not current_user.establishment.has_access: 
+        return jsonify({'max_id': 0})
+    
+    # Busca o agendamento mais recente deste estabelecimento
+    ultimo = Appointment.query.filter_by(establishment_id=current_user.establishment_id).order_by(Appointment.id.desc()).first()
+    
+    # Devolve o ID do último agendamento (ou 0 se a agenda estiver vazia)
+    return jsonify({'max_id': ultimo.id if ultimo else 0})
 
 if __name__ == '__main__':
     app.run(debug=True)
