@@ -1,21 +1,104 @@
 {% extends 'layout.html' %}
-{% block content %}
-<div class="container py-5 text-center">
-    <div class="card shadow-lg border-0 rounded-4 p-5 max-w-lg mx-auto">
-        <div class="mb-4 text-success display-1"><i class="bi bi-check-circle-fill"></i></div>
-        <h2 class="fw-bold text-gray-800">Agendamento Confirmado!</h2>
-        <p class="text-muted mb-4">Enviamos um e-mail com os detalhes.</p>
-        
-        <div class="bg-light p-3 rounded-3 mb-4 text-start border">
-            <p class="mb-2"><strong>Serviços:</strong><br><span class="text-primary fw-bold">{{ appointment.service_names }}</span></p>
-            <p class="mb-2"><strong>Data:</strong> {{ appointment.appointment_date.strftime('%d/%m/%Y') }} às {{ appointment.appointment_time.strftime('%H:%M') }}</p>
-            <p class="mb-0 border-top pt-2 mt-2"><strong>Total a pagar no local:</strong> <span class="text-success fw-bold fs-5">R$ {{ "%.2f"|format(appointment.total_price) }}</span></p>
-        </div>
+{% block title %}Sucesso - {{ appointment.establishment.name }}{% endblock %}
 
-        {% if zap_link != "#" %}
-        <a href="{{ zap_link }}" target="_blank" class="btn btn-success w-100 py-3 fw-bold rounded-pill mb-2"><i class="bi bi-whatsapp"></i> Enviar Mensagem ao Profissional</a>
-        {% endif %}
-        <div class="mt-3"><a href="{{ url_for('establishment_services', url_prefix=appointment.establishment.url_prefix) }}" class="text-decoration-none fw-bold">Agendar Outro</a></div>
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-6 col-md-8">
+            <div class="card shadow-lg border-0 rounded-4 overflow-hidden text-center">
+                
+                <div class="bg-success p-5 text-white">
+                    <i class="bi bi-check-circle-fill display-1 mb-3 d-block shadow-sm rounded-circle d-inline-block bg-white text-success p-1"></i>
+                    <h2 class="fw-black mb-0">Tudo Certo!</h2>
+                    <p class="fs-5 text-success-emphasis mb-0 mt-2 text-white-50">Seu horário foi reservado.</p>
+                </div>
+
+                <div class="card-body p-4 p-md-5">
+                    
+                    <div class="bg-light p-4 rounded-4 mb-4 border text-start">
+                        <h6 class="text-muted fw-bold text-uppercase small mb-3">Resumo da Reserva</h6>
+                        
+                        <div class="d-flex align-items-center mb-3">
+                            <div class="bg-primary-subtle text-primary p-3 rounded-3 me-3"><i class="bi bi-calendar-event fs-4"></i></div>
+                            <div>
+                                <h5 class="fw-black text-dark mb-0">{{ appointment.appointment_date.strftime('%d/%m/%Y') }}</h5>
+                                <div class="text-muted fw-bold">às {{ appointment.appointment_time.strftime('%H:%M') }}</div>
+                            </div>
+                        </div>
+
+                        <div class="d-flex align-items-center mb-3">
+                            <div class="bg-secondary-subtle text-secondary p-3 rounded-3 me-3"><i class="bi bi-scissors fs-4"></i></div>
+                            <div>
+                                <div class="fw-bold text-dark">{{ appointment.service_names }}</div>
+                                <div class="text-success fw-bold">
+                                    {% if appointment.total_price == 0 %}
+                                        Membro VIP (Valor Zerado)
+                                    {% else %}
+                                        R$ {{ "%.2f"|format(appointment.total_price) }}
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        {% if appointment.professional %}
+                        <div class="d-flex align-items-center">
+                            <div class="bg-info-subtle text-info-emphasis p-3 rounded-3 me-3"><i class="bi bi-person-badge fs-4"></i></div>
+                            <div>
+                                <div class="small text-muted fw-bold mb-0">Profissional</div>
+                                <div class="fw-bold text-dark">{{ appointment.professional.name }}</div>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    {% if zap_link != "#" %}
+                    <a href="{{ zap_link }}" target="_blank" class="btn btn-success w-100 py-3 fw-bold rounded-pill shadow-sm mb-3 fs-5 d-flex justify-content-center align-items-center gap-2 transition-transform hover-scale">
+                        <i class="bi bi-whatsapp fs-4"></i> Enviar Confirmação no WhatsApp
+                    </a>
+                    {% endif %}
+
+                    <div class="mt-4 pt-4 border-top">
+                        <h6 class="fw-bold text-dark mb-2"><i class="bi bi-arrow-repeat text-primary"></i> Imprevistos acontecem?</h6>
+                        <p class="small text-muted mb-3">Enviamos os detalhes para o seu e-mail (<strong>{{ appointment.client_email }}</strong>). Guarde o link abaixo caso precise alterar o seu horário no futuro:</p>
+                        
+                        <div class="input-group mb-2 shadow-sm rounded-pill overflow-hidden">
+                            <input type="text" class="form-control bg-light border-0 text-muted small py-2 ps-4" id="linkReagendamento" value="{{ reagendar_link }}" readonly>
+                            <button class="btn btn-primary fw-bold px-4" type="button" onclick="copiarLink()"><i class="bi bi-copy"></i> Copiar</button>
+                        </div>
+                    </div>
+
+                </div>
+                
+                <div class="card-footer bg-light border-0 py-3">
+                    <a href="{{ url_for('establishment_services', url_prefix=appointment.establishment.url_prefix) }}" class="text-decoration-none fw-bold text-muted small"><i class="bi bi-arrow-left"></i> Voltar para a página inicial</a>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
+
+<style>
+    .hover-scale:hover { transform: scale(1.02); }
+    .transition-transform { transition: transform 0.2s ease; }
+</style>
+
+<script>
+    function copiarLink() {
+        const linkInput = document.getElementById("linkReagendamento");
+        linkInput.select();
+        linkInput.setSelectionRange(0, 99999); // Para mobile
+        
+        navigator.clipboard.writeText(linkInput.value).then(() => {
+            const btn = document.querySelector('.input-group .btn-primary');
+            const textoOriginal = btn.innerHTML;
+            btn.innerHTML = '<i class="bi bi-check2-all"></i> Copiado!';
+            btn.classList.replace('btn-primary', 'btn-success');
+            
+            setTimeout(() => {
+                btn.innerHTML = textoOriginal;
+                btn.classList.replace('btn-success', 'btn-primary');
+            }, 2000);
+        });
+    }
+</script>
 {% endblock %}

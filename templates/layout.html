@@ -27,11 +27,9 @@
                 </button>
             {% else %}
                 {% if request.endpoint not in ['login', 'register_business', 'planos'] %}
-                    
                     <button class="navbar-toggler border-0 shadow-none" type="button" data-bs-toggle="offcanvas" data-bs-target="#publicMobileNav">
                         <span class="navbar-toggler-icon"></span>
                     </button>
-                    
                     <div class="offcanvas-lg offcanvas-end bg-white" tabindex="-1" id="publicMobileNav">
                         <div class="offcanvas-header border-bottom d-lg-none">
                             <h5 class="offcanvas-title fw-bold text-primary"><i class="bi bi-calendar-check"></i> Menu</h5>
@@ -56,21 +54,25 @@
     {% if current_user.is_authenticated %}
     <div class="offcanvas offcanvas-end" tabindex="-1" id="sidebarMenu">
         <div class="offcanvas-header">
-            <h5 class="offcanvas-title fw-bold">{{ current_user.establishment.name }}</h5>
+            <h5 class="offcanvas-title fw-bold text-primary fs-4">{{ current_user.establishment.name }}</h5>
             <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
         </div>
         <div class="offcanvas-body d-flex flex-column">
             <ul class="nav flex-column fs-5 gap-2">
                 <li class="nav-item"><a class="nav-link text-dark" href="{{ url_for('admin_dashboard') }}"><i class="bi bi-speedometer2 me-2"></i> Painel</a></li>
+                <li class="nav-item"><a class="nav-link text-dark" href="{{ url_for('admin_dashboard') }}#loja"><i class="bi bi-shop me-2"></i> Loja & Estoque</a></li>
+                <li class="nav-item"><a class="nav-link text-dark" href="{{ url_for('admin_dashboard') }}#assinaturas"><i class="bi bi-person-vcard me-2"></i> Assinaturas</a></li>
                 <li class="nav-item"><a class="nav-link text-dark" href="{{ url_for('historico_atendimentos') }}"><i class="bi bi-journal-text me-2"></i> Histórico</a></li>
-                <li class="nav-item"><a class="nav-link text-dark" href="{{ url_for('relatorios_gerenciais') }}"><i class="bi bi-bar-chart-fill me-2"></i> Relatórios</a></li>
+                
+                <li class="nav-item"><a class="nav-link text-dark" href="{{ url_for('relatorio_bi') }}"><i class="bi bi-pie-chart me-2"></i> Painel de BI</a></li>
+                
                 <li class="nav-item"><a class="nav-link text-dark" href="{{ url_for('establishment_services', url_prefix=current_user.establishment.url_prefix) }}" target="_blank"><i class="bi bi-box-arrow-up-right me-2"></i> Ver Minha Página</a></li>
-		<li class="nav-item"><a class="nav-link text-dark" href="{{ url_for('ajuda') }}"><i class="bi bi-question-circle me-2"></i> Ajuda e Suporte</a></li>
-		<li class="nav-item">
-    <a class="nav-link text-dark" href="{{ url_for('alterar_senha') }}">
-        <i class="bi bi-shield-lock me-2"></i> Segurança e Senha
-    </a>
-</li>
+                <li class="nav-item"><a class="nav-link text-dark" href="{{ url_for('ajuda') }}"><i class="bi bi-question-circle me-2"></i> Ajuda e Suporte</a></li>
+                <li class="nav-item">
+                    <a class="nav-link text-dark" href="{{ url_for('alterar_senha') }}">
+                        <i class="bi bi-shield-lock me-2"></i> Segurança e Senha
+                    </a>
+                </li>
             </ul>
             <div class="mt-auto border-top pt-3">
                 <a class="nav-link text-danger fw-bold" href="{{ url_for('logout') }}"><i class="bi bi-box-arrow-right me-2"></i> Sair</a>
@@ -83,9 +85,7 @@
         {% with m = get_flashed_messages(with_categories=true) %}
             {% if m %}<div class="container mt-3">{% for c, msg in m %}<div class="alert alert-{{ c }} alert-dismissible fade show shadow-sm">{{ msg }} <button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>{% endfor %}</div>{% endif %}
         {% endwith %}
-        
         {% block content %}{% endblock %}
-        
     </main>
     
     <footer class="bg-white border-top pt-4 pb-3 mt-auto">
@@ -93,9 +93,7 @@
             <p class="text-muted small mb-0">© 2026 Agenda Fácil.</p>
         </div>
     </footer>
-    
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    
     {% block scripts %}{% endblock %}
 </body>
 </html>

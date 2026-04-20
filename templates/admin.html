@@ -32,573 +32,601 @@
             <div><h1 class="h3 mb-0">Painel: {{ establishment.name }}</h1><a href="{{ url_for('establishment_services', url_prefix=establishment.url_prefix) }}" target="_blank" class="text-decoration-none small">Ver a Minha Página <i class="bi bi-box-arrow-up-right"></i></a></div>
         </div>
     </div>
-    
-    <div class="card shadow-sm border-0 mb-4 p-3 bg-light" id="container-configuracoes">
-        <form action="{{ url_for('update_settings') }}" method="POST" enctype="multipart/form-data" class="row align-items-center g-2" onsubmit="return submeterFormAJAX(event, this, 'container-configuracoes')" data-no-reset="true">
-            <input type="hidden" name="form_type" value="contact"> 
-            <div class="col-md-3"><label class="small fw-bold">WhatsApp:</label><input type="text" name="contact_phone" class="form-control form-control-sm" value="{{ establishment.contact_phone or '' }}"></div>
-            <div class="col-md-3"><label class="small fw-bold">E-mail (Notificações):</label><input type="email" name="contact_email" class="form-control form-control-sm" value="{{ establishment.contact_email or '' }}"></div>
-            
-            {% if establishment.plan_type == 'solo' %}
-            <div class="col-md-2">
-                <label class="small fw-bold">Profissionais:</label>
-                <select name="capacity" class="form-select form-select-sm">
-                    <option value="1" {% if establishment.capacity == 1 %}selected{% endif %}>1</option>
-                    <option value="2" {% if establishment.capacity == 2 %}selected{% endif %}>2</option>
-                    <option value="3" {% if establishment.capacity == 3 %}selected{% endif %}>3</option>
-                </select>
+
+    <ul class="nav nav-pills mb-4 bg-white p-2 rounded-pill shadow-sm d-inline-flex border" id="adminTabs">
+        <li class="nav-item"><a class="nav-link active fw-bold rounded-pill" data-bs-toggle="pill" href="#tab-agenda" id="btn-tab-agenda"><i class="bi bi-calendar3"></i> Agenda & Configurações</a></li>
+        <li class="nav-item"><a class="nav-link fw-bold rounded-pill" data-bs-toggle="pill" href="#tab-loja" id="btn-tab-loja"><i class="bi bi-bag-check"></i> Loja & Estoque</a></li>
+        {% if establishment.plan_type == 'gestao' %}
+	<li class="nav-item"><a class="nav-link fw-bold rounded-pill" data-bs-toggle="pill" href="#tab-assinaturas" id="btn-tab-assinaturas"><i class="bi bi-person-vcard"></i> Assinaturas</a></li>
+	{% else %}
+	<li class="nav-item"><a href="{{ url_for('planos') }}" class="nav-link fw-bold rounded-pill text-muted" title="Exclusivo do Plano Gestão"><i class="bi bi-lock-fill text-warning"></i> Assinaturas</a></li>
+	{% endif %}
+    </ul>
+
+    <div class="tab-content">
+        <div class="tab-pane fade show active" id="tab-agenda">
+            <div class="card shadow-sm border-0 mb-4 p-3 bg-light" id="container-configuracoes">
+                <form action="{{ url_for('update_settings') }}" method="POST" enctype="multipart/form-data" class="row align-items-end g-2" onsubmit="return submeterFormAJAX(event, this, 'container-configuracoes')" data-no-reset="true">
+                    <input type="hidden" name="form_type" value="contact"> 
+                    <div class="col-md-2"><label class="small fw-bold">WhatsApp:</label><input type="text" name="contact_phone" class="form-control form-control-sm" value="{{ establishment.contact_phone or '' }}"></div>
+                    <div class="col-md-3"><label class="small fw-bold">E-mail (Notificações):</label><input type="email" name="contact_email" class="form-control form-control-sm" value="{{ establishment.contact_email or '' }}"></div>
+                    
+                    <div class="col-md-1">
+                        <label class="small fw-bold">Estado:</label>
+                        <select name="state" class="form-select form-select-sm">
+                            <option value="AC" {% if establishment.state == 'AC' %}selected{% endif %}>AC</option><option value="AL" {% if establishment.state == 'AL' %}selected{% endif %}>AL</option><option value="AP" {% if establishment.state == 'AP' %}selected{% endif %}>AP</option>
+                            <option value="AM" {% if establishment.state == 'AM' %}selected{% endif %}>AM</option><option value="BA" {% if establishment.state == 'BA' %}selected{% endif %}>BA</option><option value="CE" {% if establishment.state == 'CE' %}selected{% endif %}>CE</option>
+                            <option value="DF" {% if establishment.state == 'DF' %}selected{% endif %}>DF</option><option value="ES" {% if establishment.state == 'ES' %}selected{% endif %}>ES</option><option value="GO" {% if establishment.state == 'GO' %}selected{% endif %}>GO</option>
+                            <option value="MA" {% if establishment.state == 'MA' %}selected{% endif %}>MA</option><option value="MT" {% if establishment.state == 'MT' %}selected{% endif %}>MT</option><option value="MS" {% if establishment.state == 'MS' %}selected{% endif %}>MS</option>
+                            <option value="MG" {% if establishment.state == 'MG' %}selected{% endif %}>MG</option><option value="PA" {% if establishment.state == 'PA' %}selected{% endif %}>PA</option><option value="PB" {% if establishment.state == 'PB' %}selected{% endif %}>PB</option>
+                            <option value="PR" {% if establishment.state == 'PR' %}selected{% endif %}>PR</option><option value="PE" {% if establishment.state == 'PE' %}selected{% endif %}>PE</option><option value="PI" {% if establishment.state == 'PI' %}selected{% endif %}>PI</option>
+                            <option value="RJ" {% if establishment.state == 'RJ' %}selected{% endif %}>RJ</option><option value="RN" {% if establishment.state == 'RN' %}selected{% endif %}>RN</option><option value="RS" {% if establishment.state == 'RS' %}selected{% endif %}>RS</option>
+                            <option value="RO" {% if establishment.state == 'RO' %}selected{% endif %}>RO</option><option value="RR" {% if establishment.state == 'RR' %}selected{% endif %}>RR</option><option value="SC" {% if establishment.state == 'SC' %}selected{% endif %}>SC</option>
+                            <option value="SP" {% if establishment.state == 'SP' %}selected{% endif %}>SP</option><option value="SE" {% if establishment.state == 'SE' %}selected{% endif %}>SE</option><option value="TO" {% if establishment.state == 'TO' %}selected{% endif %}>TO</option>
+                        </select>
+                    </div>
+
+                    {% if establishment.plan_type == 'solo' %}
+                    <div class="col-md-2">
+                        <label class="small fw-bold">Profissionais:</label>
+                        <select name="capacity" class="form-select form-select-sm">
+                            <option value="1" {% if establishment.capacity == 1 %}selected{% endif %}>1</option>
+                            <option value="2" {% if establishment.capacity == 2 %}selected{% endif %}>2</option>
+                        </select>
+                    </div>
+                    {% else %}
+                    <div class="col-md-2"><label class="small fw-bold">Equipe Ativa:</label><input type="text" class="form-control form-control-sm bg-light fw-bold text-success" value="{{ establishment.capacity }} na Agenda" readonly></div>
+                    {% endif %}
+                    
+                    <div class="col-md-2"><label class="small fw-bold">Logo:</label><input type="file" name="logo" class="form-control form-control-sm" accept="image/*"></div>
+                    <div class="col-md-2"><button type="submit" class="btn btn-primary btn-sm w-100 fw-bold shadow-sm">Salvar</button></div>
+                    
+                    <div class="col-12 mt-3 border-top pt-3">
+                        <div class="row g-2 align-items-center">
+                            <div class="col-md-4"><label class="small fw-bold text-primary"><i class="bi bi-gift"></i> Pontos para o Prêmio (0=desativar):</label><input type="number" name="loyalty_points_goal" class="form-control form-control-sm" value="{{ establishment.loyalty_points_goal or 0 }}"></div>
+                            <div class="col-md-6"><label class="small fw-bold text-primary">Qual é o Prêmio?</label><input type="text" name="loyalty_reward" class="form-control form-control-sm" placeholder="Ex: Um corte grátis!" value="{{ establishment.loyalty_reward or '' }}"></div>
+                        </div>
+                    </div>
+                </form>
             </div>
-            {% else %}
-            <div class="col-md-2">
-                <label class="small fw-bold">Equipe Ativa:</label>
-                <input type="text" class="form-control form-control-sm bg-light fw-bold text-success" value="{{ establishment.capacity }} na Agenda" readonly title="A capacidade é controlada automaticamente pelos profissionais cadastrados.">
-            </div>
-            {% endif %}
             
-            <div class="col-md-2"><label class="small fw-bold">Logo:</label><input type="file" name="logo" class="form-control form-control-sm" accept="image/*"></div>
-            <div class="col-md-2 text-end pt-4"><button type="submit" class="btn btn-primary btn-sm w-100 fw-bold shadow-sm">Salvar</button></div>
-            <div class="col-12 mt-3 border-top pt-3">
-                <div class="row g-2 align-items-center">
-                    <div class="col-md-4"><label class="small fw-bold text-primary"><i class="bi bi-gift"></i> Pontos para o Prémio (0 para desativar):</label><input type="number" name="loyalty_points_goal" class="form-control form-control-sm" value="{{ establishment.loyalty_points_goal or 0 }}"></div>
-                    <div class="col-md-6"><label class="small fw-bold text-primary">Qual é o Prémio?</label><input type="text" name="loyalty_reward" class="form-control form-control-sm" placeholder="Ex: Um corte grátis!" value="{{ establishment.loyalty_reward or '' }}"></div>
-                </div>
-            </div>
-        </form>
-    </div>
-    
-    <div class="row">
-        <div class="col-lg-7">
-            
-            <div class="card shadow-sm border-0 mb-4" id="container-horarios">
-                <div class="card-header bg-white fw-bold">Horários de Funcionamento</div>
-                <div class="card-body p-0">
-                    <form action="{{ url_for('update_settings') }}" method="POST" onsubmit="return submeterFormAJAX(event, this, 'container-horarios')" data-no-reset="true">
-                        <input type="hidden" name="form_type" value="schedule">
-                        <div class="table-responsive">
-                            <table class="table table-bordered mb-0 align-middle text-center"><thead class="table-light"><tr><th style="width: 50px;">Ativo</th><th>Dia</th><th>Abertura</th><th>Fechamento</th><th>Almoço Início</th><th>Almoço Fim</th><th>Pausa Início</th><th>Pausa Fim</th></tr></thead><tbody>
-                                    {% set day_names = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'] %}{% for d in schedules %}<tr class="{% if not d.is_active %}bg-light text-muted{% endif %}"><input type="hidden" name="schedule_id" value="{{ d.id }}"><td><input class="form-check-input" type="checkbox" name="active_{{ d.id }}" {% if d.is_active %}checked{% endif %}></td><td class="fw-bold text-start">{{ day_names[d.day_index] }}</td><td><input type="time" class="form-control form-control-sm" name="work_start_{{ d.id }}" value="{{ d.work_start.strftime('%H:%M') }}"></td><td><input type="time" class="form-control form-control-sm" name="work_end_{{ d.id }}" value="{{ d.work_end.strftime('%H:%M') }}"></td><td><input type="time" class="form-control form-control-sm" name="lunch_start_{{ d.id }}" value="{{ d.lunch_start.strftime('%H:%M') if d.lunch_start else '' }}"></td><td><input type="time" class="form-control form-control-sm" name="lunch_end_{{ d.id }}" value="{{ d.lunch_end.strftime('%H:%M') if d.lunch_end else '' }}"></td><td><input type="time" class="form-control form-control-sm" name="pause2_start_{{ d.id }}" value="{{ d.pause2_start.strftime('%H:%M') if d.pause2_start else '' }}"></td><td><input type="time" class="form-control form-control-sm" name="pause2_end_{{ d.id }}" value="{{ d.pause2_end.strftime('%H:%M') if d.pause2_end else '' }}"></td></tr>{% endfor %}
+            <div class="row">
+                <div class="col-lg-7">
+                    <div class="card shadow-sm border-0 mb-4" id="container-horarios">
+                        <div class="card-header bg-white fw-bold">Horários de Funcionamento</div>
+                        <div class="card-body p-0">
+                            <form action="{{ url_for('update_settings') }}" method="POST" onsubmit="return submeterFormAJAX(event, this, 'container-horarios')" data-no-reset="true">
+                                <input type="hidden" name="form_type" value="schedule">
+                                <div class="table-responsive">
+                                    <table class="table table-bordered mb-0 align-middle text-center"><thead class="table-light"><tr><th style="width: 50px;">Ativo</th><th>Dia</th><th>Abertura</th><th>Fecho</th><th>Almoço Início</th><th>Almoço Fim</th><th>Pausa Início</th><th>Pausa Fim</th></tr></thead><tbody>
+                                            {% set day_names = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'] %}{% for d in schedules %}<tr class="{% if not d.is_active %}bg-light text-muted{% endif %}"><input type="hidden" name="schedule_id" value="{{ d.id }}"><td><input class="form-check-input" type="checkbox" name="active_{{ d.id }}" {% if d.is_active %}checked{% endif %}></td><td class="fw-bold text-start">{{ day_names[d.day_index] }}</td><td><input type="time" class="form-control form-control-sm" name="work_start_{{ d.id }}" value="{{ d.work_start.strftime('%H:%M') }}"></td><td><input type="time" class="form-control form-control-sm" name="work_end_{{ d.id }}" value="{{ d.work_end.strftime('%H:%M') }}"></td><td><input type="time" class="form-control form-control-sm" name="lunch_start_{{ d.id }}" value="{{ d.lunch_start.strftime('%H:%M') if d.lunch_start else '' }}"></td><td><input type="time" class="form-control form-control-sm" name="lunch_end_{{ d.id }}" value="{{ d.lunch_end.strftime('%H:%M') if d.lunch_end else '' }}"></td><td><input type="time" class="form-control form-control-sm" name="pause2_start_{{ d.id }}" value="{{ d.pause2_start.strftime('%H:%M') if d.pause2_start else '' }}"></td><td><input type="time" class="form-control form-control-sm" name="pause2_end_{{ d.id }}" value="{{ d.pause2_end.strftime('%H:%M') if d.pause2_end else '' }}"></td></tr>{% endfor %}
+                                    </tbody></table>
+                                </div>
+                                <div class="p-3 bg-light border-top text-end"><button type="submit" class="btn btn-success fw-bold px-4 shadow-sm">Salvar Horários</button></div>
+                            </form>
+                        </div>
+                    </div>
+
+                    <div class="card shadow-sm border-0 mb-4" id="container-agendamentos">
+                        <div class="card-header bg-white p-3 border-bottom-0 d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+                            <div class="d-flex align-items-center gap-2"><span class="fw-bold fs-5"><i class="bi bi-calendar-check text-primary"></i> Agendamentos</span><span class="badge bg-primary rounded-pill shadow-sm" id="badge-contador-hoje">{{ today_count }} hoje</span></div>
+                            <form method="GET" action="{{ url_for('admin_dashboard') }}" class="d-flex gap-2 w-100" style="max-width: 400px;">
+                                <input type="text" name="search" class="form-control form-control-sm" placeholder="Nome ou WhatsApp..." value="{{ request.args.get('search', '') }}">
+                                <input type="{{ 'date' if request.args.get('filter_date') else 'text' }}" onfocus="(this.type='date')" onblur="if(!this.value)this.type='text'" name="filter_date" class="form-control form-control-sm" placeholder="Data..." value="{{ request.args.get('filter_date', '') }}" style="max-width: 130px;">
+                                <button type="submit" class="btn btn-sm btn-dark fw-bold px-3"><i class="bi bi-search"></i></button>
+                                {% if request.args.get('search') or request.args.get('filter_date') %}<a href="{{ url_for('admin_dashboard') }}" class="btn btn-sm btn-outline-danger px-2" title="Limpar Filtros"><i class="bi bi-x-lg"></i></a>{% endif %}
+                            </form>
+                        </div>
+                        <div class="card-body p-0">
+                            <table class="table table-hover mb-0 align-middle"><thead class="table-light"><tr><th>Data/Hora</th><th>Serviços / Cliente</th><th>Ações</th></tr></thead><tbody>
+                                    {% for a in appointments %}<tr>
+                                        <td><div class="fw-bold text-primary">{{ a.appointment_date.strftime('%d/%m') }}</div><div>{{ a.appointment_time.strftime('%H:%M') }}</div><div class="small text-muted">{{ a.total_duration }}min</div></td>
+                                        <td><div class="fw-bold">{{ a.service_names }}</div>
+                                            <div class="text-success fw-bold small">{% if a.total_price == 0 %}<span class="badge bg-warning text-dark">Plano VIP</span>{% else %}R$ {{ "%.2f"|format(a.total_price) }}{% endif %}</div>
+                                            <div class="mt-1">
+                                                {{ a.client_name }} 
+                                                {% if a.active_subscription %}
+                                                    <i class="bi bi-star-fill text-warning ms-1" title="Clube: {{ a.active_subscription.plan.name }}"></i>
+                                                {% endif %}
+                                                <br> <i class="bi bi-whatsapp text-success"></i> {{ a.client_phone }}
+                                            </div>
+                                            {% if establishment.plan_type == 'gestao' %}<div class="mt-2">{% if a.professional %}<span class="badge bg-primary text-white shadow-sm"><i class="bi bi-scissors"></i> {{ a.professional.name }}</span>{% else %}<span class="badge bg-secondary text-white shadow-sm"><i class="bi bi-question-circle"></i> Qualquer um</span>{% endif %}</div>{% endif %}
+                                            {% if establishment.loyalty_points_goal and establishment.loyalty_points_goal > 0 and a.client_loyalty %}
+                                                <div class="mt-2 small">{% if a.client_loyalty.points >= establishment.loyalty_points_goal %}<span class="badge bg-warning text-dark fs-6 shadow-sm d-block mb-1"><i class="bi bi-gift-fill"></i> PRÊMIO LIBERADO!</span><form method="POST" action="{{ url_for('reset_loyalty', id=a.client_loyalty.id) }}" onsubmit="return excluirItemAJAX(event, this, 'container-agendamentos', 'Zerar os pontos deste cliente?');"><button class="btn btn-sm btn-outline-dark w-100 py-0" style="font-size: 0.75rem;">Zerar Pontos</button></form>{% else %}<span class="badge bg-light text-dark border"><i class="bi bi-star-fill text-warning"></i> Pontos: {{ a.client_loyalty.points }}/{{ establishment.loyalty_points_goal }}</span>{% endif %}</div>
+                                            {% endif %}
+                                        </td>
+                                        <td>{% if a.status != 'concluido' %}<div class="mb-2"><a href="https://wa.me/55{{ a.client_phone }}?text=Olá, {{ a.client_name }}! Tudo bem? Passando só para confirmar o seu horário hoje às {{ a.appointment_time.strftime('%H:%M') }} 💈" target="_blank" class="btn btn-sm btn-outline-success w-100 fw-bold mb-2 shadow-sm"><i class="bi bi-whatsapp"></i> Lembrar</a>
+                                                <form method="POST" action="{{ url_for('complete_appointment', id=a.id) }}" onsubmit="return submeterFormAJAX(event, this, 'container-agendamentos')">
+                                                    {% if establishment.plan_type == 'gestao' %}<select name="professional_id" class="form-select form-select-sm mb-1 border-success" required><option value="" disabled {% if not a.professional %}selected{% endif %}>Quem atendeu?</option>{% for p in professionals %}<option value="{{ p.id }}" {% if a.professional_id == p.id %}selected{% endif %}>{{ p.name }}</option>{% endfor %}</select>{% endif %}
+                                                    <button class="btn btn-sm btn-success w-100 fw-bold"><i class="bi bi-check-circle"></i> Concluir</button>
+                                                </form></div>
+                                                <div class="d-flex gap-1 flex-column flex-md-row"><form method="POST" action="{{ url_for('delete_appointment', id=a.id) }}" class="w-100" onsubmit="return excluirItemAJAX(event, this, 'container-agendamentos', 'Apenas cancelar o horário?');"><button class="btn btn-sm btn-outline-danger w-100"><i class="bi bi-trash"></i> Cancelar</button></form><form method="POST" action="{{ url_for('mark_no_show', id=a.id) }}" class="w-100" onsubmit="return excluirItemAJAX(event, this, 'container-agendamentos', 'Bloquear este cliente permanentemente?');"><button class="btn btn-sm btn-warning w-100 text-dark fw-bold"><i class="bi bi-person-x-fill"></i> Falta</button></form></div>
+                                            {% else %}<span class="badge bg-success mb-1"><i class="bi bi-check-all"></i> Concluído</span><br>
+                                                {% if a.rating %}<span class="text-warning fs-5">{% for i in range(a.rating) %}★{% endfor %}</span>{% else %}<span class="small text-muted fst-italic">Aguardando nota...</span>{% endif %}
+                                                <form method="POST" action="{{ url_for('archive_appointment', id=a.id) }}" class="mt-2" onsubmit="return submeterFormAJAX(event, this, 'container-agendamentos')"><button class="btn btn-sm btn-outline-secondary py-0 w-100" style="font-size: 0.75rem;"><i class="bi bi-eye-slash"></i> Limpar da Tela</button></form>
+                                            {% endif %}
+                                        </td></tr>
+                                    {% else %}<tr><td colspan="3" class="text-center py-4 text-muted">Agenda livre.</td></tr>{% endfor %}
                             </tbody></table>
                         </div>
-                        <div class="p-3 bg-light border-top text-end"><button type="submit" class="btn btn-success fw-bold px-4 shadow-sm">Salvar Horários</button></div>
-                    </form>
-                </div>
-            </div>
-
-            <div class="card shadow-sm border-0 mb-4" id="container-agendamentos">
-                <div class="card-header bg-white p-3 border-bottom-0 d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
-                    <div class="d-flex align-items-center gap-2">
-                        <span class="fw-bold fs-5"><i class="bi bi-calendar-check text-primary"></i> Agendamentos</span> 
-                        <span class="badge bg-primary rounded-pill shadow-sm" id="badge-contador-hoje">{{ today_count }} hoje</span>
                     </div>
-                    
-                    <form method="GET" action="{{ url_for('admin_dashboard') }}" class="d-flex gap-2 w-100" style="max-width: 400px;">
-                        <input type="text" name="search" class="form-control form-control-sm" placeholder="Nome ou WhatsApp..." value="{{ request.args.get('search', '') }}">
-                        
-                        <input type="{{ 'date' if request.args.get('filter_date') else 'text' }}" 
-                               onfocus="(this.type='date')" 
-                               onblur="if(!this.value)this.type='text'" 
-                               name="filter_date" class="form-control form-control-sm" placeholder="Data..." 
-                               value="{{ request.args.get('filter_date', '') }}" style="max-width: 130px;">
-                        
-                        <button type="submit" class="btn btn-sm btn-dark fw-bold px-3"><i class="bi bi-search"></i></button>
-                        {% if request.args.get('search') or request.args.get('filter_date') %}
-                            <a href="{{ url_for('admin_dashboard') }}" class="btn btn-sm btn-outline-danger px-2" title="Limpar Filtros"><i class="bi bi-x-lg"></i></a>
-                        {% endif %}
-                    </form>
                 </div>
-                <div class="card-body p-0">
-                    <table class="table table-hover mb-0 align-middle">
-                        <thead class="table-light"><tr><th>Data/Hora</th><th>Serviços / Cliente</th><th>Ações</th></tr></thead>
-                        <tbody>
-                            {% for a in appointments %}
-                            <tr>
-                                <td><div class="fw-bold text-primary">{{ a.appointment_date.strftime('%d/%m') }}</div><div>{{ a.appointment_time.strftime('%H:%M') }}</div><div class="small text-muted">{{ a.total_duration }}min</div></td>
-                                <td>
-                                    <div class="fw-bold">{{ a.service_names }}</div>
-                                    <div class="text-success fw-bold small">R$ {{ "%.2f"|format(a.total_price) }}</div>
-                                    <div class="mt-1">{{ a.client_name }} <br> <i class="bi bi-whatsapp text-success"></i> {{ a.client_phone }}</div>
-                                    
-                                    {% if establishment.plan_type == 'gestao' %}
-                                        <div class="mt-2">
-                                            {% if a.professional %}
-                                                <span class="badge bg-primary text-white shadow-sm"><i class="bi bi-scissors"></i> {{ a.professional.name }}</span>
-                                            {% else %}
-                                                <span class="badge bg-secondary text-white shadow-sm"><i class="bi bi-question-circle"></i> Qualquer um</span>
-                                            {% endif %}
-                                        </div>
-                                    {% endif %}
+                
+                <div class="col-lg-5">
+                    <div class="card shadow-sm border-0 mb-4">
+                        <div class="card-header bg-white fw-bold d-flex justify-content-between align-items-center"><span><i class="bi bi-folder text-primary"></i> Categorias</span></div>
+                        <div class="card-body bg-light" id="container-categorias">
+                            <form method="POST" action="{{ url_for('add_category') }}" class="input-group input-group-sm mb-3" onsubmit="return submeterFormAJAX(event, this, 'container-categorias')"><input type="text" name="name" class="form-control" placeholder="Nova (Ex: Cabelo)" required><button class="btn bi bi-plus btn-primary fw-bold"></button></form>
+                            <div class="d-flex flex-wrap gap-1">
+                                {% for c in categories %}<span class="badge bg-white text-dark border d-flex align-items-center gap-1 p-2 shadow-sm">{{ c.name }}{% if c.name != 'Geral' %}<form method="POST" action="{{ url_for('delete_category', id=c.id) }}" class="m-0" onsubmit="return excluirItemAJAX(event, this, 'container-categorias', 'Excluir categoria?');"><button type="submit" class="btn-close" style="font-size: 0.5rem;"></button></form>{% endif %}</span>{% endfor %}
+                            </div>
+                        </div>
+                    </div>
 
-                                    {% if establishment.loyalty_points_goal and establishment.loyalty_points_goal > 0 and a.client_loyalty %}
-                                        <div class="mt-2 small">
-                                            {% if a.client_loyalty.points >= establishment.loyalty_points_goal %}
-                                                <span class="badge bg-warning text-dark fs-6 shadow-sm d-block mb-1"><i class="bi bi-gift-fill"></i> PRÉMIO LIBERADO!</span>
-                                                <form method="POST" action="{{ url_for('reset_loyalty', id=a.client_loyalty.id) }}" onsubmit="return excluirItemAJAX(event, this, 'container-agendamentos', 'O prémio já foi entregue? Isso vai zerar os pontos deste cliente.');"><button class="btn btn-sm btn-outline-dark w-100 py-0" style="font-size: 0.75rem;">Zerar Pontos</button></form>
-                                            {% else %}
-                                                <span class="badge bg-light text-dark border"><i class="bi bi-star-fill text-warning"></i> Pontos: {{ a.client_loyalty.points }}/{{ establishment.loyalty_points_goal }}</span>
-                                            {% endif %}
-                                        </div>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {% if a.status != 'concluido' %}
-                                        <div class="mb-2">
-                                            <a href="https://wa.me/55{{ a.client_phone }}?text=Fala, {{ a.client_name }}! ✂️ Tudo bem? Passando só para confirmar o seu horário hoje às {{ a.appointment_time.strftime('%H:%M') }} aqui na barbearia. 💈 Confirma pra gente? Valeu! 👊" 
-                                               target="_blank" 
-                                               class="btn btn-sm btn-outline-success w-100 fw-bold mb-2 shadow-sm">
-                                                <i class="bi bi-whatsapp"></i> Lembrar no WhatsApp
-                                            </a>
+                    <div class="card shadow-sm border-0 mb-4">
+                        <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center"><h6 class="mb-0 fw-bold"><i class="bi bi-scissors text-primary"></i> Serviços Oferecidos</h6><button class="btn btn-sm btn-primary fw-bold px-3 shadow-sm" onclick="abrirModalServico()"><i class="bi bi-plus-lg"></i> Novo Serviço</button></div>
+                        <div class="card-body" id="container-lista-servicos">
+                            <ul class="list-group list-group-flush small" style="max-height: 400px; overflow-y: auto;">
+                                {% for s in services %}<li class="list-group-item d-flex justify-content-between align-items-center px-0 py-2 border-bottom" 
+                                    data-id="{{ s.id }}" data-nome="{{ s.name|e }}" data-preco="{{ s.price }}" data-duracao="{{ s.duration }}" 
+                                    data-categoria="{{ s.category_id }}" data-iscombo="{{ 'true' if s.is_combo else 'false' }}" 
+                                    data-precooriginal="{{ s.original_price or '' }}" data-isclub="{{ 'true' if s.is_club_included else 'false' }}">
+                                    <div><span class="badge bg-secondary mb-1" style="font-size: 0.65rem;">{{ s.category.name if s.category else 'Geral' }}</span>
+                                        {% if s.is_combo %}<span class="badge bg-warning text-dark mb-1 ms-1 shadow-sm" style="font-size: 0.65rem;"><i class="bi bi-stars"></i> Promoção</span>{% endif %}
+                                        {% if s.is_club_included %}<span class="badge bg-success-subtle text-success mb-1 ms-1" style="font-size: 0.65rem;"><i class="bi bi-star-fill"></i> Clube</span>{% endif %}
+                                        <br><strong>{{ s.name }}</strong> ({{ s.duration }}m)<br>{% if s.is_combo and s.original_price %}<span class="text-muted text-decoration-line-through small me-1">R$ {{ "%.2f"|format(s.original_price) }}</span>{% endif %}<span class="text-success fw-bold fs-6">R$ {{ "%.2f"|format(s.price) }}</span></div>
+                                    <div class="d-flex gap-2"><button class="btn btn-light btn-sm text-primary shadow-sm" onclick="editarServico(this)"><i class="bi bi-pencil-fill"></i></button><button class="btn btn-light btn-sm text-danger shadow-sm" onclick="excluirServico({{ s.id }}, this)"><i class="bi bi-trash-fill"></i></button></div>
+                                </li>{% else %}<li class="list-group-item px-0 text-muted text-center border-0 py-4">Nenhum serviço.</li>{% endfor %}
+                            </ul>
+                        </div>
+                    </div>
 
-                                            <form method="POST" action="{{ url_for('complete_appointment', id=a.id) }}" onsubmit="return submeterFormAJAX(event, this, 'container-agendamentos')">
-                                                {% if establishment.plan_type == 'gestao' %}
-                                                    <select name="professional_id" class="form-select form-select-sm mb-1 border-success" required>
-                                                        <option value="" disabled {% if not a.professional %}selected{% endif %}>Quem atendeu?</option>
-                                                        {% for p in professionals %}
-                                                            <option value="{{ p.id }}" {% if a.professional_id == p.id %}selected{% endif %}>{{ p.name }}</option>
-                                                        {% endfor %}
-                                                    </select>
-                                                {% endif %}
-                                                <button class="btn btn-sm btn-success w-100 fw-bold"><i class="bi bi-check-circle"></i> Concluir Atendimento</button>
-                                            </form>
-                                        </div>
-                                        <div class="d-flex gap-1 flex-column flex-md-row">
-                                            <form method="POST" action="{{ url_for('delete_appointment', id=a.id) }}" class="w-100" onsubmit="return excluirItemAJAX(event, this, 'container-agendamentos', 'Apenas cancelar o horário?');"><button class="btn btn-sm btn-outline-danger w-100"><i class="bi bi-trash"></i> Cancelar</button></form>
-                                            <form method="POST" action="{{ url_for('mark_no_show', id=a.id) }}" class="w-100" onsubmit="return excluirItemAJAX(event, this, 'container-agendamentos', 'Bloquear este cliente permanentemente?');"><button class="btn btn-sm btn-warning w-100 text-dark fw-bold"><i class="bi bi-person-x-fill"></i> Falta</button></form>
-                                        </div>
-                                    {% else %}
-                                        <span class="badge bg-success mb-1"><i class="bi bi-check-all"></i> Concluído</span><br>
-                                        {% if a.rating %}
-                                            <span class="text-warning fs-5">{% for i in range(a.rating) %}★{% endfor %}</span>
-                                        {% else %}
-                                            <span class="small text-muted fst-italic">Aguardando nota...</span>
-                                        {% endif %}
-                                        <form method="POST" action="{{ url_for('archive_appointment', id=a.id) }}" class="mt-2" onsubmit="return submeterFormAJAX(event, this, 'container-agendamentos')">
-                                            <button class="btn btn-sm btn-outline-secondary py-0 w-100" style="font-size: 0.75rem;" title="Limpar este agendamento da tela inicial"><i class="bi bi-eye-slash"></i> Limpar da Tela</button>
-                                        </form>
-                                    {% endif %}
-                                </td>
-                            </tr>
-                            {% else %}<tr><td colspan="3" class="text-center py-4 text-muted">Agenda livre.</td></tr>{% endfor %}
-                        </tbody>
-                    </table>
+                    {% if establishment.plan_type == 'gestao' %}
+                    <div class="card shadow-sm border-0 mb-4">
+                        <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center"><h6 class="mb-0 fw-bold text-success"><i class="bi bi-people-fill"></i> Minha Equipe (Comissões)</h6></div>
+                        <div class="card-body" id="container-equipe">
+                            <form action="{{ url_for('add_professional') }}" method="POST" class="mb-3" onsubmit="return submeterFormAJAX(event, this, 'container-equipe')"><div class="input-group input-group-sm"><input type="text" name="name" class="form-control" placeholder="Nome" required><input type="number" step="0.1" name="commission_rate" class="form-control" placeholder="Comissão %" style="max-width: 100px;" required><button class="btn bi bi-plus btn-success fw-bold"></button></div></form>
+                            <ul class="list-group list-group-flush small" style="max-height: 200px; overflow-y: auto;">
+                                {% for p in professionals %}<li class="list-group-item d-flex justify-content-between align-items-center px-0"><span class="fw-bold text-dark"><i class="bi bi-person-badge text-muted"></i> {{ p.name }}</span>
+                                    <div class="d-flex align-items-center gap-2"><span class="badge bg-success-subtle text-success border border-success-subtle">{{ "%.1f"|format(p.commission_rate) }}%</span>
+                                        <div class="d-flex gap-1"><button class="btn btn-light btn-sm text-primary border" onclick="editarProfissional({{ p.id }}, '{{ p.name|e }}', {{ p.commission_rate }})" style="padding: 0.1rem 0.4rem;"><i class="bi bi-pencil"></i></button><form method="POST" action="{{ url_for('delete_professional', id=p.id) }}" onsubmit="return excluirItemAJAX(event, this, 'container-equipe', 'Demitir este profissional da agenda?');" class="m-0"><button type="submit" class="btn btn-light btn-sm text-danger border" style="padding: 0.1rem 0.4rem;"><i class="bi bi-trash"></i></button></form></div>
+                                    </div>
+                                </li>{% else %}<li class="list-group-item px-0 text-muted text-center border-0">A sua equipe aparecerá aqui.</li>{% endfor %}
+                            </ul>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <div class="card shadow-sm border-0 mb-4">
+                        <div class="card-header bg-white py-3 border-bottom"><h6 class="mb-0 fw-bold text-danger"><i class="bi bi-person-x"></i> Clientes Bloqueados (No-Show)</h6></div>
+                        <div class="card-body" id="container-blacklist">
+                            <form action="{{ url_for('add_blacklist') }}" method="POST" class="mb-3" onsubmit="return submeterFormAJAX(event, this, 'container-blacklist')"><div class="input-group input-group-sm"><input type="text" name="phone" class="form-control" placeholder="WhatsApp" required><button class="btn btn-danger fw-bold">Bloquear</button></div></form>
+                            <ul class="list-group list-group-flush small" style="max-height: 200px; overflow-y: auto;">
+                                {% for b in blacklists %}<li class="list-group-item d-flex justify-content-between align-items-center px-0"><span class="text-muted fw-bold"><i class="bi bi-whatsapp"></i> {{ b.client_phone }}</span><form method="POST" action="{{ url_for('remove_blacklist', id=b.id) }}" onsubmit="return excluirItemAJAX(event, this, 'container-blacklist', 'Desbloquear este cliente?');"><button class="btn btn-link text-success p-0 text-decoration-none"><i class="bi bi-unlock-fill"></i> Liberar</button></form></li>{% else %}<li class="list-group-item px-0 text-muted text-center border-0">Nenhum bloqueado.</li>{% endfor %}
+                            </ul>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
-        
-        <div class="col-lg-5">
-            
-            <div class="card shadow-sm border-0 mb-4">
-                <div class="card-header bg-white fw-bold d-flex justify-content-between align-items-center">
-                    <span><i class="bi bi-folder text-primary"></i> Categorias</span>
+
+        <div class="tab-pane fade" id="tab-loja">
+            <div class="row">
+                <div class="col-lg-8 mb-4">
+                    <div class="card shadow-sm border-0">
+                        <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+                            <h6 class="mb-0 fw-bold"><i class="bi bi-shop text-primary"></i> Gestão de Produtos</h6>
+                            <button class="btn btn-sm btn-primary fw-bold px-3 shadow-sm" onclick="abrirModalProduto()"><i class="bi bi-plus-lg"></i> Novo Produto</button>
+                        </div>
+                        <div class="card-body" id="container-lista-produtos">
+                            <div class="row g-3">
+                                {% for p in establishment.products %}
+                                <div class="col-md-6">
+                                    <div class="card h-100 border shadow-sm rounded-4 overflow-hidden">
+                                        {% if p.image_filename %}
+                                            <img src="{{ url_for('static', filename='uploads/' + p.image_filename) }}" class="card-img-top" style="height: 160px; object-fit: cover;">
+                                        {% else %}
+                                            <div class="bg-light text-muted d-flex align-items-center justify-content-center" style="height: 160px;"><i class="bi bi-image fs-1"></i></div>
+                                        {% endif %}
+                                        <div class="card-body">
+                                            <h6 class="fw-bold mb-1">{{ p.name }}</h6>
+                                            <div class="text-success fw-bold fs-5 mb-2">R$ {{ "%.2f"|format(p.price) }}</div>
+                                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                                <span class="badge {% if p.stock_quantity > 0 %}bg-info-subtle text-info border-info-subtle{% else %}bg-danger-subtle text-danger border-danger-subtle{% endif %} border px-3 py-2 rounded-pill">Estoque: {{ p.stock_quantity }} un</span>
+                                            </div>
+                                            <div class="d-grid gap-2">
+                                                <button class="btn btn-outline-success btn-sm fw-bold" onclick="darBaixaProduto({{ p.id }})" {% if p.stock_quantity <= 0 %}disabled{% endif %}><i class="bi bi-cart-dash"></i> Dar Baixa</button>
+                                                <div class="d-flex gap-2 mt-1">
+                                                    <button class="btn btn-light btn-sm w-100 border" onclick="editarProduto({{ p.id }}, '{{ p.name|e }}', {{ p.price }}, {{ p.stock_quantity }}, '{{ p.description|e }}')"><i class="bi bi-pencil"></i></button>
+                                                    <button class="btn btn-light btn-sm w-100 border text-danger" onclick="excluirProduto({{ p.id }})"><i class="bi bi-trash"></i></button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% else %}
+                                <div class="text-center py-5 text-muted w-100">Ainda não há produtos cadastrados.</div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div class="card-body bg-light" id="container-categorias">
-                    <form method="POST" action="{{ url_for('add_category') }}" class="input-group input-group-sm mb-3" onsubmit="return submeterFormAJAX(event, this, 'container-categorias')">
-                        <input type="text" name="name" class="form-control" placeholder="Nova (Ex: Cabelo)" required>
-                        <button class="btn btn-primary fw-bold"><i class="bi bi-plus"></i></button>
-                    </form>
-                    <div class="d-flex flex-wrap gap-1">
-                        {% for c in categories %}
-                            <span class="badge bg-white text-dark border d-flex align-items-center gap-1 p-2 shadow-sm">
-                                {{ c.name }}
-                                {% if c.name != 'Geral' %}
-                                <form method="POST" action="{{ url_for('delete_category', id=c.id) }}" class="m-0" onsubmit="return excluirItemAJAX(event, this, 'container-categorias', 'Excluir categoria? Os serviços irão para a categoria Geral.');">
-                                    <button type="submit" class="btn-close" style="font-size: 0.5rem;"></button>
-                                </form>
-                                {% endif %}
-                            </span>
-                        {% endfor %}
+                
+                <div class="col-lg-4">
+                    <div class="card shadow-sm border-0 sticky-top" style="top: 80px;">
+                        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                            <h6 class="mb-0 fw-bold"><i class="bi bi-receipt text-success"></i> Últimas Vendas</h6>
+                            <a href="{{ url_for('relatorio_bi') }}" class="btn btn-sm btn-light border" title="Ver Painel de BI Completo"><i class="bi bi-pie-chart-fill"></i> BI</a>
+                        </div>
+                        <div class="card-body p-0" id="container-ultimas-vendas">
+                            <ul class="list-group list-group-flush small" style="max-height: 500px; overflow-y: auto;">
+                                {% for sale in recent_sales %}
+                                <li class="list-group-item d-flex justify-content-between align-items-center px-3 py-3 border-bottom">
+                                    <div>
+                                        <div class="fw-bold text-dark mb-1">{{ sale.product_name }}</div>
+                                        <div class="text-muted" style="font-size: 0.75rem;"><i class="bi bi-clock"></i> {{ sale.sale_date.strftime('%d/%m às %H:%M') }} • {{ sale.quantity }} un</div>
+                                    </div>
+                                    <div class="text-success fw-bold fs-6">+ R$ {{ "%.2f"|format(sale.total_price) }}</div>
+                                </li>
+                                {% else %}
+                                <li class="list-group-item text-center text-muted py-5 border-0">Nenhuma venda registrada recentemente.</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
                     </div>
                 </div>
             </div>
+        </div>
 
-            <div class="card shadow-sm border-0 mb-4">
-                <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
-                    <h6 class="mb-0 fw-bold"><i class="bi bi-scissors text-primary"></i> Serviços Oferecidos</h6>
-                    <button class="btn btn-sm btn-primary fw-bold px-3 shadow-sm" onclick="abrirModalServico()"><i class="bi bi-plus-lg"></i> Novo Serviço</button>
-                </div>
-                
-                <div class="card-body" id="container-lista-servicos">
-                    <ul class="list-group list-group-flush small" style="max-height: 400px; overflow-y: auto;">
-                        {% for s in services %}
-                        <li class="list-group-item d-flex justify-content-between align-items-center px-0 py-2 border-bottom"
-                            data-id="{{ s.id }}" data-nome="{{ s.name|e }}" data-preco="{{ s.price }}" data-duracao="{{ s.duration }}" 
-                            data-categoria="{{ s.category_id }}" data-iscombo="{{ 'true' if s.is_combo else 'false' }}" data-precooriginal="{{ s.original_price or '' }}">
-
-                            <div>
-                                <span class="badge bg-secondary mb-1" style="font-size: 0.65rem;">{{ s.category.name if s.category else 'Geral' }}</span>
-                                {% if s.is_combo %}
-                                    <span class="badge bg-warning text-dark mb-1 ms-1 shadow-sm" style="font-size: 0.65rem;"><i class="bi bi-stars"></i> Promoção</span>
-                                {% endif %}
-                                <br>
-                                <strong>{{ s.name }}</strong> ({{ s.duration }}m)<br>
-                                {% if s.is_combo and s.original_price %}
-                                    <span class="text-muted text-decoration-line-through small me-1">R$ {{ "%.2f"|format(s.original_price) }}</span>
-                                {% endif %}
-                                <span class="text-success fw-bold fs-6">R$ {{ "%.2f"|format(s.price) }}</span>
-                            </div>
-
-                            <div class="d-flex gap-2">
-                                <button class="btn btn-light btn-sm text-primary shadow-sm" onclick="editarServico(this)" title="Editar Serviço"><i class="bi bi-pencil-fill"></i></button>
-                                <button class="btn btn-light btn-sm text-danger shadow-sm" onclick="excluirServico({{ s.id }}, this)" title="Excluir Serviço"><i class="bi bi-trash-fill"></i></button>
-                            </div>
-                        </li>
-                        {% else %}
-                        <li class="list-group-item px-0 text-muted text-center border-0 py-4">Nenhum serviço cadastrado. Clique em Novo Serviço.</li>
-                        {% endfor %}
-                    </ul>
-                </div>
-            </div>
-
-            {% if establishment.plan_type == 'gestao' %}
-            <div class="card shadow-sm border-0 mb-4">
-                <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
-                    <h6 class="mb-0 fw-bold text-success"><i class="bi bi-people-fill"></i> Minha Equipe (Comissões)</h6>
-                </div>
-                <div class="card-body" id="container-equipe">
-                    <form action="{{ url_for('add_professional') }}" method="POST" class="mb-3" onsubmit="return submeterFormAJAX(event, this, 'container-equipe')">
-                        <div class="input-group input-group-sm">
-                            <input type="text" name="name" class="form-control" placeholder="Nome (Ex: João)" required>
-                            <input type="number" step="0.1" name="commission_rate" class="form-control" placeholder="Comissão %" style="max-width: 100px;" required>
-                            <button class="btn btn-success fw-bold"><i class="bi bi-plus"></i></button>
+        <div class="tab-pane fade" id="tab-assinaturas">
+            <div class="row">
+                <div class="col-lg-6 mb-4">
+                    <div class="card shadow-sm border-0 h-100">
+                        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-stars text-primary"></i> Planos do Clube (Assinaturas)</h5>
+                            <button class="btn btn-primary btn-sm fw-bold shadow-sm" onclick="abrirModalPlano()"><i class="bi bi-plus-lg"></i> Novo</button>
                         </div>
-                    </form>
-                    <ul class="list-group list-group-flush small" style="max-height: 200px; overflow-y: auto;">
-                        {% for p in professionals %}
-                        <li class="list-group-item d-flex justify-content-between align-items-center px-0">
-                            <span class="fw-bold text-dark"><i class="bi bi-person-badge text-muted"></i> {{ p.name }}</span>
-                            <div class="d-flex align-items-center gap-3">
-                                <span class="badge bg-success-subtle text-success border border-success-subtle" title="Taxa de Comissão">{{ "%.1f"|format(p.commission_rate) }}%</span>
-                                <form method="POST" action="{{ url_for('delete_professional', id=p.id) }}" onsubmit="return excluirItemAJAX(event, this, 'container-equipe', 'Demitir este profissional da agenda?');">
-                                    <button class="btn btn-link text-danger p-0 text-decoration-none"><i class="bi bi-trash"></i></button>
-                                </form>
+                        <div class="card-body" id="container-lista-planos">
+                            <div class="row g-3">
+                                {% for p in establishment.subscription_plans %}
+                                <div class="col-12">
+                                    <div class="card border-primary-subtle shadow-sm rounded-4">
+                                        <div class="card-body d-flex justify-content-between align-items-center">
+                                            <div>
+                                                <h6 class="fw-bold text-primary mb-1">{{ p.name }}</h6>
+                                                <div class="fs-5 fw-bold">R$ {{ "%.2f"|format(p.price) }}<small class="text-muted">/mês</small></div>
+                                                <span class="badge bg-light text-dark border mt-1">Limite: {{ p.services_limit if p.services_limit > 0 else 'Ilimitado' }}</span>
+                                            </div>
+                                            <button class="btn btn-light btn-sm border text-primary" onclick="editarPlano({{ p.id }}, '{{ p.name|e }}', {{ p.price }}, {{ p.services_limit }}, '{{ p.description|e }}')"><i class="bi bi-pencil"></i></button>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% else %}
+                                <div class="text-center py-4 text-muted w-100">Crie o seu primeiro plano de assinatura.</div>
+                                {% endfor %}
                             </div>
-                        </li>
-                        {% else %}
-                        <li class="list-group-item px-0 text-muted text-center border-0">A sua equipe aparecerá aqui.</li>
-                        {% endfor %}
-                    </ul>
-                </div>
-            </div>
-            {% endif %}
-
-            <div class="card shadow-sm border-0 mb-4">
-                <div class="card-header bg-white py-3 border-bottom"><h6 class="mb-0 fw-bold text-danger"><i class="bi bi-person-x"></i> Clientes Bloqueados (No-Show)</h6></div>
-                <div class="card-body" id="container-blacklist">
-                    <form action="{{ url_for('add_blacklist') }}" method="POST" class="mb-3" onsubmit="return submeterFormAJAX(event, this, 'container-blacklist')">
-                        <div class="input-group input-group-sm">
-                            <input type="text" name="phone" class="form-control" placeholder="WhatsApp (ex: 87999999999)" required>
-                            <button class="btn btn-danger fw-bold">Bloquear</button>
                         </div>
-                    </form>
-                    <ul class="list-group list-group-flush small" style="max-height: 200px; overflow-y: auto;">
-                        {% for b in blacklists %}
-                        <li class="list-group-item d-flex justify-content-between align-items-center px-0">
-                            <span class="text-muted fw-bold"><i class="bi bi-whatsapp"></i> {{ b.client_phone }}</span>
-                            <form method="POST" action="{{ url_for('remove_blacklist', id=b.id) }}" onsubmit="return excluirItemAJAX(event, this, 'container-blacklist', 'Desbloquear este cliente?');">
-                                <button class="btn btn-link text-success p-0 text-decoration-none"><i class="bi bi-unlock-fill"></i> Liberar</button>
-                            </form>
-                        </li>
-                        {% else %}
-                        <li class="list-group-item px-0 text-muted text-center border-0">Nenhum número bloqueado.</li>
-                        {% endfor %}
-                    </ul>
+                    </div>
+                </div>
+
+                <div class="col-lg-6 mb-4">
+                    <div class="card shadow-sm border-0 h-100">
+                        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-clock-history text-success"></i> Histórico de Assinantes</h5>
+                            <button class="btn btn-success btn-sm fw-bold shadow-sm" onclick="abrirModalAssinante()"><i class="bi bi-person-plus-fill"></i> Registrar</button>
+                        </div>
+                        <div class="card-body p-0" id="container-lista-assinantes">
+                            <table class="table table-hover mb-0 align-middle"><thead class="table-light"><tr><th>Data</th><th>Cliente / Plano</th><th>Status</th><th>Ações</th></tr></thead>
+                                <tbody>
+                                    {% for s in establishment.subscriptions|sort(attribute='id', reverse=True) %}
+                                    <tr>
+                                        <td class="small text-muted">{{ s.created_at.strftime('%d/%m/%Y') }}</td>
+                                        <td>
+                                            <div class="fw-bold text-dark">{{ s.client_name }}</div>
+                                            <div class="small"><span class="badge bg-primary-subtle text-primary border border-primary-subtle">{{ s.plan.name }}</span></div>
+                                        </td>
+                                        <td>{% if s.status == 'ativo' %}<span class="badge bg-success">Ativo</span>{% else %}<span class="badge bg-danger">Cancelado</span>{% endif %}</td>
+                                        <td><div class="d-flex gap-1">
+                                            <button class="btn btn-light btn-sm text-primary border" onclick="editarAssinante({{ s.id }}, '{{ s.client_name|e }}', '{{ s.client_phone }}', {{ s.plan_id }}, '{{ s.expiry_date.strftime('%Y-%m-%d') }}', '{{ s.status }}')"><i class="bi bi-pencil"></i></button>
+                                            <button class="btn btn-light btn-sm text-danger border" onclick="excluirAssinante({{ s.id }})"><i class="bi bi-trash"></i></button>
+                                        </div></td>
+                                    </tr>
+                                    {% else %}<tr><td colspan="4" class="text-center py-5 text-muted">Nenhum assinante registrado no histórico.</td></tr>{% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
             </div>
-
         </div>
     </div>
 </div>
 
 <div class="modal fade" id="modalServico" tabindex="-1">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content border-0 shadow-lg rounded-4">
-      <div class="modal-header border-bottom-0 pb-0">
-        <h5 class="modal-title fw-bold text-dark" id="modalServicoTitle">Novo Serviço</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
+  <div class="modal-dialog modal-dialog-centered"><div class="modal-content border-0 shadow-lg rounded-4"><div class="modal-header border-bottom-0 pb-0"><h5 class="modal-title fw-bold text-dark" id="modalServicoTitle">Novo Serviço</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
       <div class="modal-body p-4">
-        <form id="formServico">
-            <input type="hidden" id="servicoId" name="id">
-            
-            <div class="mb-3">
-                <label class="form-label small fw-bold text-muted">Categoria</label>
-                <select id="servicoCategoria" name="category_id" class="form-select border-light-subtle shadow-sm" required>
-                    <option value="" disabled selected>Escolha a Categoria...</option>
-                    {% for c in categories %}
-                        <option value="{{ c.id }}">{{ c.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            
-            <div class="mb-3">
-                <label class="form-label small fw-bold text-muted">Nome do Serviço</label>
-                <input type="text" id="servicoNome" name="name" class="form-control border-light-subtle shadow-sm" placeholder="Ex: Corte Degradê" required>
-            </div>
-            
-            <div class="row g-3 mb-4">
-                <div class="col-6">
-                    <label class="form-label small fw-bold text-muted">Preço (R$)</label>
-                    <input type="number" step="0.01" id="servicoPreco" name="price" class="form-control border-light-subtle shadow-sm" placeholder="0.00" required>
-                </div>
-                <div class="col-6">
-                    <label class="form-label small fw-bold text-muted">Duração (Min)</label>
-                    <input type="number" id="servicoDuracao" name="duration" class="form-control border-light-subtle shadow-sm" placeholder="30" required>
-                </div>
-            </div>
+        <form id="formServico"><input type="hidden" id="servicoId" name="id">
+            <div class="mb-3"><label class="form-label small fw-bold">Categoria</label><select id="servicoCategoria" name="category_id" class="form-select border-light-subtle shadow-sm" required><option value="" disabled selected>Escolha...</option>{% for c in categories %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}</select></div>
+            <div class="mb-3"><label class="form-label small fw-bold">Nome do Serviço</label><input type="text" id="servicoNome" name="name" class="form-control border-light-subtle shadow-sm" required></div>
+            <div class="row g-3 mb-2"><div class="col-6"><label class="form-label small fw-bold">Preço (R$)</label><input type="number" step="0.01" id="servicoPreco" name="price" class="form-control border-light-subtle shadow-sm" required></div><div class="col-6"><label class="form-label small fw-bold">Duração (Min)</label><input type="number" id="servicoDuracao" name="duration" class="form-control border-light-subtle shadow-sm" required></div></div>
+            <div class="form-check form-switch fw-bold text-success mb-3"><input class="form-check-input" type="checkbox" id="servicoIsClub" name="is_club_included"><label class="form-check-label ms-1" for="servicoIsClub"><i class="bi bi-star-fill"></i> Incluso no Clube?</label></div>
+            <div class="bg-light p-3 rounded-3 border border-light shadow-sm"><div class="form-check form-switch fw-bold text-primary mb-0"><input class="form-check-input" type="checkbox" id="servicoIsCombo" name="is_combo" onchange="document.getElementById('divOriginalPrice').classList.toggle('d-none', !this.checked)"><label class="form-check-label ms-1" for="servicoIsCombo"> É Promoção / Pacote?</label></div>
+                <div class="input-group input-group-sm mt-3 d-none" id="divOriginalPrice"><span class="input-group-text bg-white text-muted border-end-0">Preço Antigo: R$</span><input type="number" step="0.01" id="servicoOriginalPrice" name="original_price" class="form-control border-start-0"></div></div>
+        </form></div>
+      <div class="modal-footer border-top-0 pt-0 px-4 pb-4"><button type="button" class="btn btn-light fw-bold" data-bs-dismiss="modal">Cancelar</button><button type="button" class="btn btn-primary fw-bold shadow-sm px-4" id="btnSalvarServico" onclick="salvarServico()">Salvar</button></div>
+    </div></div>
+</div>
 
-            <div class="bg-light p-3 rounded-3 border border-light shadow-sm">
-                <div class="form-check form-switch fw-bold text-primary mb-0">
-                    <input class="form-check-input" type="checkbox" id="servicoIsCombo" name="is_combo" onchange="document.getElementById('divOriginalPrice').classList.toggle('d-none', !this.checked)">
-                    <label class="form-check-label ms-1" for="servicoIsCombo"><i class="bi bi-stars"></i> É Promoção / Pacote?</label>
-                </div>
-                <div class="input-group input-group-sm mt-3 d-none" id="divOriginalPrice">
-                    <span class="input-group-text bg-white text-muted border-end-0">Preço Antigo: R$</span>
-                    <input type="number" step="0.01" id="servicoOriginalPrice" name="original_price" class="form-control border-start-0" placeholder="Ex: 90.00">
-                </div>
-            </div>
-        </form>
-      </div>
-      <div class="modal-footer border-top-0 pt-0 px-4 pb-4">
-        <button type="button" class="btn btn-light fw-bold" data-bs-dismiss="modal">Cancelar</button>
-        <button type="button" class="btn btn-primary fw-bold shadow-sm px-4" id="btnSalvarServico" onclick="salvarServico()">Salvar Serviço</button>
+<div class="modal fade" id="modalProduto" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered"><div class="modal-content border-0 shadow-lg rounded-4"><div class="modal-header border-bottom-0 pb-0"><h5 class="modal-title fw-bold" id="modalProdutoTitle">Novo Produto</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body p-4">
+        <form id="formProduto" enctype="multipart/form-data"><input type="hidden" id="prodId" name="id">
+            <div class="mb-3"><label class="form-label small fw-bold">Nome</label><input type="text" name="name" id="prodNome" class="form-control" required></div>
+            <div class="row g-2 mb-3"><div class="col-6"><label class="form-label small fw-bold">Preço (R$)</label><input type="number" step="0.01" name="price" id="prodPreco" class="form-control" required></div><div class="col-6"><label class="form-label small fw-bold">Estoque Inicial</label><input type="number" name="stock_quantity" id="prodEstoque" class="form-control" required></div></div>
+            <div class="mb-3"><label class="form-label small fw-bold">Descrição (Opcional)</label><textarea name="description" id="prodDesc" class="form-control" rows="2"></textarea></div>
+            <div class="mb-0"><label class="form-label small fw-bold">Foto do Produto</label><input type="file" name="image" class="form-control" accept="image/*"></div>
+        </form></div>
+      <div class="modal-footer border-0 pt-0"><button type="button" class="btn btn-primary w-100 fw-bold py-2" id="btnSalvarProduto" onclick="salvarProduto()">Salvar Produto</button></div>
+    </div></div>
+</div>
+
+<div class="modal fade" id="modalPlano" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border-0 shadow-lg rounded-4">
+        <div class="modal-header border-bottom-0 pb-0"><h5 class="modal-title fw-bold">Novo Plano de Assinatura</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body p-4">
+          <form id="formPlano">
+              <div class="mb-3"><label class="form-label small fw-bold">Nome do Plano</label><input type="text" name="name" class="form-control" placeholder="Ex: VIP Mensal" required></div>
+              <div class="row g-2 mb-3">
+                  <div class="col-6"><label class="form-label small fw-bold">Preço Mensal (R$)</label><input type="number" step="0.01" name="price" class="form-control" required></div>
+                  <div class="col-6"><label class="form-label small fw-bold">Limite de Serviços</label><input type="number" name="services_limit" class="form-control" placeholder="0 para ilimitado"></div>
+              </div>
+              <div class="mb-0"><label class="form-label small fw-bold">Descrição/Benefícios</label><textarea name="description" class="form-control" rows="2"></textarea></div>
+          </form>
+        </div>
+        <div class="modal-footer border-0 pt-0"><button type="button" class="btn btn-primary w-100 fw-bold py-2" onclick="salvarPlano()">Criar Plano</button></div>
       </div>
     </div>
-  </div>
 </div>
+
+<div class="modal fade" id="modalEditarPlano" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border-0 shadow-lg rounded-4">
+        <div class="modal-header border-bottom-0 pb-0"><h5 class="modal-title fw-bold">Editar Plano</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body p-4">
+          <form id="formEditarPlano">
+              <input type="hidden" name="id" id="editPlanID">
+              <div class="mb-3"><label class="form-label small fw-bold">Nome do Plano</label><input type="text" id="editPlanName" name="name" class="form-control" required></div>
+              <div class="row g-2 mb-3">
+                  <div class="col-6"><label class="form-label small fw-bold">Preço Mensal (R$)</label><input type="number" step="0.01" id="editPlanPrice" name="price" class="form-control" required></div>
+                  <div class="col-6"><label class="form-label small fw-bold">Limite de Serviços</label><input type="number" id="editPlanLimit" name="services_limit" class="form-control"></div>
+              </div>
+              <div class="mb-0"><label class="form-label small fw-bold">Descrição</label><textarea id="editPlanDesc" name="description" class="form-control" rows="2"></textarea></div>
+          </form>
+        </div>
+        <div class="modal-footer border-0 pt-0"><button type="button" class="btn btn-primary w-100 fw-bold py-2" onclick="salvarEdicaoPlano()">Salvar Alterações</button></div>
+      </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalAssinante" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border-0 shadow-lg rounded-4">
+        <div class="modal-header border-bottom-0 pb-0"><h5 class="modal-title fw-bold">Registrar Novo Assinante</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body p-4">
+          <form id="formAssinante">
+              <div class="mb-3"><label class="form-label small fw-bold">Nome do Cliente</label><input type="text" name="client_name" class="form-control" required></div>
+              <div class="mb-3"><label class="form-label small fw-bold">WhatsApp</label><input type="text" name="client_phone" class="form-control" placeholder="DDD + Número" required></div>
+              <div class="row g-2">
+                  <div class="col-8"><label class="form-label small fw-bold">Plano Escolhido</label><select name="plan_id" class="form-select" required><option value="" disabled selected>Escolha...</option>{% for p in establishment.subscription_plans %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}</select></div>
+                  <div class="col-4"><label class="form-label small fw-bold">Meses</label><input type="number" name="months" class="form-control" value="1"></div>
+              </div>
+          </form>
+        </div>
+        <div class="modal-footer border-0 pt-0"><button type="button" class="btn btn-success w-100 fw-bold py-2" onclick="registrarAssinante()">Confirmar Assinatura</button></div>
+      </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalEditarAssinante" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border-0 shadow-lg rounded-4">
+        <div class="modal-header border-bottom-0 pb-0"><h5 class="modal-title fw-bold">Editar Assinante</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body p-4">
+          <form id="formEditarAssinante">
+              <input type="hidden" name="id" id="editAssID">
+              <div class="mb-3"><label class="form-label small fw-bold">Nome do Cliente</label><input type="text" id="editAssName" name="client_name" class="form-control" required></div>
+              <div class="mb-3"><label class="form-label small fw-bold">WhatsApp</label><input type="text" id="editAssPhone" name="client_phone" class="form-control" required></div>
+              <div class="row g-2 mb-3">
+                  <div class="col-6"><label class="form-label small fw-bold">Plano</label><select id="editAssPlan" name="plan_id" class="form-select" required>{% for p in establishment.subscription_plans %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}</select></div>
+                  <div class="col-6"><label class="form-label small fw-bold">Status</label><select id="editAssStatus" name="status" class="form-select"><option value="ativo">Ativo</option><option value="cancelado">Cancelado</option></select></div>
+              </div>
+              <div class="mb-0"><label class="form-label small fw-bold">Data de Vencimento</label><input type="date" id="editAssExpiry" name="expiry_date" class="form-control" required></div>
+          </form>
+        </div>
+        <div class="modal-footer border-0 pt-0"><button type="button" class="btn btn-success w-100 fw-bold py-2" onclick="salvarEdicaoAssinante()">Salvar Alterações</button></div>
+      </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalProfissional" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-sm"><div class="modal-content border-0 shadow-lg rounded-4"><div class="modal-header border-bottom-0 pb-0"><h5 class="modal-title fw-bold" id="modalProfTitle">Editar Profissional</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body p-4"><form id="formProfissional"><input type="hidden" id="profId" name="id">
+              <div class="mb-3"><label class="form-label small fw-bold">Nome</label><input type="text" name="name" id="profNome" class="form-control" required></div>
+              <div class="mb-3"><label class="form-label small fw-bold">Comissão (%)</label><input type="number" step="0.1" name="commission_rate" id="profComissao" class="form-control" required></div>
+          </form></div>
+        <div class="modal-footer border-0 pt-0"><button type="button" class="btn btn-success w-100 fw-bold py-2" id="btnSalvarProf" onclick="salvarProfissional()">Salvar Alterações</button></div>
+      </div></div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
 <script>
-    // ==========================================
-    // SISTEMA DE TEMPO REAL (POLLING)
-    // ==========================================
-    let ultimoMaxId = null;
+    function verificarAbaLoja() {
+        const sidebar = document.getElementById('sidebarMenu');
+        const fecharMenu = () => { if (sidebar) { const bsOffcanvas = bootstrap.Offcanvas.getInstance(sidebar); if (bsOffcanvas) bsOffcanvas.hide(); } };
 
-    async function checarNovosAgendamentos() {
-        try {
-            const res = await fetch('/api/check_novos_agendamentos');
-            const data = await res.json();
-            
-            if (ultimoMaxId === null) {
-                ultimoMaxId = data.max_id;
-                return;
-            }
-
-            if (data.max_id > ultimoMaxId) {
-                ultimoMaxId = data.max_id;
-                
-                const badge = document.getElementById('badge-contador-hoje');
-                if(badge) {
-                    badge.classList.replace('bg-primary', 'bg-warning');
-                    badge.classList.add('text-dark');
-                    setTimeout(() => {
-                        badge.classList.replace('bg-warning', 'bg-primary');
-                        badge.classList.remove('text-dark');
-                    }, 2000);
-                }
-
-                await atualizarContainerSilenciosamente('container-agendamentos');
-            }
-        } catch(e) {
-            console.log("Buscando atualizações na rede...");
+        if (window.location.hash === '#loja') {
+            const lojaTab = document.getElementById('btn-tab-loja'); if (lojaTab) new bootstrap.Tab(lojaTab).show(); fecharMenu();
+        } else if (window.location.hash === '#assinaturas') {
+            const assTab = document.getElementById('btn-tab-assinaturas'); if (assTab) new Tab(assTab).show(); fecharMenu();
+        } else if (window.location.hash === '' || window.location.hash === '#agenda') {
+            const agendaTab = document.getElementById('btn-tab-agenda'); if(agendaTab) new bootstrap.Tab(agendaTab).show();
         }
     }
+    document.addEventListener("DOMContentLoaded", verificarAbaLoja); window.addEventListener("hashchange", verificarAbaLoja);
+
+    // SISTEMA DE POLLING 10 SEGUNDOS
+    let ultimoMaxId = null;
+    async function checarNovosAgendamentos() {
+        try {
+            const res = await fetch('/api/check_novos_agendamentos'); 
+            const data = await res.json();
+            if (ultimoMaxId === null) { ultimoMaxId = data.max_id; return; }
+            if (data.max_id > ultimoMaxId) {
+                ultimoMaxId = data.max_id; 
+                const badge = document.getElementById('badge-contador-hoje');
+                if(badge) { 
+                    badge.classList.replace('bg-primary', 'bg-warning'); badge.classList.add('text-dark');
+                    setTimeout(() => { badge.classList.replace('bg-warning', 'bg-primary'); badge.classList.remove('text-dark'); }, 2000); 
+                }
+                await atualizarContainerSilenciosamente('container-agendamentos');
+            }
+        } catch(e) { console.log("Aguardando rede...", e); }
+    } 
     setInterval(checarNovosAgendamentos, 10000);
 
-    // ==========================================
-    // MOTOR AJAX UNIVERSAL PARA O PAINEL
-    // ==========================================
-
     async function atualizarContainerSilenciosamente(containerId) {
-        const htmlRes = await fetch(window.location.href);
-        const htmlText = await htmlRes.text();
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(htmlText, 'text/html');
-        
-        const novoConteudo = doc.getElementById(containerId);
-        if(novoConteudo) {
-            document.getElementById(containerId).innerHTML = novoConteudo.innerHTML;
-        }
+        const htmlRes = await fetch(window.location.href); const htmlText = await htmlRes.text();
+        const doc = new DOMParser().parseFromString(htmlText, 'text/html'); const novoConteudo = doc.getElementById(containerId);
+        if(novoConteudo) { document.getElementById(containerId).innerHTML = novoConteudo.innerHTML; }
     }
 
     async function submeterFormAJAX(event, formElement, containerId) {
         event.preventDefault(); 
         const btn = formElement.querySelector('button[type="submit"]') || formElement.querySelector('button');
-        const iconeOriginal = btn.innerHTML;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
-        btn.disabled = true;
-
+        const iconeOriginal = btn.innerHTML; btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>'; btn.disabled = true;
         try {
-            const formData = new FormData(formElement);
-            const res = await fetch(formElement.action, {
-                method: 'POST',
-                body: formData,
-                headers: { 'X-Requested-With': 'XMLHttpRequest' }
-            });
+            const res = await fetch(formElement.action, { method: 'POST', body: new FormData(formElement), headers: { 'X-Requested-With': 'XMLHttpRequest' } });
             const data = await res.json();
-            
             if (data.success) {
-                // Se a flag data-no-reset existir, o formulário não será apagado (ex: configurações)
-                if(formElement.tagName === 'FORM' && formElement.elements.length > 2 && !formElement.dataset.noReset) {
-                    formElement.reset();
-                }
-                
+                if(formElement.tagName === 'FORM' && formElement.elements.length > 2 && !formElement.dataset.noReset) { formElement.reset(); }
                 await atualizarContainerSilenciosamente(containerId);
-                
-                // Animação de Sucesso ("Salvo!") no novo botão gerado
-                const newContainer = document.getElementById(containerId);
-                if (newContainer && formElement.dataset.noReset) {
-                    const newBtn = newContainer.querySelector('button[type="submit"]') || newContainer.querySelector('button');
-                    if (newBtn) {
-                        const originalContent = newBtn.innerHTML;
-                        const originalClass = newBtn.className;
-                        newBtn.innerHTML = '<i class="bi bi-check-lg"></i> Salvo';
-                        newBtn.classList.add('btn-success');
-                        setTimeout(() => {
-                            newBtn.innerHTML = originalContent;
-                            newBtn.className = originalClass;
-                        }, 2000);
-                    }
-                }
-            } else {
-                alert(data.error || 'Erro ao processar o pedido.');
-            }
-        } catch (e) {
-            console.error(e);
-            alert('Erro de conexão com o servidor.');
-        } finally {
-            if(document.body.contains(btn)) {
-                btn.innerHTML = iconeOriginal;
-                btn.disabled = false;
-            }
-        }
+            } else { alert(data.error || 'Erro.'); }
+        } catch (e) { alert('Erro de conexão.'); } finally { if(document.body.contains(btn)) { btn.innerHTML = iconeOriginal; btn.disabled = false; } }
     }
 
     async function excluirItemAJAX(event, formElement, containerId, mensagemConfirmacao) {
-        event.preventDefault();
-        if (mensagemConfirmacao && !confirm(mensagemConfirmacao)) return;
-
-        const btn = formElement.querySelector('button[type="submit"]') || formElement.querySelector('button');
-        const iconeOriginal = btn.innerHTML;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
-        btn.disabled = true;
-
-        try {
-            const res = await fetch(formElement.action, {
-                method: 'POST',
-                headers: { 'X-Requested-With': 'XMLHttpRequest' }
-            });
-            const data = await res.json();
-            
-            if (data.success) {
-                await atualizarContainerSilenciosamente(containerId);
-            } else {
-                alert(data.error || 'Erro ao excluir o item.');
-                if(document.body.contains(btn)) {
-                    btn.innerHTML = iconeOriginal;
-                    btn.disabled = false;
-                }
-            }
-        } catch (e) {
-            console.error(e);
-            alert('Erro de conexão com o servidor.');
-            if(document.body.contains(btn)) {
-                btn.innerHTML = iconeOriginal;
-                btn.disabled = false;
-            }
-        }
+        event.preventDefault(); if (mensagemConfirmacao && !confirm(mensagemConfirmacao)) return;
+        const res = await fetch(formElement.action, { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+        if ((await res.json()).success) { await atualizarContainerSilenciosamente(containerId); }
     }
 
-    // ==========================================
-    // LÓGICA ESPECÍFICA DA JANELA MODAL (SERVIÇOS)
-    // ==========================================
-
+    // SERVIÇOS
     function abrirModalServico() {
-        document.getElementById('formServico').reset();
-        document.getElementById('servicoId').value = '';
-        document.getElementById('modalServicoTitle').innerText = 'Novo Serviço';
-        document.getElementById('divOriginalPrice').classList.add('d-none');
+        document.getElementById('formServico').reset(); document.getElementById('servicoId').value = '';
+        document.getElementById('modalServicoTitle').innerText = 'Novo Serviço'; document.getElementById('divOriginalPrice').classList.add('d-none');
         new bootstrap.Modal(document.getElementById('modalServico')).show();
     }
-
     function editarServico(btn) {
-        const li = btn.closest('li'); 
-        
-        document.getElementById('servicoId').value = li.dataset.id;
-        document.getElementById('servicoNome').value = li.dataset.nome;
-        document.getElementById('servicoPreco').value = li.dataset.preco;
-        document.getElementById('servicoDuracao').value = li.dataset.duracao;
+        const li = btn.closest('li'); document.getElementById('servicoId').value = li.dataset.id; document.getElementById('servicoNome').value = li.dataset.nome;
+        document.getElementById('servicoPreco').value = li.dataset.preco; document.getElementById('servicoDuracao').value = li.dataset.duracao;
         document.getElementById('servicoCategoria').value = li.dataset.categoria;
-
-        const isCombo = li.dataset.iscombo === 'true';
-        document.getElementById('servicoIsCombo').checked = isCombo;
-        document.getElementById('divOriginalPrice').classList.toggle('d-none', !isCombo);
-        document.getElementById('servicoOriginalPrice').value = li.dataset.precooriginal;
-
-        document.getElementById('modalServicoTitle').innerText = 'Editar Serviço';
+        document.getElementById('servicoIsClub').checked = li.dataset.isclub === 'true';
+        const isCombo = li.dataset.iscombo === 'true'; document.getElementById('servicoIsCombo').checked = isCombo;
+        document.getElementById('divOriginalPrice').classList.toggle('d-none', !isCombo); document.getElementById('servicoOriginalPrice').value = li.dataset.precooriginal;
         new bootstrap.Modal(document.getElementById('modalServico')).show();
     }
-
     async function salvarServico() {
-        const id = document.getElementById('servicoId').value;
-        const form = document.getElementById('formServico');
-        
-        if (!form.checkValidity()) { 
-            form.reportValidity(); 
-            return; 
-        }
-
-        const formData = new FormData(form);
-        formData.append('is_combo', document.getElementById('servicoIsCombo').checked);
-
+        const id = document.getElementById('servicoId').value; const form = document.getElementById('formServico');
+        const formData = new FormData(form); formData.append('is_club_included', document.getElementById('servicoIsClub').checked);
         const url = id ? `/admin/servico/editar/${id}` : '/admin/servico/adicionar';
-        const btn = document.getElementById('btnSalvarServico');
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Salvando...';
-        btn.disabled = true;
-
-        try {
-            const res = await fetch(url, {
-                method: 'POST',
-                body: formData,
-                headers: { 'X-Requested-With': 'XMLHttpRequest' }
-            });
-            const data = await res.json();
-            
-            if (data.success) {
-                bootstrap.Modal.getInstance(document.getElementById('modalServico')).hide();
-                await atualizarContainerSilenciosamente('container-lista-servicos'); 
-            } else {
-                alert(data.error || 'Erro ao salvar o serviço.');
-            }
-        } catch (e) {
-            console.error(e);
-            alert('Erro de conexão. Tente novamente.');
-        } finally {
-            btn.innerHTML = 'Salvar Serviço';
-            btn.disabled = false;
-        }
+        const res = await fetch(url, { method: 'POST', body: formData, headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+        if ((await res.json()).success) { bootstrap.Modal.getInstance(document.getElementById('modalServico')).hide(); await atualizarContainerSilenciosamente('container-lista-servicos'); }
+    }
+    async function excluirServico(id, btn) {
+        if (!confirm('Excluir?')) return;
+        const res = await fetch(`/admin/servicos/excluir/${id}`, { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+        if ((await res.json()).success) { await atualizarContainerSilenciosamente('container-lista-servicos'); }
     }
 
-    async function excluirServico(id, btn) {
-        if (!confirm('Tem certeza que deseja excluir este serviço?')) return;
-
-        const iconeOriginal = btn.innerHTML;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
-        btn.disabled = true;
-
-        try {
-            const res = await fetch(`/admin/servicos/excluir/${id}`, {
-                method: 'POST',
-                headers: { 'X-Requested-With': 'XMLHttpRequest' }
-            });
-            const data = await res.json();
-            if (data.success) {
-                await atualizarContainerSilenciosamente('container-lista-servicos'); 
-            }
-        } catch (e) {
-            alert('Erro ao excluir o serviço.');
-            btn.innerHTML = iconeOriginal;
-            btn.disabled = false;
+    // PRODUTOS E VENDAS
+    function abrirModalProduto() { document.getElementById('formProduto').reset(); document.getElementById('prodId').value = ''; new bootstrap.Modal(document.getElementById('modalProduto')).show(); }
+    function editarProduto(id, nome, preco, estoque, desc) {
+        document.getElementById('prodId').value = id; document.getElementById('prodNome').value = nome;
+        document.getElementById('prodPreco').value = preco; document.getElementById('prodEstoque').value = estoque;
+        document.getElementById('prodDesc').value = desc || ''; new bootstrap.Modal(document.getElementById('modalProduto')).show();
+    }
+    async function salvarProduto() {
+        const id = document.getElementById('prodId').value; const form = document.getElementById('formProduto');
+        const url = id ? `/admin/produto/editar/${id}` : '/admin/produto/adicionar';
+        const res = await fetch(url, { method: 'POST', body: new FormData(form), headers: {'X-Requested-With': 'XMLHttpRequest'} });
+        if((await res.json()).success) { bootstrap.Modal.getInstance(document.getElementById('modalProduto')).hide(); await atualizarContainerSilenciosamente('container-lista-produtos'); }
+    }
+    async function darBaixaProduto(id) {
+        const qtd = prompt("Quantidade vendida hoje?"); if (!qtd || isNaN(qtd) || qtd <= 0) return;
+        const formData = new FormData(); formData.append('quantidade', qtd);
+        const res = await fetch(`/admin/produto/dar_baixa/${id}`, { method: 'POST', body: formData, headers: {'X-Requested-With': 'XMLHttpRequest'} });
+        if ((await res.json()).success) { 
+            await atualizarContainerSilenciosamente('container-lista-produtos'); 
+            await atualizarContainerSilenciosamente('container-ultimas-vendas'); 
         }
+    }
+    async function excluirProduto(id) {
+        if(!confirm('Excluir este produto?')) return;
+        const res = await fetch(`/admin/produto/excluir/${id}`, { method: 'POST', headers: {'X-Requested-With': 'XMLHttpRequest'} });
+        if((await res.json()).success) { await atualizarContainerSilenciosamente('container-lista-produtos'); }
+    }
+
+    // EQUIPE
+    function editarProfissional(id, nome, comissao) {
+        document.getElementById('profId').value = id; document.getElementById('profNome').value = nome;
+        document.getElementById('profComissao').value = comissao; new bootstrap.Modal(document.getElementById('modalProfissional')).show();
+    }
+    async function salvarProfissional() {
+        const id = document.getElementById('profId').value;
+        const res = await fetch(`/admin/profissional/editar/${id}`, { method: 'POST', body: new FormData(document.getElementById('formProfissional')), headers: {'X-Requested-With': 'XMLHttpRequest'} });
+        if((await res.json()).success) { bootstrap.Modal.getInstance(document.getElementById('modalProfissional')).hide(); await atualizarContainerSilenciosamente('container-equipe'); }
+    }
+
+    // ASSINATURAS
+    function abrirModalPlano() { document.getElementById('formPlano').reset(); new bootstrap.Modal(document.getElementById('modalPlano')).show(); }
+    function editarPlano(id, name, price, limit, desc) {
+        document.getElementById('editPlanID').value = id; document.getElementById('editPlanName').value = name;
+        document.getElementById('editPlanPrice').value = price; document.getElementById('editPlanLimit').value = limit;
+        document.getElementById('editPlanDesc').value = desc; new bootstrap.Modal(document.getElementById('modalEditarPlano')).show();
+    }
+    async function salvarPlano() {
+        const res = await fetch('/admin/assinaturas/plano/adicionar', { method: 'POST', body: new FormData(document.getElementById('formPlano')), headers: {'X-Requested-With': 'XMLHttpRequest'} });
+        if((await res.json()).success) { bootstrap.Modal.getInstance(document.getElementById('modalPlano')).hide(); await atualizarContainerSilenciosamente('container-lista-planos'); }
+    }
+    async function salvarEdicaoPlano() {
+        const id = document.getElementById('editPlanID').value;
+        const res = await fetch(`/admin/assinaturas/plano/editar/${id}`, { method: 'POST', body: new FormData(document.getElementById('formEditarPlano')), headers: {'X-Requested-With': 'XMLHttpRequest'} });
+        if((await res.json()).success) { bootstrap.Modal.getInstance(document.getElementById('modalEditarPlano')).hide(); await atualizarContainerSilenciosamente('container-lista-planos'); }
+    }
+
+    function abrirModalAssinante() { document.getElementById('formAssinante').reset(); new bootstrap.Modal(document.getElementById('modalAssinante')).show(); }
+    function editarAssinante(id, name, phone, planId, expiry, status) {
+        document.getElementById('editAssID').value = id; document.getElementById('editAssName').value = name;
+        document.getElementById('editAssPhone').value = phone; document.getElementById('editAssPlan').value = planId;
+        document.getElementById('editAssExpiry').value = expiry; document.getElementById('editAssStatus').value = status;
+        new bootstrap.Modal(document.getElementById('modalEditarAssinante')).show();
+    }
+    async function registrarAssinante() {
+        const res = await fetch('/admin/assinaturas/cliente/adicionar', { method: 'POST', body: new FormData(document.getElementById('formAssinante')), headers: {'X-Requested-With': 'XMLHttpRequest'} });
+        if((await res.json()).success) { bootstrap.Modal.getInstance(document.getElementById('modalAssinante')).hide(); await atualizarContainerSilenciosamente('container-lista-assinantes'); }
+    }
+    async function salvarEdicaoAssinante() {
+        const id = document.getElementById('editAssID').value;
+        const res = await fetch(`/admin/assinaturas/cliente/editar/${id}`, { method: 'POST', body: new FormData(document.getElementById('formEditarAssinante')), headers: {'X-Requested-With': 'XMLHttpRequest'} });
+        if((await res.json()).success) { bootstrap.Modal.getInstance(document.getElementById('modalEditarAssinante')).hide(); await atualizarContainerSilenciosamente('container-lista-assinantes'); }
+    }
+    async function excluirAssinante(id) {
+        if(!confirm('Excluir assinante permanentemente?')) return;
+        const res = await fetch(`/admin/assinaturas/cliente/excluir/${id}`, { method: 'POST', headers: {'X-Requested-With': 'XMLHttpRequest'} });
+        if((await res.json()).success) await atualizarContainerSilenciosamente('container-lista-assinantes');
     }
 </script>
 {% endblock %}

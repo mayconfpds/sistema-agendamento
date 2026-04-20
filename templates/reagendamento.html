@@ -1,0 +1,167 @@
+{% extends 'layout.html' %}
+{% block title %}Reagendar - {{ establishment.name }}{% endblock %}
+
+{% block content %}
+<div class="container py-5" id="container-reagendamento">
+    <div class="row justify-content-center">
+        <div class="col-lg-6">
+            <div class="card shadow-lg border-0 p-4 rounded-4">
+                
+                <div class="text-center mb-4 border-bottom pb-3">
+                    <h4 class="fw-bold text-dark mb-2">Alterar Agendamento</h4>
+                    <p class="text-muted mb-0">{{ establishment.name }}</p>
+                </div>
+
+                <div class="bg-light p-4 rounded-3 mb-4 border text-center">
+                    <h6 class="fw-bold text-muted text-uppercase small mb-3">Seu Horário Atual</h6>
+                    <div class="display-6 fw-black text-dark mb-1">{{ appointment.appointment_date.strftime('%d/%m/%Y') }}</div>
+                    <div class="fs-4 fw-bold text-primary mb-3">às {{ appointment.appointment_time.strftime('%H:%M') }}</div>
+                    
+                    <div class="small text-muted fw-bold mb-1">Serviços:</div>
+                    <div class="text-dark">{{ appointment.service_names }}</div>
+                    
+                    {% if appointment.professional %}
+                    <div class="small text-muted fw-bold mt-2">Profissional: <span class="text-dark">{{ appointment.professional.name }}</span></div>
+                    {% endif %}
+                </div>
+
+                {% if can_reschedule %}
+                <div id="reagendamento-box">
+                    <form id="formReagendar">
+                        <h6 class="fw-bold text-primary mb-3"><i class="bi bi-calendar-event"></i> Escolha o Novo Horário</h6>
+                        
+                        <div class="mb-3">
+                            <label class="fw-bold small">Nova Data</label>
+                            <input type="date" id="date" name="appointment_date" class="form-control border-primary py-2" required>
+                        </div>
+                        
+                        <div class="mb-4">
+                            <label class="fw-bold small">Horários Disponíveis</label>
+                            <div id="slots" class="d-flex flex-wrap gap-2 mt-2">
+                                <small class="text-muted">Selecione uma data para ver os horários...</small>
+                            </div>
+                            <input type="hidden" id="time" name="appointment_time" required>
+                        </div>
+                        
+                        <button type="button" id="btnSalvar" class="btn btn-primary w-100 py-3 fw-bold rounded-pill shadow-sm" onclick="salvarReagendamento()" disabled>
+                            Confirmar Novo Horário
+                        </button>
+                    </form>
+                </div>
+                
+                <div id="sucesso-box" class="text-center d-none py-4">
+                    <i class="bi bi-check-circle-fill text-success" style="font-size: 4rem;"></i>
+                    <h4 class="fw-bold text-dark mt-3">Reagendado com Sucesso!</h4>
+                    <p class="text-muted">O seu novo horário foi salvo no sistema da barbearia.</p>
+                    <a href="https://wa.me/55{{ establishment.contact_phone | replace(' ', '') | replace('-', '') | replace('(', '') | replace(')', '') }}" target="_blank" class="btn btn-outline-success fw-bold rounded-pill px-4 mt-2">
+                        <i class="bi bi-whatsapp"></i> Falar no WhatsApp
+                    </a>
+                </div>
+
+                {% else %}
+                <div class="alert alert-danger bg-danger-subtle border-0 rounded-3 p-4 text-center">
+                    <i class="bi bi-exclamation-triangle-fill text-danger fs-1 mb-2 d-block"></i>
+                    <h6 class="fw-bold text-danger-emphasis mb-2">Não é possível alterar online</h6>
+                    <p class="small text-danger-emphasis mb-0">{{ msg_erro }}</p>
+                </div>
+                
+                <a href="https://wa.me/55{{ establishment.contact_phone | replace(' ', '') | replace('-', '') | replace('(', '') | replace(')', '') }}" target="_blank" class="btn btn-success w-100 py-3 fw-bold rounded-pill shadow-sm mt-2">
+                    <i class="bi bi-whatsapp"></i> Solicitar Alteração no WhatsApp
+                </a>
+                {% endif %}
+
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% if can_reschedule %}
+<script>
+    // Define a data mínima como hoje
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    document.getElementById('date').min = `${year}-${month}-${day}`;
+
+    // Busca os horários livres na API
+    async function fetchSlots() {
+        const dVal = document.getElementById('date').value;
+        if(!dVal) return;
+        
+        const div = document.getElementById('slots');
+        div.innerHTML = '<span class="spinner-border spinner-border-sm text-primary"></span> Buscando horários...';
+        document.getElementById('btnSalvar').disabled = true;
+        document.getElementById('time').value = '';
+        
+        // Passamos os dados do agendamento atual para garantir que cabe
+        const estId = {{ establishment.id }};
+        const duration = {{ appointment.total_duration }};
+        const profId = "{{ appointment.professional_id or '' }}";
+        
+        try {
+            const res = await fetch(`/api/horarios_disponiveis?est_id=${estId}&date=${dVal}&duration=${duration}&prof_id=${profId}`);
+            const times = await res.json();
+            
+            div.innerHTML = '';
+            if(times.length === 0) {
+                div.innerHTML = '<span class="text-danger small fw-bold">Nenhum horário com tempo suficiente nesta data.</span>';
+                return;
+            }
+            
+            times.forEach(t => {
+                const b = document.createElement('button');
+                b.type = 'button'; 
+                b.className = 'btn btn-outline-dark btn-sm rounded-pill px-3 fw-bold'; 
+                b.innerText = t;
+                b.onclick = () => {
+                    document.querySelectorAll('#slots button').forEach(x => x.classList.replace('btn-dark', 'btn-outline-dark'));
+                    b.classList.replace('btn-outline-dark', 'btn-dark');
+                    document.getElementById('time').value = t;
+                    document.getElementById('btnSalvar').disabled = false;
+                };
+                div.appendChild(b);
+            });
+        } catch(e) {
+            div.innerHTML = '<span class="text-danger small">Erro de conexão. Tente novamente.</span>';
+        }
+    }
+
+    document.getElementById('date').addEventListener('change', fetchSlots);
+
+    // Envia o reagendamento silenciosamente
+    async function salvarReagendamento() {
+        const btn = document.getElementById('btnSalvar');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Salvando...';
+        btn.disabled = true;
+
+        const formData = new FormData(document.getElementById('formReagendar'));
+        
+        try {
+            const res = await fetch(`/api/reagendar/{{ appointment.edit_token }}`, { 
+                method: 'POST', 
+                body: formData, 
+                headers: {'X-Requested-With': 'XMLHttpRequest'} 
+            });
+            const data = await res.json();
+            
+            if(data.success) {
+                document.getElementById('reagendamento-box').classList.add('d-none');
+                document.getElementById('sucesso-box').classList.remove('d-none');
+            } else {
+                alert(data.error || 'Ocorreu um erro ao reagendar.');
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        } catch (e) {
+            alert('Erro de conexão. Verifique sua internet.');
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
+    }
+</script>
+{% endif %}
+{% endblock %}

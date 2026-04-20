@@ -8,7 +8,7 @@
         </div>
         <div>
             <h2 class="h3 mb-0 fw-bold text-dark">Central de Ajuda</h2>
-            <p class="text-muted mb-0">Aprenda a usar a plataforma e tire as suas dúvidas.</p>
+            <p class="text-muted mb-0">Aprenda a usar a plataforma. Meu Plano: <span class="badge {{ 'bg-primary' if establishment.plan_type == 'gestao' else 'bg-secondary' }} ms-1">{{ establishment.plan_type|upper }}</span></p>
         </div>
     </div>
 
@@ -24,15 +24,15 @@
                         <div class="col-md-4">
                             <div class="bg-white bg-opacity-10 rounded-3 p-3 h-100 border border-white border-opacity-25 transition hover:bg-opacity-20">
                                 <div class="fs-2 fw-extrabold text-white-50 mb-2" style="line-height: 1;">1</div>
-                                <h6 class="fw-bold"><i class="bi bi-clock me-1"></i> Horários</h6>
-                                <p class="small text-white-50 mb-0">Defina a sua hora de abertura, fecho e pausa para almoço. Guarde para ativar a agenda.</p>
+                                <h6 class="fw-bold"><i class="bi bi-clock me-1"></i> Configurações</h6>
+                                <p class="small text-white-50 mb-0">Defina a sua hora de abertura, fecho, e escolha o seu <strong>Estado (UF)</strong> para ativarmos o robô de feriados da sua região.</p>
                             </div>
                         </div>
                         <div class="col-md-4">
                             <div class="bg-white bg-opacity-10 rounded-3 p-3 h-100 border border-white border-opacity-25 transition hover:bg-opacity-20">
                                 <div class="fs-2 fw-extrabold text-white-50 mb-2" style="line-height: 1;">2</div>
                                 <h6 class="fw-bold"><i class="bi bi-scissors me-1"></i> Serviços</h6>
-                                <p class="small text-white-50 mb-0">Crie uma "Categoria" (ex: Cabelo) e depois adicione os seus serviços com preço e duração.</p>
+                                <p class="small text-white-50 mb-0">Crie uma "Categoria" e adicione os serviços. {% if establishment.plan_type == 'gestao' %}Marque também quais deles farão parte do seu <strong>Clube VIP</strong>.{% else %}Coloque o preço e a duração corretos.{% endif %}</p>
                             </div>
                         </div>
                         <div class="col-md-4">
@@ -92,11 +92,65 @@
 
             <div class="card shadow-sm border-0 mb-4">
                 <div class="card-header bg-white py-3 border-bottom-0">
-                    <h5 class="mb-0 fw-bold"><i class="bi bi-book text-primary me-2"></i> Dúvidas Frequentes</h5>
+                    <h5 class="mb-0 fw-bold"><i class="bi bi-book text-primary me-2"></i> Manual e Dúvidas Frequentes</h5>
                 </div>
                 <div class="card-body p-0">
                     <div class="accordion accordion-flush" id="faqAccordion">
                         
+                        <div class="accordion-item border-bottom">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed fw-bold text-dark px-4 py-3" type="button" data-bs-toggle="collapse" data-bs-target="#faq_reagendar">
+                                    <i class="bi bi-arrow-repeat text-primary me-2"></i> Como funciona o Reagendamento Self-Service?
+                                </button>
+                            </h2>
+                            <div id="faq_reagendar" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                                <div class="accordion-body text-muted small px-4 pb-4">
+                                    Ao marcar um horário, o seu cliente recebe um <strong>Link Mágico</strong> no WhatsApp e no E-mail. Se ele precisar alterar a data, basta clicar no link e escolher um novo horário sozinho. <strong>Regra de segurança:</strong> O sistema bloqueia alterações automáticas se faltarem menos de 2 horas para o corte, pedindo para o cliente lhe enviar uma mensagem.
+                                </div>
+                            </div>
+                        </div>
+
+                        {% if establishment.plan_type == 'gestao' %}
+                        <div class="accordion-item border-bottom">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed fw-bold text-dark px-4 py-3" type="button" data-bs-toggle="collapse" data-bs-target="#faq_clube">
+                                    <i class="bi bi-star-fill text-warning me-2"></i> Como usar o Clube VIP de Assinaturas?
+                                </button>
+                            </h2>
+                            <div id="faq_clube" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                                <div class="accordion-body text-muted small px-4 pb-4">
+                                    Para gerar receita recorrente: Vá até à aba <strong>Assinaturas</strong> e crie os planos (ex: R$ 80/mês). Depois, registre os clientes assinantes colocando o número do WhatsApp deles. Quando esse cliente for agendar um serviço pelo site, o sistema reconhece o número dele e <strong>zera o valor na hora</strong>.
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="accordion-item border-bottom">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed fw-bold text-dark px-4 py-3" type="button" data-bs-toggle="collapse" data-bs-target="#faq2">
+                                    <i class="bi bi-people-fill text-success me-2"></i> Como funciona o cálculo de comissões da Equipe?
+                                </button>
+                            </h2>
+                            <div id="faq2" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                                <div class="accordion-body text-muted small px-4 pb-4">
+                                    Ao cadastrar um profissional, define a percentagem (%) do mesmo. Toda a vez que concluir um agendamento e marcar que foi aquele profissional quem atendeu, o sistema calcula a comissão automaticamente. Pode ver o total exato a pagar no seu <strong>Painel de BI (Relatórios)</strong>.
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <div class="accordion-item border-bottom">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed fw-bold text-dark px-4 py-3" type="button" data-bs-toggle="collapse" data-bs-target="#faq_loja">
+                                    <i class="bi bi-shop text-info me-2"></i> Como usar a Loja Virtual e Estoque?
+                                </button>
+                            </h2>
+                            <div id="faq_loja" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                                <div class="accordion-body text-muted small px-4 pb-4">
+                                    Cadastre seus produtos com preço e quantidade em estoque. Na sua vitrine online, o cliente adiciona os itens num carrinho virtual e finaliza a compra enviando um resumo direto para o seu WhatsApp com o valor do PIX. Para atualizar o sistema, clique em <strong>"Dar Baixa"</strong> no painel da Loja.
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="accordion-item border-bottom">
                             <h2 class="accordion-header">
                                 <button class="accordion-button collapsed fw-bold text-dark px-4 py-3" type="button" data-bs-toggle="collapse" data-bs-target="#faq1">
@@ -106,19 +160,6 @@
                             <div id="faq1" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
                                 <div class="accordion-body text-muted small px-4 pb-4">
                                     Vá até à tela inicial do seu <strong>Painel</strong> e desça até à secção "Serviços Oferecidos". Preencha o nome, duração (em minutos) e o valor. Lembre-se que precisa de ter criado pelo menos uma <strong>Categoria</strong> antes.
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="accordion-item border-bottom">
-                            <h2 class="accordion-header">
-                                <button class="accordion-button collapsed fw-bold text-dark px-4 py-3" type="button" data-bs-toggle="collapse" data-bs-target="#faq2">
-                                    Como funciona o cálculo de comissões (Plano Gestão)?
-                                </button>
-                            </h2>
-                            <div id="faq2" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
-                                <div class="accordion-body text-muted small px-4 pb-4">
-                                    Ao cadastrar um profissional, define a percentagem (%) do mesmo. Toda a vez que concluir um agendamento e marcar que foi aquele profissional quem atendeu, o sistema calcula a comissão automaticamente. Pode ver o total a pagar na aba <strong>Relatórios</strong>.
                                 </div>
                             </div>
                         </div>
@@ -136,7 +177,7 @@
                             </div>
                         </div>
 
-                        <div class="accordion-item">
+                        <div class="accordion-item {% if establishment.plan_type != 'solo' %}border-bottom-0{% endif %}">
                             <h2 class="accordion-header">
                                 <button class="accordion-button collapsed fw-bold text-dark px-4 py-3" type="button" data-bs-toggle="collapse" data-bs-target="#faq4">
                                     Como funciona o Programa de Fidelidade?
@@ -148,6 +189,21 @@
                                 </div>
                             </div>
                         </div>
+
+                        {% if establishment.plan_type == 'solo' %}
+                        <div class="accordion-item border-bottom-0">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed fw-bold text-primary px-4 py-3" type="button" data-bs-toggle="collapse" data-bs-target="#faq_upgrade">
+                                    <i class="bi bi-arrow-up-circle-fill me-2"></i> Como mudar para o Plano Gestão?
+                                </button>
+                            </h2>
+                            <div id="faq_upgrade" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                                <div class="accordion-body text-muted small px-4 pb-4">
+                                    Basta clicar no botão "Forçar Gestão" (se visível no seu painel de testes) ou alterar a sua assinatura. Você terá acesso imediato à gestão de Equipe/Comissões, ao Clube VIP de Assinaturas e ao Painel Avançado de BI (Business Intelligence).
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
 
                     </div>
                 </div>
@@ -172,7 +228,8 @@
                     </a>
                     
                     <div class="mt-4 small text-white-50">
-                        <i class="bi bi-clock me-1"></i> Seg a Sex - 09h às 18h <div> Atendemos assim que possível mesmo fora do horário comercial
+                        <i class="bi bi-clock me-1"></i> Seg a Sex - 09h às 17h <br>
+                        <span> Atendemos assim que possível mesmo fora do horário comercial</span>
                     </div>
                 </div>
             </div>

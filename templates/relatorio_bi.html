@@ -1,0 +1,361 @@
+{% extends 'layout.html' %}
+{% block title %}Painel de BI - Agenda Fácil{% endblock %}
+
+{% block content %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<div class="container py-4">
+    
+    <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center mb-4 gap-3">
+        <div>
+            <h2 class="fw-black text-dark mb-1"><i class="bi bi-pie-chart-fill text-primary me-2"></i> Painel de BI (Métricas)</h2>
+            <p class="text-muted mb-0">Visão consolidada do faturamento, agenda e loja.</p>
+        </div>
+        
+        <div class="d-flex gap-2 align-items-center">
+            <button class="btn btn-outline-secondary fw-bold shadow-sm" onclick="window.print()"><i class="bi bi-printer"></i> Imprimir</button>
+            <form method="GET" action="{{ url_for('relatorio_bi') }}" class="d-flex bg-white p-1 rounded-pill shadow-sm border">
+                <input type="date" name="start_date" class="form-control border-0 bg-transparent fw-bold text-muted" value="{{ start_date }}" required>
+                <span class="d-flex align-items-center px-2 text-muted">até</span>
+                <input type="date" name="end_date" class="form-control border-0 bg-transparent fw-bold text-muted" value="{{ end_date }}" required>
+                <button type="submit" class="btn btn-primary rounded-pill fw-bold px-3 ms-1"><i class="bi bi-funnel-fill"></i> Filtrar</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-lg-4 col-md-6">
+            <div class="card border-0 shadow-sm rounded-4 bg-primary text-white h-100 overflow-hidden position-relative">
+                <div class="card-body p-4 z-1">
+                    <h6 class="text-white-50 fw-bold text-uppercase mb-1">Faturamento Total do Período</h6>
+                    <h2 class="display-5 fw-black mb-0">R$ {{ "%.2f"|format(fat_total) }}</h2>
+                </div>
+                <i class="bi bi-cash-coin position-absolute text-white opacity-10" style="font-size: 8rem; right: -10px; bottom: -20px; z-0"></i>
+            </div>
+        </div>
+
+        <div class="col-lg-4 col-md-6">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-body p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="text-muted fw-bold text-uppercase mb-0">Serviços (Agenda)</h6>
+                        <div class="bg-primary-subtle text-primary p-2 rounded-3"><i class="bi bi-scissors fs-5"></i></div>
+                    </div>
+                    <h3 class="fw-black text-dark mb-1">R$ {{ "%.2f"|format(fat_agenda) }}</h3>
+                    <span class="badge bg-light text-dark border"><i class="bi bi-check-circle text-success"></i> {{ qtd_concluidos }} concluídos</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4 col-md-6">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-body p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="text-muted fw-bold text-uppercase mb-0">Produtos (Loja)</h6>
+                        <div class="bg-success-subtle text-success p-2 rounded-3"><i class="bi bi-shop fs-5"></i></div>
+                    </div>
+                    <h3 class="fw-black text-dark mb-1">R$ {{ "%.2f"|format(fat_loja) }}</h3>
+                    <span class="badge bg-light text-dark border"><i class="bi bi-box-seam text-primary"></i> {{ itens_vendidos }} vendidos</span>
+                </div>
+            </div>
+        </div>
+
+        {% if establishment.plan_type == 'gestao' %}
+        <div class="col-lg-4 col-md-6">
+            <div class="card border-0 shadow-sm rounded-4 h-100 border-start border-4 border-warning">
+                <div class="card-body p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="text-muted fw-bold text-uppercase mb-0">MRR (Assinaturas)</h6>
+                        <div class="bg-warning-subtle text-warning-emphasis p-2 rounded-3"><i class="bi bi-stars fs-5"></i></div>
+                    </div>
+                    <h3 class="fw-black text-dark mb-1">R$ {{ "%.2f"|format(mrr) }}</h3>
+                    <span class="badge bg-light text-dark border">{{ total_assinantes }} Membros VIP ativos</span>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="{% if establishment.plan_type == 'gestao' %}col-lg-4{% else %}col-lg-6{% endif %} col-md-6">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-body p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="text-muted fw-bold text-uppercase mb-0">Ticket Médio (Geral)</h6>
+                        <div class="bg-info-subtle text-info-emphasis p-2 rounded-3"><i class="bi bi-tag-fill fs-5"></i></div>
+                    </div>
+                    <h3 class="fw-black text-dark mb-1">R$ {{ "%.2f"|format(ticket_medio) }}</h3>
+                    <span class="badge bg-light text-dark border">Gasto médio por cliente</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="{% if establishment.plan_type == 'gestao' %}col-lg-4{% else %}col-lg-6{% endif %} col-md-12">
+            <div class="row g-3 h-100">
+                <div class="col-sm-6">
+                    <div class="card border-0 shadow-sm rounded-4 h-100 bg-warning bg-opacity-10 border border-warning-subtle">
+                        <div class="card-body p-3 text-center d-flex flex-column justify-content-center">
+                            <h6 class="text-warning-emphasis fw-bold mb-1">Satisfação</h6>
+                            <h3 class="fw-black text-warning-emphasis mb-0"><i class="bi bi-star-fill text-warning"></i> {{ "%.1f"|format(media_avaliacoes) }}</h3>
+                            <small class="text-muted" style="font-size: 0.7rem;">({{ qtd_avaliacoes }} avaliações)</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-sm-6">
+                    <div class="card border-0 shadow-sm rounded-4 h-100 bg-danger-subtle border border-danger-subtle">
+                        <div class="card-body p-3 text-center d-flex flex-column justify-content-center">
+                            <h6 class="text-danger-emphasis fw-bold mb-1">No-Show</h6>
+                            <h3 class="fw-black text-danger mb-0">{{ "%.1f"|format(taxa_faltas) }}%</h3>
+                            <small class="text-muted" style="font-size: 0.7rem;">Taxa de Faltas</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <div class="col-lg-8">
+            <div class="card shadow-sm border-0 rounded-4 h-100 p-4">
+                <h6 class="fw-bold mb-4 text-dark"><i class="bi bi-graph-up-arrow text-primary"></i> Evolução de Receita Diária</h6>
+                <div style="height: 300px;"><canvas id="revenueChart"></canvas></div>
+            </div>
+        </div>
+        
+        <div class="col-lg-4">
+            <div class="card shadow-sm border-0 rounded-4 h-100 p-4">
+                <h6 class="fw-bold mb-4 text-dark"><i class="bi bi-pie-chart text-success"></i> Divisão de Faturamento</h6>
+                <div style="height: 250px;" class="d-flex justify-content-center"><canvas id="pieChart"></canvas></div>
+                <div class="mt-4 text-center">
+                    <p class="mb-0 text-muted small"><i class="bi bi-circle-fill text-primary"></i> Agenda: R$ {{ "%.2f"|format(fat_agenda) }}</p>
+                    <p class="mb-0 text-muted small"><i class="bi bi-circle-fill text-success"></i> Loja: R$ {{ "%.2f"|format(fat_loja) }}</p>
+                    {% if establishment.plan_type == 'gestao' %}
+                    <p class="mb-0 text-muted small"><i class="bi bi-circle-fill text-warning"></i> Assinaturas: R$ {{ "%.2f"|format(mrr) }}</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <div class="col-lg-4">
+            <div class="card shadow-sm border-0 rounded-4 h-100">
+                <div class="card-header bg-white py-3 border-bottom d-flex align-items-center">
+                    <i class="bi bi-trophy-fill text-warning me-2 fs-5"></i><h6 class="mb-0 fw-bold">Top 5 Serviços</h6>
+                </div>
+                <div class="card-body p-0">
+                    <ul class="list-group list-group-flush">
+                        {% for servico, dados in top_servicos %}
+                        <li class="list-group-item px-4 py-3 d-flex justify-content-between align-items-center border-bottom">
+                            <div><div class="fw-bold text-dark">{{ loop.index }}. {{ servico }}</div><small class="text-muted">{{ dados.qtd }} vezes</small></div>
+                            <div class="text-success fw-bold">R$ {{ "%.2f"|format(dados.receita) }}</div>
+                        </li>
+                        {% else %}
+                        <li class="list-group-item text-center text-muted py-4 border-0">Nenhum serviço neste período.</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card shadow-sm border-0 rounded-4 h-100">
+                <div class="card-header bg-white py-3 border-bottom d-flex align-items-center">
+                    <i class="bi bi-bag-check-fill text-success me-2 fs-5"></i><h6 class="mb-0 fw-bold">Top 5 Produtos</h6>
+                </div>
+                <div class="card-body p-0">
+                    <ul class="list-group list-group-flush">
+                        {% for produto, dados in top_produtos %}
+                        <li class="list-group-item px-4 py-3 d-flex justify-content-between align-items-center border-bottom">
+                            <div><div class="fw-bold text-dark">{{ loop.index }}. {{ produto }}</div><small class="text-muted">{{ dados.qtd }} unid.</small></div>
+                            <div class="text-success fw-bold">R$ {{ "%.2f"|format(dados.receita) }}</div>
+                        </li>
+                        {% else %}
+                        <li class="list-group-item text-center text-muted py-4 border-0">Nenhuma venda de produto.</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            {% if establishment.plan_type == 'gestao' %}
+            <div class="card shadow-sm border-0 rounded-4 mb-4">
+                <div class="card-header bg-white py-3 border-bottom d-flex align-items-center">
+                    <i class="bi bi-people-fill text-primary me-2 fs-5"></i><h6 class="mb-0 fw-bold">Comissões da Equipe</h6>
+                </div>
+                <div class="card-body p-0">
+                    <table class="table table-hover mb-0 align-middle">
+                        <thead class="table-light"><tr><th class="px-4">Nome</th><th class="text-end px-4">A Pagar</th></tr></thead>
+                        <tbody>
+                            {% for prof, valor in comissoes.items() %}
+                            <tr><td class="px-4 fw-bold text-dark">{{ prof }}</td><td class="text-end px-4 text-danger fw-bold">R$ {{ "%.2f"|format(valor) }}</td></tr>
+                            {% else %}
+                            <tr><td colspan="2" class="text-center text-muted py-4 border-0">Nenhuma comissão.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+            
+            <div class="card shadow-sm border-0 rounded-4 bg-light border h-100 d-flex flex-column justify-content-center">
+                <div class="card-body p-4 text-center">
+                    <h6 class="text-muted fw-bold mb-2"><i class="bi bi-box-seam text-secondary"></i> Capital Parado em Estoque</h6>
+                    <h3 class="fw-black text-secondary mb-0">R$ {{ "%.2f"|format(capital_parado) }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="accordion shadow-sm rounded-4 overflow-hidden border-0 mb-5" id="accordionTabelas">
+        
+        <div class="accordion-item border-0 border-bottom">
+            <h2 class="accordion-header" id="headingOne">
+                <button class="accordion-button collapsed fw-bold fs-6 bg-white text-dark py-4" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOne">
+                    <i class="bi bi-journal-text text-primary me-3 fs-5"></i> Histórico Detalhado: Serviços Concluídos
+                </button>
+            </h2>
+            <div id="collapseOne" class="accordion-collapse collapse" data-bs-parent="#accordionTabelas">
+                <div class="accordion-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0 align-middle small">
+                            <thead class="table-light"><tr><th>Data/Hora</th><th>Cliente</th><th>Serviços</th><th>Profissional</th><th class="text-end">Valor</th></tr></thead>
+                            <tbody>
+                                {% for a in concluidos|sort(attribute='appointment_date', reverse=True) %}
+                                <tr>
+                                    <td>{{ a.appointment_date.strftime('%d/%m/%Y') }}<br><span class="text-muted">{{ a.appointment_time.strftime('%H:%M') }}</span></td>
+                                    <td class="fw-bold">{{ a.client_name }}<br><span class="text-muted fw-normal">{{ a.client_phone }}</span></td>
+                                    <td>{{ a.service_names }}</td>
+                                    <td>{{ a.professional.name if a.professional else 'Qualquer' }}</td>
+                                    <td class="text-end text-success fw-bold">R$ {{ "%.2f"|format(a.total_price) }}</td>
+                                </tr>
+                                {% else %}
+                                <tr><td colspan="5" class="text-center py-4 text-muted">Nenhum atendimento neste período.</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="accordion-item border-0">
+            <h2 class="accordion-header" id="headingTwo">
+                <button class="accordion-button collapsed fw-bold fs-6 bg-white text-dark py-4" type="button" data-bs-toggle="collapse" data-bs-target="#collapseTwo">
+                    <i class="bi bi-receipt text-success me-3 fs-5"></i> Histórico Detalhado: Vendas da Loja
+                </button>
+            </h2>
+            <div id="collapseTwo" class="accordion-collapse collapse" data-bs-parent="#accordionTabelas">
+                <div class="accordion-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0 align-middle small">
+                            <thead class="table-light"><tr><th>Data/Hora</th><th>Produto</th><th class="text-center">Quantidade</th><th class="text-end">Total</th></tr></thead>
+                            <tbody>
+                                {% for v in vendas_periodo|sort(attribute='sale_date', reverse=True) %}
+                                <tr>
+                                    <td>{{ v.sale_date.strftime('%d/%m/%Y às %H:%M') }}</td>
+                                    <td class="fw-bold">{{ v.product_name }}</td>
+                                    <td class="text-center">{{ v.quantity }}</td>
+                                    <td class="text-end text-success fw-bold">R$ {{ "%.2f"|format(v.total_price) }}</td>
+                                </tr>
+                                {% else %}
+                                <tr><td colspan="4" class="text-center py-4 text-muted">Nenhuma venda neste período.</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    
+    // Dados passados pelo Flask
+    const labels = {{ chart_labels|tojson }};
+    const dataAgenda = {{ chart_data_agenda|tojson }};
+    const dataLoja = {{ chart_data_loja|tojson }};
+    
+    const valAgenda = {{ fat_agenda }};
+    const valLoja = {{ fat_loja }};
+    const valMRR = {{ mrr }};
+    
+    // Identifica o plano para ocultar MRR no gráfico
+    const isGestao = "{{ establishment.plan_type }}" === "gestao";
+
+    // 1. Gráfico de Linhas (Evolução Diária)
+    const ctxLine = document.getElementById('revenueChart').getContext('2d');
+    new Chart(ctxLine, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Agenda (Serviços)',
+                    data: dataAgenda,
+                    borderColor: '#0d6efd',
+                    backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                    borderWidth: 3,
+                    tension: 0.3,
+                    fill: true
+                },
+                {
+                    label: 'Loja (Produtos)',
+                    data: dataLoja,
+                    borderColor: '#198754',
+                    backgroundColor: 'rgba(25, 135, 84, 0.1)',
+                    borderWidth: 3,
+                    tension: 0.3,
+                    fill: true
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { position: 'top' } },
+            scales: { y: { beginAtZero: true, ticks: { callback: function(value) { return 'R$ ' + value; } } } }
+        }
+    });
+
+    // 2. Gráfico de Rosca Dinâmico
+    const pieLabels = isGestao ? ['Agenda', 'Loja', 'Assinaturas (MRR)'] : ['Agenda', 'Loja'];
+    const pieData = isGestao ? [valAgenda, valLoja, valMRR] : [valAgenda, valLoja];
+    const pieColors = isGestao ? ['#0d6efd', '#198754', '#ffc107'] : ['#0d6efd', '#198754'];
+
+    const ctxPie = document.getElementById('pieChart').getContext('2d');
+    new Chart(ctxPie, {
+        type: 'doughnut',
+        data: {
+            labels: pieLabels,
+            datasets: [{
+                data: pieData,
+                backgroundColor: pieColors,
+                borderWidth: 0,
+                hoverOffset: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '70%',
+            plugins: { legend: { display: false } }
+        }
+    });
+});
+</script>
+
+<style>
+    /* Estilos de Impressão (Remove menus e botões) */
+    @media print {
+        body { background-color: white !important; }
+        .navbar, .btn, form, .alert, .accordion-button::after { display: none !important; }
+        .card, .accordion-item { border: 1px solid #ddd !important; box-shadow: none !important; break-inside: avoid; }
+        .shadow-sm, .shadow-lg { box-shadow: none !important; }
+        .accordion-collapse { display: block !important; } /* Abre as tabelas para imprimir */
+    }
+</style>
+{% endblock %}
