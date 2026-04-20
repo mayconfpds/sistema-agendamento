@@ -20,8 +20,8 @@ from sqlalchemy import inspect
 from flask_migrate import Migrate
 import stripe
 import uuid
-import holidays
-import requests
+# import holidays
+# import requests
 
 socket.setdefaulttimeout(15)
 
@@ -1291,37 +1291,37 @@ def relatorio_bi():
                            chart_labels=grafico_datas, chart_data_agenda=chart_data_agenda, chart_data_loja=chart_data_loja,
                            concluidos=concluidos, vendas_periodo=vendas_periodo)
 
-def checar_feriados_e_notificar():
-    daqui_a_3_dias = get_now_brazil().date() + timedelta(days=3)
-    estabelecimentos = Establishment.query.filter_by(is_active=True).all()
+# def checar_feriados_e_notificar():
+#     daqui_a_3_dias = get_now_brazil().date() + timedelta(days=3)
+#     estabelecimentos = Establishment.query.filter_by(is_active=True).all()
     
-    for est in estabelecimentos:
-        if not est.contact_phone: 
-            continue
+#     for est in estabelecimentos:
+#         if not est.contact_phone: 
+#             continue
             
-        uf = est.state if est.state else 'BR' # Se não tiver estado, usa o calendário Nacional
+#         uf = est.state if est.state else 'BR' # Se não tiver estado, usa o calendário Nacional
         
-        try:
-            if uf == 'BR': feriados_locais = holidays.BR()
-            else: feriados_locais = holidays.BR(state=uf)
-        except:
-            feriados_locais = holidays.BR() # Fallback de segurança
+#         try:
+#             if uf == 'BR': feriados_locais = holidays.BR()
+#             else: feriados_locais = holidays.BR(state=uf)
+#         except:
+#             feriados_locais = holidays.BR() # Fallback de segurança
         
-        if daqui_a_3_dias in feriados_locais:
-            nome_feriado = feriados_locais.get(daqui_a_3_dias)
-            data_formatada = daqui_a_3_dias.strftime('%d/%m')
+#         if daqui_a_3_dias in feriados_locais:
+#             nome_feriado = feriados_locais.get(daqui_a_3_dias)
+#             data_formatada = daqui_a_3_dias.strftime('%d/%m')
             
-            mensagem = (
-                f"🤖 *Assistente Agenda Fácil*\n\n"
-                f"Olá, {est.name}! Notei que dia *{data_formatada}* é feriado de *{nome_feriado}* na sua região ({uf}).\n\n"
-                f"A barbearia vai funcionar neste dia?\n\n"
-                f"Responda apenas com o número:\n"
-                f"*1* - Sim, vamos abrir normalmente.\n"
-                f"*2* - Não, pode bloquear a agenda."
-            )
+#             mensagem = (
+#                 f"🤖 *Assistente Agenda Fácil*\n\n"
+#                 f"Olá, {est.name}! Notei que dia *{data_formatada}* é feriado de *{nome_feriado}* na sua região ({uf}).\n\n"
+#                 f"A barbearia vai funcionar neste dia?\n\n"
+#                 f"Responda apenas com o número:\n"
+#                 f"*1* - Sim, vamos abrir normalmente.\n"
+#                 f"*2* - Não, pode bloquear a agenda."
+#             )
             
-            # TODO: Substitua pela chamada da sua API gratuita (Evolution, Baileys, etc)
-            print(f"Disparo para {est.contact_phone}: Feriado detectado ({nome_feriado} - {uf})")
+#             # TODO: Substitua pela chamada da sua API gratuita (Evolution, Baileys, etc)
+#             print(f"Disparo para {est.contact_phone}: Feriado detectado ({nome_feriado} - {uf})")
 
 @app.route('/api/whatsapp/webhook', methods=['POST'])
 def whatsapp_webhook():
