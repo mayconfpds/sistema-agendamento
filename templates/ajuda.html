@@ -7,8 +7,8 @@
             <i class="bi bi-life-preserver fs-3"></i>
         </div>
         <div>
-            <h2 class="h3 mb-0 fw-bold text-dark">Central de Ajuda</h2>
-            <p class="text-muted mb-0">Aprenda a usar a plataforma. Meu Plano: <span class="badge {{ 'bg-primary' if establishment.plan_type == 'gestao' else 'bg-secondary' }} ms-1">{{ establishment.plan_type|upper }}</span></p>
+            <h2 class="h3 mb-0 fw-bold text-body-emphasis">Central de Ajuda</h2>
+            <p class="text-body-secondary mb-0">Aprenda a usar a plataforma. Meu Plano: <span class="badge {{ 'bg-primary' if establishment.plan_type == 'gestao' else 'bg-secondary' }} ms-1">{{ establishment.plan_type|upper }}</span></p>
         </div>
     </div>
 
@@ -22,21 +22,21 @@
                     
                     <div class="row g-4">
                         <div class="col-md-4">
-                            <div class="bg-white bg-opacity-10 rounded-3 p-3 h-100 border border-white border-opacity-25 transition hover:bg-opacity-20">
+                            <div class="bg-body bg-opacity-10 rounded-3 p-3 h-100 border border-white border-opacity-25 transition hover:bg-opacity-20">
                                 <div class="fs-2 fw-extrabold text-white-50 mb-2" style="line-height: 1;">1</div>
                                 <h6 class="fw-bold"><i class="bi bi-clock me-1"></i> Configurações</h6>
                                 <p class="small text-white-50 mb-0">Defina a sua hora de abertura, fecho, e escolha o seu <strong>Estado (UF)</strong> para ativarmos o robô de feriados da sua região.</p>
                             </div>
                         </div>
                         <div class="col-md-4">
-                            <div class="bg-white bg-opacity-10 rounded-3 p-3 h-100 border border-white border-opacity-25 transition hover:bg-opacity-20">
+                            <div class="bg-body bg-opacity-10 rounded-3 p-3 h-100 border border-white border-opacity-25 transition hover:bg-opacity-20">
                                 <div class="fs-2 fw-extrabold text-white-50 mb-2" style="line-height: 1;">2</div>
                                 <h6 class="fw-bold"><i class="bi bi-scissors me-1"></i> Serviços</h6>
                                 <p class="small text-white-50 mb-0">Crie uma "Categoria" e adicione os serviços. {% if establishment.plan_type == 'gestao' %}Marque também quais deles farão parte do seu <strong>Clube VIP</strong>.{% else %}Coloque o preço e a duração corretos.{% endif %}</p>
                             </div>
                         </div>
                         <div class="col-md-4">
-                            <div class="bg-white bg-opacity-10 rounded-3 p-3 h-100 border border-white border-opacity-25 transition hover:bg-opacity-20">
+                            <div class="bg-body bg-opacity-10 rounded-3 p-3 h-100 border border-white border-opacity-25 transition hover:bg-opacity-20">
                                 <div class="fs-2 fw-extrabold text-white-50 mb-2" style="line-height: 1;">3</div>
                                 <h6 class="fw-bold"><i class="bi bi-share me-1"></i> Partilhe!</h6>
                                 <p class="small text-white-50 mb-0">Copie o link da sua página (no topo do painel) e coloque na Bio do Instagram e no WhatsApp.</p>
@@ -46,43 +46,43 @@
                 </div>
             </div>
 
-            <div class="card shadow-sm border-0 mb-4 bg-white">
-                <div class="card-header bg-white py-4 border-bottom-0">
+            <div class="card shadow-sm border-0 mb-4 bg-body">
+                <div class="card-header bg-body py-4 border-bottom-0">
                     <h5 class="mb-0 fw-bold"><i class="bi bi-lightbulb text-warning me-2"></i> Dicas de Sucesso</h5>
-                    <p class="text-muted small mb-0 mt-1">Estratégias para lotar a sua agenda usando o sistema.</p>
+                    <p class="text-body-secondary small mb-0 mt-1">Estratégias para lotar a sua agenda usando o sistema.</p>
                 </div>
                 <div class="card-body p-4 pt-0">
                     <div class="row g-4">
                         <div class="col-12">
-                            <div class="d-flex align-items-start gap-3 p-3 border rounded-3 bg-light">
+                            <div class="d-flex align-items-start gap-3 p-3 border rounded-3 bg-body-tertiary">
                                 <div class="bg-danger bg-opacity-10 text-danger p-3 rounded-circle shadow-sm">
                                     <i class="bi bi-instagram fs-4"></i>
                                 </div>
                                 <div>
                                     <h6 class="fw-bold mb-1">O Link na Bio do Instagram</h6>
-                                    <p class="text-muted small mb-0">Esta é a sua maior fonte de clientes! Vá ao seu perfil do Instagram, clique em "Editar Perfil" e cole o link da sua página (ex: <em>agendafacil.com/b/seunome</em>) no campo "Links" ou "Site". Faça um post a avisar os clientes da novidade!</p>
+                                    <p class="text-body-secondary small mb-0">Esta é a sua maior fonte de clientes! Vá ao seu perfil do Instagram, clique em "Editar Perfil" e cole o link da sua página (ex: <em>agendafacil.com/b/seunome</em>) no campo "Links" ou "Site". Faça um post a avisar os clientes da novidade!</p>
                                 </div>
                             </div>
                         </div>
                         <div class="col-12">
-                            <div class="d-flex align-items-start gap-3 p-3 border rounded-3 bg-light">
+                            <div class="d-flex align-items-start gap-3 p-3 border rounded-3 bg-body-tertiary">
                                 <div class="bg-success bg-opacity-10 text-success p-3 rounded-circle shadow-sm">
                                     <i class="bi bi-whatsapp fs-4"></i>
                                 </div>
                                 <div>
                                     <h6 class="fw-bold mb-1">A Mensagem para Clientes Antigos</h6>
-                                    <p class="text-muted small mb-0">Não espere que eles adivinhem. Envie uma mensagem no WhatsApp para os seus clientes regulares: <em>"Olá! Agora temos um sistema de agendamento online. É só clicar neste link e escolher o seu horário: [SEU LINK]"</em>. A taxa de conversão é enorme!</p>
+                                    <p class="text-body-secondary small mb-0">Não espere que eles adivinhem. Envie uma mensagem no WhatsApp para os seus clientes regulares: <em>"Olá! Agora temos um sistema de agendamento online. É só clicar neste link e escolher o seu horário: [SEU LINK]"</em>. A taxa de conversão é enorme!</p>
                                 </div>
                             </div>
                         </div>
                         <div class="col-12">
-                            <div class="d-flex align-items-start gap-3 p-3 border rounded-3 bg-light">
+                            <div class="d-flex align-items-start gap-3 p-3 border rounded-3 bg-body-tertiary">
                                 <div class="bg-warning bg-opacity-10 text-warning p-3 rounded-circle shadow-sm">
                                     <i class="bi bi-star-fill fs-4"></i>
                                 </div>
                                 <div>
                                     <h6 class="fw-bold mb-1">Construa a sua Reputação</h6>
-                                    <p class="text-muted small mb-0">Sempre que <strong>Concluir</strong> um atendimento no painel, o sistema envia um e-mail a pedir uma avaliação de 1 a 5 estrelas. Lembre o seu cliente de olhar o e-mail! Salões com notas altas transmitem mais confiança para novos clientes.</p>
+                                    <p class="text-body-secondary small mb-0">Sempre que <strong>Concluir</strong> um atendimento no painel, o sistema envia um e-mail a pedir uma avaliação de 1 a 5 estrelas. Lembre o seu cliente de olhar o e-mail! Salões com notas altas transmitem mais confiança para novos clientes.</p>
                                 </div>
                             </div>
                         </div>
@@ -91,7 +91,7 @@
             </div>
 
             <div class="card shadow-sm border-0 mb-4">
-                <div class="card-header bg-white py-3 border-bottom-0">
+                <div class="card-header bg-body py-3 border-bottom-0">
                     <h5 class="mb-0 fw-bold"><i class="bi bi-book text-primary me-2"></i> Manual e Dúvidas Frequentes</h5>
                 </div>
                 <div class="card-body p-0">
@@ -99,12 +99,12 @@
                         
                         <div class="accordion-item border-bottom">
                             <h2 class="accordion-header">
-                                <button class="accordion-button collapsed fw-bold text-dark px-4 py-3" type="button" data-bs-toggle="collapse" data-bs-target="#faq_reagendar">
+                                <button class="accordion-button collapsed fw-bold text-body-emphasis px-4 py-3" type="button" data-bs-toggle="collapse" data-bs-target="#faq_reagendar">
                                     <i class="bi bi-arrow-repeat text-primary me-2"></i> Como funciona o Reagendamento Self-Service?
                                 </button>
                             </h2>
                             <div id="faq_reagendar" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
-                                <div class="accordion-body text-muted small px-4 pb-4">
+                                <div class="accordion-body text-body-secondary small px-4 pb-4">
                                     Ao marcar um horário, o seu cliente recebe um <strong>Link Mágico</strong> no WhatsApp e no E-mail. Se ele precisar alterar a data, basta clicar no link e escolher um novo horário sozinho. <strong>Regra de segurança:</strong> O sistema bloqueia alterações automáticas se faltarem menos de 2 horas para o corte, pedindo para o cliente lhe enviar uma mensagem.
                                 </div>
                             </div>
@@ -113,12 +113,12 @@
                         {% if establishment.plan_type == 'gestao' %}
                         <div class="accordion-item border-bottom">
                             <h2 class="accordion-header">
-                                <button class="accordion-button collapsed fw-bold text-dark px-4 py-3" type="button" data-bs-toggle="collapse" data-bs-target="#faq_clube">
+                                <button class="accordion-button collapsed fw-bold text-body-emphasis px-4 py-3" type="button" data-bs-toggle="collapse" data-bs-target="#faq_clube">
                                     <i class="bi bi-star-fill text-warning me-2"></i> Como usar o Clube VIP de Assinaturas?
                                 </button>
                             </h2>
                             <div id="faq_clube" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
-                                <div class="accordion-body text-muted small px-4 pb-4">
+                                <div class="accordion-body text-body-secondary small px-4 pb-4">
                                     Para gerar receita recorrente: Vá até à aba <strong>Assinaturas</strong> e crie os planos (ex: R$ 80/mês). Depois, registre os clientes assinantes colocando o número do WhatsApp deles. Quando esse cliente for agendar um serviço pelo site, o sistema reconhece o número dele e <strong>zera o valor na hora</strong>.
                                 </div>
                             </div>
@@ -126,12 +126,12 @@
 
                         <div class="accordion-item border-bottom">
                             <h2 class="accordion-header">
-                                <button class="accordion-button collapsed fw-bold text-dark px-4 py-3" type="button" data-bs-toggle="collapse" data-bs-target="#faq2">
+                                <button class="accordion-button collapsed fw-bold text-body-emphasis px-4 py-3" type="button" data-bs-toggle="collapse" data-bs-target="#faq2">
                                     <i class="bi bi-people-fill text-success me-2"></i> Como funciona o cálculo de comissões da Equipe?
                                 </button>
                             </h2>
                             <div id="faq2" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
-                                <div class="accordion-body text-muted small px-4 pb-4">
+                                <div class="accordion-body text-body-secondary small px-4 pb-4">
                                     Ao cadastrar um profissional, define a percentagem (%) do mesmo. Toda a vez que concluir um agendamento e marcar que foi aquele profissional quem atendeu, o sistema calcula a comissão automaticamente. Pode ver o total exato a pagar no seu <strong>Painel de BI (Relatórios)</strong>.
                                 </div>
                             </div>
@@ -140,12 +140,12 @@
 
                         <div class="accordion-item border-bottom">
                             <h2 class="accordion-header">
-                                <button class="accordion-button collapsed fw-bold text-dark px-4 py-3" type="button" data-bs-toggle="collapse" data-bs-target="#faq_loja">
+                                <button class="accordion-button collapsed fw-bold text-body-emphasis px-4 py-3" type="button" data-bs-toggle="collapse" data-bs-target="#faq_loja">
                                     <i class="bi bi-shop text-info me-2"></i> Como usar a Loja Virtual e Estoque?
                                 </button>
                             </h2>
                             <div id="faq_loja" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
-                                <div class="accordion-body text-muted small px-4 pb-4">
+                                <div class="accordion-body text-body-secondary small px-4 pb-4">
                                     Cadastre seus produtos com preço e quantidade em estoque. Na sua vitrine online, o cliente adiciona os itens num carrinho virtual e finaliza a compra enviando um resumo direto para o seu WhatsApp com o valor do PIX. Para atualizar o sistema, clique em <strong>"Dar Baixa"</strong> no painel da Loja.
                                 </div>
                             </div>
@@ -153,12 +153,12 @@
 
                         <div class="accordion-item border-bottom">
                             <h2 class="accordion-header">
-                                <button class="accordion-button collapsed fw-bold text-dark px-4 py-3" type="button" data-bs-toggle="collapse" data-bs-target="#faq1">
+                                <button class="accordion-button collapsed fw-bold text-body-emphasis px-4 py-3" type="button" data-bs-toggle="collapse" data-bs-target="#faq1">
                                     Como adiciono um novo serviço?
                                 </button>
                             </h2>
                             <div id="faq1" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
-                                <div class="accordion-body text-muted small px-4 pb-4">
+                                <div class="accordion-body text-body-secondary small px-4 pb-4">
                                     Vá até à tela inicial do seu <strong>Painel</strong> e desça até à secção "Serviços Oferecidos". Preencha o nome, duração (em minutos) e o valor. Lembre-se que precisa de ter criado pelo menos uma <strong>Categoria</strong> antes.
                                 </div>
                             </div>
@@ -166,12 +166,12 @@
 
                         <div class="accordion-item border-bottom">
                             <h2 class="accordion-header">
-                                <button class="accordion-button collapsed fw-bold text-dark px-4 py-3" type="button" data-bs-toggle="collapse" data-bs-target="#faq3">
+                                <button class="accordion-button collapsed fw-bold text-body-emphasis px-4 py-3" type="button" data-bs-toggle="collapse" data-bs-target="#faq3">
                                     O que é a Lista de Clientes Bloqueados (No-Show)?
                                 </button>
                             </h2>
                             <div id="faq3" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
-                                <div class="accordion-body text-muted small px-4 pb-4">
+                                <div class="accordion-body text-body-secondary small px-4 pb-4">
                                     Se um cliente agendar e não comparecer, pode clicar no botão amarelo <strong>Falta</strong> no agendamento dele. Isso coloca-o automaticamente na sua lista de bloqueados, impedindo que aquele número de WhatsApp faça novos agendamentos na sua página.
                                 </div>
                             </div>
@@ -179,12 +179,12 @@
 
                         <div class="accordion-item {% if establishment.plan_type != 'solo' %}border-bottom-0{% endif %}">
                             <h2 class="accordion-header">
-                                <button class="accordion-button collapsed fw-bold text-dark px-4 py-3" type="button" data-bs-toggle="collapse" data-bs-target="#faq4">
+                                <button class="accordion-button collapsed fw-bold text-body-emphasis px-4 py-3" type="button" data-bs-toggle="collapse" data-bs-target="#faq4">
                                     Como funciona o Programa de Fidelidade?
                                 </button>
                             </h2>
                             <div id="faq4" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
-                                <div class="accordion-body text-muted small px-4 pb-4">
+                                <div class="accordion-body text-body-secondary small px-4 pb-4">
                                     No painel superior de configurações, digite a quantidade de pontos necessários e o prémio (Ex: 10 pontos = 1 Corte). Toda a vez que <strong>Concluir</strong> um agendamento, o cliente ganha 1 ponto. Quando ele atingir a meta, um aviso verde aparecerá no agendamento dele para que possa entregar o prémio!
                                 </div>
                             </div>
@@ -198,8 +198,15 @@
                                 </button>
                             </h2>
                             <div id="faq_upgrade" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
-                                <div class="accordion-body text-muted small px-4 pb-4">
-                                    Basta clicar no botão "Forçar Gestão" (se visível no seu painel de testes) ou alterar a sua assinatura. Você terá acesso imediato à gestão de Equipe/Comissões, ao Clube VIP de Assinaturas e ao Painel Avançado de BI (Business Intelligence).
+                                <div class="accordion-body text-body-secondary small px-4 pb-4">
+                                    <p class="mb-3">Você pode fazer o upgrade a qualquer momento para desbloquear a <strong>Gestão de Equipe (Comissões)</strong>, o <strong>Clube VIP de Assinaturas</strong> e o <strong>Painel de BI (Relatórios Avançados)</strong>.</p>
+                                    <form method="POST" action="{{ url_for('upgrade_plano') }}" class="m-0" onsubmit="return confirm('Deseja evoluir para o plano Gestão?');">
+                                        <input type="hidden" name="plano_destino" value="gestao">
+                                        <button type="submit" class="btn btn-sm btn-primary fw-bold rounded-pill px-4 shadow-sm">
+                                            Quero Fazer o Upgrade Agora
+                                        </button>
+                                    </form>
+                                    <p class="mt-2 text-body-secondary" style="font-size: 0.75rem;">*Se você estiver no período de teste grátis, a mudança é imediata. Se já for assinante pagante, o nosso suporte ajudará com o ajuste do pagamento (Prorata).</p>
                                 </div>
                             </div>
                         </div>
@@ -217,7 +224,7 @@
                 </div>
                 
                 <div class="card-body position-relative z-1 d-flex flex-column justify-content-center align-items-center text-center p-4">
-                    <div class="bg-white bg-opacity-10 p-3 rounded-circle mb-3">
+                    <div class="bg-body bg-opacity-10 p-3 rounded-circle mb-3">
                         <i class="bi bi-whatsapp fs-1 text-success"></i>
                     </div>
                     <h4 class="fw-bold mb-3">Ainda tem dúvidas?</h4>

@@ -5,9 +5,9 @@
         <div class="col-lg-6">
             <div class="card shadow-lg border-0 p-4 rounded-4">
                 <div class="text-center mb-4 border-bottom pb-3">
-                    <h4 class="fw-bold text-dark mb-2">{{ establishment.name }}</h4>
+                    <h4 class="fw-bold text-body-emphasis mb-2">{{ establishment.name }}</h4>
                     {% if establishment.rating_count > 0 %}
-                        <div class="badge bg-warning text-dark"><i class="bi bi-star-fill"></i> {{ "%.1f"|format(establishment.average_rating) }} ({{ establishment.rating_count }})</div>
+                        <div class="badge bg-warning text-body-emphasis"><i class="bi bi-star-fill"></i> {{ "%.1f"|format(establishment.average_rating) }} ({{ establishment.rating_count }})</div>
                     {% else %}
                         <div class="badge bg-info text-white"><i class="bi bi-stars"></i> Novo no Agenda Fácil</div>
                     {% endif %}
@@ -15,7 +15,7 @@
                 
                 <form id="form" method="POST" action="{{ url_for('create_appointment', url_prefix=establishment.url_prefix) }}">
                     
-                    <div class="bg-light p-3 rounded-3 mb-4 border">
+                    <div class="bg-body-tertiary p-3 rounded-3 mb-4 border">
                         <h6 class="fw-bold text-primary mb-3">Serviços Selecionados</h6>
                         
                         <div class="form-check mb-2">
@@ -27,8 +27,8 @@
                         </div>
                         
                         {% if other_services %}
-                        <hr class="text-muted">
-                        <p class="small fw-bold text-muted mb-2">Deseja adicionar algo mais?</p>
+                        <hr class="text-body-secondary">
+                        <p class="small fw-bold text-body-secondary mb-2">Deseja adicionar algo mais?</p>
                         {% for s in other_services %}
                         <div class="form-check mb-2">
                             <input class="form-check-input service-cb" type="checkbox" name="services" value="{{ s.id }}" id="s_{{ s.id }}" 
@@ -41,7 +41,7 @@
                         
                         <div id="sub-badge" class="text-end mt-2"></div>
                         <div class="mt-2 text-end fw-bold fs-5">Total: <span class="text-success">R$ <span id="display-price">0.00</span></span></div>
-                        <div class="text-end small text-muted">Tempo estimado: <span id="display-dur">0</span> min</div>
+                        <div class="text-end small text-body-secondary">Tempo estimado: <span id="display-dur">0</span> min</div>
                     </div>
 
                     {% if professionals %}
@@ -67,11 +67,11 @@
                     </div>
                     
                     <div class="mb-3"><label class="fw-bold small">Escolha a Data</label><input type="date" id="date" name="appointment_date" class="form-control" required></div>
-                    <div class="mb-4"><label class="fw-bold small">Horários Disponíveis</label><div id="slots" class="d-flex flex-wrap gap-2 mt-2"><small class="text-muted">Selecione a data...</small></div><input type="hidden" id="time" name="appointment_time" required></div>
+                    <div class="mb-4"><label class="fw-bold small">Horários Disponíveis</label><div id="slots" class="d-flex flex-wrap gap-2 mt-2"><small class="text-body-secondary">Selecione a data...</small></div><input type="hidden" id="time" name="appointment_time" required></div>
                     
                     <div class="form-check mb-4 bg-warning bg-opacity-10 p-3 rounded border border-warning">
                         <input class="form-check-input ms-1" type="checkbox" id="term_noshow" required>
-                        <label class="form-check-label ms-2 small fw-bold text-dark" for="term_noshow">
+                        <label class="form-check-label ms-2 small fw-bold text-body-emphasis" for="term_noshow">
                             Declaro que comparecerei ao horário marcado. Entendo que o não comparecimento sem aviso prévio resultará no bloqueio permanente do meu número.
                         </label>
                     </div>
@@ -134,7 +134,7 @@ function aplicarMascara(input) {
             .then(data => {
                 if(data.is_subscriber) {
                     isSubscriber = true;
-                    document.getElementById('sub-badge').innerHTML = `<span class="badge bg-warning text-dark mb-1 fs-6"><i class="bi bi-star-fill"></i> Clube ${data.plan_name} Aplicado</span>`;
+                    document.getElementById('sub-badge').innerHTML = `<span class="badge bg-warning text-body-emphasis mb-1 fs-6"><i class="bi bi-star-fill"></i> Clube ${data.plan_name} Aplicado</span>`;
                 } else {
                     isSubscriber = false;
                     document.getElementById('sub-badge').innerHTML = '';
@@ -183,7 +183,7 @@ async function fetchSlots() {
         }
         times.forEach(t => {
             const b = document.createElement('button');
-            b.type='button'; b.className='btn btn-outline-dark btn-sm rounded-pill px-3'; b.innerText=t;
+            b.type='button'; b.className='btn btn-outline-secondary btn-sm rounded-pill px-3'; b.innerText=t;
             b.onclick = () => {
                 document.querySelectorAll('#slots button').forEach(x=>x.classList.replace('btn-dark','btn-outline-dark'));
                 b.classList.replace('btn-outline-dark','btn-dark');

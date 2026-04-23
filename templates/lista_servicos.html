@@ -8,16 +8,16 @@
             <div class="rounded-circle bg-secondary d-inline-flex align-items-center justify-content-center text-white fw-bold mb-3 shadow border border-3 border-white" style="width: 120px; height: 120px; font-size: 3rem;">{{ establishment.name[0] }}</div>
         {% endif %}
         
-        <h1 class="display-5 fw-bold mb-2 text-dark">{{ establishment.name }}</h1>
+        <h1 class="display-5 fw-bold mb-2 text-body-emphasis">{{ establishment.name }}</h1>
         
         {% if establishment.rating_count > 0 %}
-            <div class="badge bg-warning text-dark fs-6 shadow-sm mb-4 px-4 py-2 rounded-pill"><i class="bi bi-star-fill"></i> {{ "%.1f"|format(establishment.average_rating) }} ({{ establishment.rating_count }} avaliações)</div>
+            <div class="badge bg-warning text-body-emphasis fs-6 shadow-sm mb-4 px-4 py-2 rounded-pill"><i class="bi bi-star-fill"></i> {{ "%.1f"|format(establishment.average_rating) }} ({{ establishment.rating_count }} avaliações)</div>
         {% else %}
             <div class="badge bg-info text-white fs-6 shadow-sm mb-4 px-4 py-2 rounded-pill"><i class="bi bi-stars"></i> Novo no Agenda Fácil</div>
         {% endif %}
     </div>
 
-    <ul class="nav nav-pills nav-fill mb-5 bg-white p-1 rounded-pill shadow-sm border" id="vitrineTabs">
+    <ul class="nav nav-pills nav-fill mb-5 bg-body p-1 rounded-pill shadow-sm border" id="vitrineTabs">
         <li class="nav-item">
             <a class="nav-link active fw-bold rounded-pill text-uppercase" style="font-size: 0.9rem;" data-bs-toggle="pill" href="#tab-servicos"><i class="bi bi-scissors"></i> Serviços</a>
         </li>
@@ -38,32 +38,32 @@
                     {% if c.services|length > 0 %}
                     <div class="accordion-item border-0 border-bottom">
                         <h2 class="accordion-header" id="heading-{{ c.id }}">
-                            <button class="accordion-button {% if not loop.first %}collapsed{% endif %} fw-bold fs-5 bg-white text-dark py-4" type="button" data-bs-toggle="collapse" data-bs-target="#cat-{{ c.id }}" aria-expanded="{% if loop.first %}true{% else %}false{% endif %}" aria-controls="cat-{{ c.id }}">
+                            <button class="accordion-button {% if not loop.first %}collapsed{% endif %} fw-bold fs-5 bg-body text-body-emphasis py-4" type="button" data-bs-toggle="collapse" data-bs-target="#cat-{{ c.id }}" aria-expanded="{% if loop.first %}true{% else %}false{% endif %}" aria-controls="cat-{{ c.id }}">
                                 <i class="bi bi-tag-fill text-primary me-3"></i> {{ c.name }} 
-                                <span class="badge bg-light text-secondary border ms-3 rounded-pill" style="font-size: 0.85rem;">{{ c.services|length }}</span>
+                                <span class="badge bg-body-tertiary text-secondary border ms-3 rounded-pill" style="font-size: 0.85rem;">{{ c.services|length }}</span>
                             </button>
                         </h2>
                         
                         <div id="cat-{{ c.id }}" class="accordion-collapse collapse {% if loop.first %}show{% endif %}" aria-labelledby="heading-{{ c.id }}" data-bs-parent="#accordionCategorias">
-                            <div class="accordion-body bg-slate-50 p-3 p-md-4">
+                            <div class="accordion-body bg-body-tertiary p-3 p-md-4">
                                 <div class="d-flex flex-column gap-3">
                                     {% for s in c.services %}
                                     <div class="card shadow-sm w-100 rounded-3 overflow-hidden {% if s.is_combo %}border-warning border-2{% else %}border-0{% endif %}">
                                         <div class="card-body d-flex flex-column flex-md-row justify-content-between align-items-center gap-3 p-4">
                                             <div class="text-center text-md-start">
-                                                <h5 class="fw-bold text-dark mb-1">
+                                                <h5 class="fw-bold text-body-emphasis mb-1">
                                                     {{ s.name }}
                                                     {% if s.is_combo %}
-                                                        <span class="badge bg-warning text-dark ms-2 align-middle shadow-sm" style="font-size: 0.7rem;"><i class="bi bi-stars"></i> PROMO</span>
+                                                        <span class="badge bg-warning text-body-emphasis ms-2 align-middle shadow-sm" style="font-size: 0.7rem;"><i class="bi bi-stars"></i> PROMO</span>
                                                     {% endif %}
                                                 </h5>
-                                                <div class="text-muted small"><i class="bi bi-clock"></i> {{ s.duration }} min</div>
+                                                <div class="text-body-secondary small"><i class="bi bi-clock"></i> {{ s.duration }} min</div>
                                             </div>
                                             
                                             <div class="d-flex align-items-center gap-4">
                                                 <div class="text-end">
                                                     {% if s.is_combo and s.original_price %}
-                                                        <div class="text-muted text-decoration-line-through" style="font-size: 0.85rem; margin-bottom: -2px;">R$ {{ "%.2f"|format(s.original_price) }}</div>
+                                                        <div class="text-body-secondary text-decoration-line-through" style="font-size: 0.85rem; margin-bottom: -2px;">R$ {{ "%.2f"|format(s.original_price) }}</div>
                                                     {% endif %}
                                                     <span class="text-success fw-black fs-4 mb-0">R$ {{ "%.2f"|format(s.price) }}</span>
                                                 </div>
@@ -73,7 +73,7 @@
                                         
                                         {% if s.is_combo and s.original_price and s.original_price > s.price %}
                                         <div class="card-footer bg-warning-subtle border-0 text-center py-2">
-                                            <small class="text-dark fw-bold"><i class="bi bi-piggy-bank-fill text-success"></i> Excelente escolha! Economize R$ {{ "%.2f"|format(s.original_price - s.price) }} neste pacote.</small>
+                                            <small class="text-body-emphasis fw-bold"><i class="bi bi-piggy-bank-fill text-success"></i> Excelente escolha! Economize R$ {{ "%.2f"|format(s.original_price - s.price) }} neste pacote.</small>
                                         </div>
                                         {% endif %}
                                     </div>
@@ -91,7 +91,7 @@
             <div class="row g-4">
                 {% for p in establishment.products %}
                 <div class="col-md-6 col-lg-4">
-                    <div class="card h-100 border-0 shadow-sm rounded-4 overflow-hidden position-relative {% if p.stock_quantity <= 0 %}opacity-75 bg-light{% endif %}">
+                    <div class="card h-100 border-0 shadow-sm rounded-4 overflow-hidden position-relative {% if p.stock_quantity <= 0 %}opacity-75 bg-body-tertiary{% endif %}">
                         
                         {% if p.stock_quantity <= 0 %}
                             <div class="position-absolute top-50 start-50 translate-middle badge bg-dark fs-5 shadow" style="z-index: 10;">ESGOTADO</div>
@@ -100,15 +100,15 @@
                         {% if p.image_filename %}
                             <img src="{{ url_for('static', filename='uploads/' + p.image_filename) }}" class="card-img-top {% if p.stock_quantity <= 0 %}opacity-50{% endif %}" style="height: 220px; object-fit: cover;">
                         {% else %}
-                            <div class="bg-secondary bg-opacity-10 text-muted d-flex align-items-center justify-content-center {% if p.stock_quantity <= 0 %}opacity-50{% endif %}" style="height: 220px;">
+                            <div class="bg-secondary bg-opacity-10 text-body-secondary d-flex align-items-center justify-content-center {% if p.stock_quantity <= 0 %}opacity-50{% endif %}" style="height: 220px;">
                                 <i class="bi bi-box-seam fs-1"></i>
                             </div>
                         {% endif %}
                         
                         <div class="card-body d-flex flex-column p-4">
-                            <h5 class="fw-bold mb-1 text-dark">{{ p.name }}</h5>
+                            <h5 class="fw-bold mb-1 text-body-emphasis">{{ p.name }}</h5>
                             <div class="text-success fw-black fs-3 mb-2">R$ {{ "%.2f"|format(p.price) }}</div>
-                            <p class="small text-muted mb-4 flex-grow-1">{{ p.description or '' }}</p>
+                            <p class="small text-body-secondary mb-4 flex-grow-1">{{ p.description or '' }}</p>
                             
                             {% if p.stock_quantity > 0 %}
                                 <button class="btn btn-outline-primary fw-bold rounded-pill w-100 mt-auto py-2" onclick="addToCart({{ p.id }}, '{{ p.name|e }}', {{ p.price }})">
@@ -121,7 +121,7 @@
                     </div>
                 </div>
                 {% else %}
-                <div class="text-center text-muted py-5 w-100">
+                <div class="text-center text-body-secondary py-5 w-100">
                     <i class="bi bi-shop text-light d-block mb-3" style="font-size: 5rem !important;"></i>
                     <p class="fs-5">A nossa loja virtual ainda não possui produtos.</p>
                 </div>
@@ -132,8 +132,8 @@
         {% if establishment.plan_type == 'gestao' %}
         <div class="tab-pane fade" id="tab-clube">
             <div class="text-center mb-5">
-                <h2 class="h3 font-bold text-dark mb-2">Assine e Economize</h2>
-                <p class="text-muted">Garanta o seu visual sempre em dia pagando um valor fixo mensal.</p>
+                <h2 class="h3 font-bold text-body-emphasis mb-2">Assine e Economize</h2>
+                <p class="text-body-secondary">Garanta o seu visual sempre em dia pagando um valor fixo mensal.</p>
             </div>
             
             <div class="row g-4 justify-content-center">
@@ -144,26 +144,26 @@
                             <i class="bi bi-stars text-warning fs-3 mb-2 d-block"></i>
                             <h4 class="fw-bold mb-0">{{ p.name }}</h4>
                         </div>
-                        <div class="card-body p-4 p-md-5 d-flex flex-column text-center bg-white">
+                        <div class="card-body p-4 p-md-5 d-flex flex-column text-center bg-body">
                             <div class="mb-4">
-                                <span class="display-5 fw-black text-dark">R$ {{ "%.2f"|format(p.price) }}</span><span class="text-muted fw-bold">/mês</span>
+                                <span class="display-5 fw-black text-body-emphasis">R$ {{ "%.2f"|format(p.price) }}</span><span class="text-body-secondary fw-bold">/mês</span>
                             </div>
-                            <p class="text-muted mb-4 flex-grow-1">{{ p.description or 'Benefícios exclusivos para assinantes do nosso clube.' }}</p>
+                            <p class="text-body-secondary mb-4 flex-grow-1">{{ p.description or 'Benefícios exclusivos para assinantes do nosso clube.' }}</p>
                             
-                            <ul class="list-unstyled text-start mb-5 bg-light p-3 rounded-3">
-                                <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i> Limite: <strong class="text-dark">{{ p.services_limit if p.services_limit > 0 else 'Ilimitado' }}</strong> serviços no mês</li>
+                            <ul class="list-unstyled text-start mb-5 bg-body-tertiary p-3 rounded-3">
+                                <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i> Limite: <strong class="text-body-emphasis">{{ p.services_limit if p.services_limit > 0 else 'Ilimitado' }}</strong> serviços no mês</li>
                                 <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i> Agendamento Simples</li>
                                 <li class="mb-0"><i class="bi bi-check-circle-fill text-success me-2"></i> Sem taxa de cancelamento</li>
                             </ul>
 
-                            <button class="btn btn-warning text-dark fs-5 fw-bold rounded-pill w-100 py-3 shadow-sm" onclick="assinarPlano('{{ p.name|e }}', {{ p.price }}, '{{ establishment.contact_phone }}')">
+                            <button class="btn btn-warning text-body-emphasis fs-5 fw-bold rounded-pill w-100 py-3 shadow-sm" onclick="assinarPlano('{{ p.name|e }}', {{ p.price }}, '{{ establishment.contact_phone }}')">
                                 Quero Assinar
                             </button>
                         </div>
                     </div>
                 </div>
                 {% else %}
-                <div class="text-center text-muted py-5 w-100">
+                <div class="text-center text-body-secondary py-5 w-100">
                     <i class="bi bi-award text-light d-block mb-3" style="font-size: 5rem !important;"></i>
                     <p class="fs-5">O clube de assinaturas estará disponível em breve.</p>
                 </div>
@@ -188,29 +188,29 @@
 </button>
 
 <div class="offcanvas offcanvas-end shadow-lg border-0" tabindex="-1" id="cartOffcanvas" aria-labelledby="cartOffcanvasLabel">
-  <div class="offcanvas-header bg-light border-bottom">
+  <div class="offcanvas-header bg-body-tertiary border-bottom">
     <h5 class="offcanvas-title fw-bold text-primary" id="cartOffcanvasLabel"><i class="bi bi-cart3"></i> Sua Sacola</h5>
     <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
   </div>
   <div class="offcanvas-body d-flex flex-column p-0">
-    <div id="cart-items" class="flex-grow-1 overflow-auto p-4 bg-white">
+    <div id="cart-items" class="flex-grow-1 overflow-auto p-4 bg-body">
         </div>
     
-    <div class="border-top p-4 bg-light shadow-sm" style="z-index: 2;">
+    <div class="border-top p-4 bg-body-tertiary shadow-sm" style="z-index: 2;">
         <div class="d-flex justify-content-between align-items-end mb-3">
-            <span class="fw-bold text-muted fs-6">Total:</span>
+            <span class="fw-bold text-body-secondary fs-6">Total:</span>
             <span class="text-success fw-black fs-2" id="cart-total">R$ 0,00</span>
         </div>
         
         <div class="mb-4">
-            <label class="form-label small fw-bold text-dark">Qual o seu Nome?</label>
+            <label class="form-label small fw-bold text-body-emphasis">Qual o seu Nome?</label>
             <input type="text" id="cart-nome" class="form-control border-primary py-2" placeholder="Ex: João Silva">
         </div>
         
         <button class="btn btn-success w-100 fw-bold py-3 rounded-pill shadow-sm fs-5" onclick="finalizarPedido('{{ establishment.contact_phone }}')">
             <i class="bi bi-whatsapp align-middle me-2"></i> Fechar no WhatsApp
         </button>
-        <p class="text-center text-muted small mt-3 mb-0">Você combinará o pagamento direto com o estabelecimento.</p>
+        <p class="text-center text-body-secondary small mt-3 mb-0">Você combinará o pagamento direto com o estabelecimento.</p>
     </div>
   </div>
 </div>
@@ -329,7 +329,7 @@
 
         if (cart.length === 0) {
             fab.style.setProperty('display', 'none', 'important');
-            itemsDiv.innerHTML = '<div class="text-center text-muted mt-5"><i class="bi bi-basket fs-1"></i><p class="mt-3">A sua sacola está vazia.</p></div>';
+            itemsDiv.innerHTML = '<div class="text-center text-body-secondary mt-5"><i class="bi bi-basket fs-1"></i><p class="mt-3">A sua sacola está vazia.</p></div>';
             totalSpan.innerText = 'R$ 0,00';
             return;
         }
@@ -346,12 +346,12 @@
             html += `
             <div class="d-flex justify-content-between align-items-center mb-3 pb-3 border-bottom">
                 <div>
-                    <div class="fw-bold text-dark">${item.name}</div>
+                    <div class="fw-bold text-body-emphasis">${item.name}</div>
                     <div class="text-success small fw-bold">${formatMoney(item.price)}</div>
                 </div>
                 <div class="input-group input-group-sm" style="width: 100px;">
                     <button class="btn btn-outline-secondary fw-bold px-2" onclick="updateQtd(${item.id}, -1)">-</button>
-                    <input type="text" class="form-control text-center px-0 bg-light fw-bold" value="${item.qtd}" readonly>
+                    <input type="text" class="form-control text-center px-0 bg-body-tertiary fw-bold" value="${item.qtd}" readonly>
                     <button class="btn btn-outline-secondary fw-bold px-2" onclick="updateQtd(${item.id}, 1)">+</button>
                 </div>
             </div>`;

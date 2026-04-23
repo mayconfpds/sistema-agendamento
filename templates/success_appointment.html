@@ -15,21 +15,21 @@
 
                 <div class="card-body p-4 p-md-5">
                     
-                    <div class="bg-light p-4 rounded-4 mb-4 border text-start">
-                        <h6 class="text-muted fw-bold text-uppercase small mb-3">Resumo da Reserva</h6>
+                    <div class="bg-body-tertiary p-4 rounded-4 mb-4 border text-start">
+                        <h6 class="text-body-secondary fw-bold text-uppercase small mb-3">Resumo da Reserva</h6>
                         
                         <div class="d-flex align-items-center mb-3">
                             <div class="bg-primary-subtle text-primary p-3 rounded-3 me-3"><i class="bi bi-calendar-event fs-4"></i></div>
                             <div>
-                                <h5 class="fw-black text-dark mb-0">{{ appointment.appointment_date.strftime('%d/%m/%Y') }}</h5>
-                                <div class="text-muted fw-bold">às {{ appointment.appointment_time.strftime('%H:%M') }}</div>
+                                <h5 class="fw-black text-body-emphasis mb-0">{{ appointment.appointment_date.strftime('%d/%m/%Y') }}</h5>
+                                <div class="text-body-secondary fw-bold">às {{ appointment.appointment_time.strftime('%H:%M') }}</div>
                             </div>
                         </div>
 
                         <div class="d-flex align-items-center mb-3">
                             <div class="bg-secondary-subtle text-secondary p-3 rounded-3 me-3"><i class="bi bi-scissors fs-4"></i></div>
                             <div>
-                                <div class="fw-bold text-dark">{{ appointment.service_names }}</div>
+                                <div class="fw-bold text-body-emphasis">{{ appointment.service_names }}</div>
                                 <div class="text-success fw-bold">
                                     {% if appointment.total_price == 0 %}
                                         Membro VIP (Valor Zerado)
@@ -44,8 +44,8 @@
                         <div class="d-flex align-items-center">
                             <div class="bg-info-subtle text-info-emphasis p-3 rounded-3 me-3"><i class="bi bi-person-badge fs-4"></i></div>
                             <div>
-                                <div class="small text-muted fw-bold mb-0">Profissional</div>
-                                <div class="fw-bold text-dark">{{ appointment.professional.name }}</div>
+                                <div class="small text-body-secondary fw-bold mb-0">Profissional</div>
+                                <div class="fw-bold text-body-emphasis">{{ appointment.professional.name }}</div>
                             </div>
                         </div>
                         {% endif %}
@@ -58,19 +58,19 @@
                     {% endif %}
 
                     <div class="mt-4 pt-4 border-top">
-                        <h6 class="fw-bold text-dark mb-2"><i class="bi bi-arrow-repeat text-primary"></i> Imprevistos acontecem?</h6>
-                        <p class="small text-muted mb-3">Enviamos os detalhes para o seu e-mail (<strong>{{ appointment.client_email }}</strong>). Guarde o link abaixo caso precise alterar o seu horário no futuro:</p>
+                        <h6 class="fw-bold text-body-emphasis mb-2"><i class="bi bi-arrow-repeat text-primary"></i> Imprevistos acontecem?</h6>
+                        <p class="small text-body-secondary mb-3">Enviamos os detalhes para o seu e-mail (<strong>{{ appointment.client_email }}</strong>). Guarde o link abaixo caso precise alterar o seu horário no futuro:</p>
                         
                         <div class="input-group mb-2 shadow-sm rounded-pill overflow-hidden">
-                            <input type="text" class="form-control bg-light border-0 text-muted small py-2 ps-4" id="linkReagendamento" value="{{ reagendar_link }}" readonly>
+                            <input type="text" class="form-control bg-body-tertiary border-0 text-body-secondary small py-2 ps-4" id="linkReagendamento" value="{{ reagendar_link }}" readonly>
                             <button class="btn btn-primary fw-bold px-4" type="button" onclick="copiarLink()"><i class="bi bi-copy"></i> Copiar</button>
                         </div>
                     </div>
 
                 </div>
                 
-                <div class="card-footer bg-light border-0 py-3">
-                    <a href="{{ url_for('establishment_services', url_prefix=appointment.establishment.url_prefix) }}" class="text-decoration-none fw-bold text-muted small"><i class="bi bi-arrow-left"></i> Voltar para a página inicial</a>
+                <div class="card-footer bg-body-tertiary border-0 py-3">
+                    <a href="{{ url_for('establishment_services', url_prefix=appointment.establishment.url_prefix) }}" class="text-decoration-none fw-bold text-body-secondary small"><i class="bi bi-arrow-left"></i> Voltar para a página inicial</a>
                 </div>
             </div>
         </div>

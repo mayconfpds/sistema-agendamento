@@ -1414,5 +1414,41 @@ def processar_reagendamento(token):
     
     return jsonify({'success': True})
 
+@app.route('/admin/upgrade_plano', methods=['POST'])
+@login_required
+def upgrade_plano():
+    est = current_user.establishment
+    
+    if est.plan_type == 'gestao':
+        flash('Você já possui o melhor plano da plataforma!', 'info')
+        return redirect(url_for('admin_dashboard'))
+        
+    novo_plano = request.form.get('plano_destino')
+    
+    if novo_plano == 'gestao':
+        # Deixando as datas baterem perfeitamente
+        hoje = get_now_brazil().date()
+        fim_teste = est.trial_ends
+        
+        # Se fim_teste for um datetime completo, pegamos apenas a data
+        if hasattr(fim_teste, 'date'):
+            fim_teste = fim_teste.date()
+            
+        # Verifica se o teste gratuito ainda é válido
+        if not est.is_active and fim_teste and hoje <= fim_teste:
+            est.plan_type = 'gestao'
+            db.session.commit()
+            flash('Parabéns! O seu plano foi atualizado para GESTÃO. Aproveite as novas ferramentas!', 'success')
+            return redirect(url_for('admin_dashboard'))
+            
+        else:
+            numero_suporte = "5587991001697"
+            mensagem = f"Olá! Sou da barbearia *{est.name}*. Já sou assinante do Plano Solo e gostaria de fazer o UPGRADE para o *Plano Gestão* para liberar a equipe, comissões e o Clube VIP. Como podemos fazer o ajuste do meu pagamento?"
+            url_zap = f"https://wa.me/{numero_suporte}?text={mensagem}"
+            return redirect(url_zap)
+            
+    flash('Plano inválido.', 'danger')
+    return redirect(url_for('planos'))
+
 if __name__ == '__main__':
     app.run(debug=True)
