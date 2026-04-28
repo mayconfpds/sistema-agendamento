@@ -550,6 +550,21 @@
             if (data.success) {
                 if(formElement.tagName === 'FORM' && formElement.elements.length > 2 && !formElement.dataset.noReset) { formElement.reset(); }
                 await atualizarContainerSilenciosamente(containerId);
+                
+                // === ATUALIZAÇÃO INSTANTÂNEA DOS SELECTS ===
+                if (data.id && data.name) {
+                    if (formElement.action.includes('/admin/categoria/adicionar')) {
+                        document.querySelectorAll('select[name="category_id"]').forEach(select => select.add(new Option(data.name, data.id)));
+                    } 
+                    else if (formElement.action.includes('/admin/profissional/adicionar')) {
+                        document.querySelectorAll('select[name="professional_id"]').forEach(select => select.add(new Option(data.name, data.id)));
+                    }
+                    else if (formElement.action.includes('/admin/assinaturas/plano/adicionar')) {
+                        document.querySelectorAll('select[name="plan_id"]').forEach(select => select.add(new Option(data.name, data.id)));
+                    }
+                }
+                // ==========================================
+
             } else { alert(data.error || 'Erro.'); }
         } catch (e) { alert('Erro de conexão.'); } finally { if(document.body.contains(btn)) { btn.innerHTML = iconeOriginal; btn.disabled = false; } }
     }

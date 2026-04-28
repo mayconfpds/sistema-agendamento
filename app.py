@@ -714,7 +714,7 @@ def add_subscription_plan():
         
         plan = SubscriptionPlan(name=name, price=price, services_limit=limit, description=desc, establishment_id=current_user.establishment_id)
         db.session.add(plan); db.session.commit()
-        return jsonify({'success': True})
+        return jsonify({'success': True, 'id': plan.id, 'name': plan.name})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
     
@@ -927,7 +927,8 @@ def add_category():
     if name:
         c = Category(name=name, establishment_id=current_user.establishment_id)
         db.session.add(c); db.session.commit()
-        if request.headers.get('X-Requested-With') == 'XMLHttpRequest': return jsonify({'success': True})
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest': 
+            return jsonify({'success': True, 'id': c.id, 'name': c.name})
     return redirect(url_for('admin_dashboard'))
 
 @app.route('/admin/categoria/excluir/<int:id>', methods=['POST'])
@@ -1111,7 +1112,8 @@ def add_professional():
         p = Professional(name=name, commission_rate=float(str(commission).replace(',', '.')), establishment_id=current_user.establishment_id)
         db.session.add(p); db.session.commit()
         est = current_user.establishment; est.capacity = max(1, Professional.query.filter_by(establishment_id=est.id).count()); db.session.commit()
-        if request.headers.get('X-Requested-With') == 'XMLHttpRequest': return jsonify({'success': True})
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest': 
+            return jsonify({'success': True, 'id': p.id, 'name': p.name})
     return redirect(url_for('admin_dashboard'))
 
 @app.route('/admin/profissional/editar/<int:id>', methods=['POST'])
