@@ -87,6 +87,7 @@
     document.getElementById('date').min = `${year}-${month}-${day}`;
 
     // Busca os horários livres na API
+    // Busca os horários livres na API
     async function fetchSlots() {
         const dVal = document.getElementById('date').value;
         if(!dVal) return;
@@ -114,11 +115,18 @@
             times.forEach(t => {
                 const b = document.createElement('button');
                 b.type = 'button'; 
-                b.className = 'btn btn-outline-dark btn-sm rounded-pill px-3 fw-bold'; 
+                // Cor padrão (desmarcado)
+                b.className = 'btn btn-outline-secondary btn-sm rounded-pill px-3 fw-bold'; 
                 b.innerText = t;
                 b.onclick = () => {
-                    document.querySelectorAll('#slots button').forEach(x => x.classList.replace('btn-dark', 'btn-outline-dark'));
-                    b.classList.replace('btn-outline-dark', 'btn-dark');
+                    // Reseta todos para a cor padrão
+                    document.querySelectorAll('#slots button').forEach(x => {
+                        x.className = 'btn btn-outline-secondary btn-sm rounded-pill px-3 fw-bold';
+                    });
+                    
+                    // Destaca o selecionado
+                    b.className = 'btn btn-primary btn-sm rounded-pill px-3 fw-bold shadow';
+                    
                     document.getElementById('time').value = t;
                     document.getElementById('btnSalvar').disabled = false;
                 };

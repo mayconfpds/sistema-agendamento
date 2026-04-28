@@ -183,10 +183,19 @@ async function fetchSlots() {
         }
         times.forEach(t => {
             const b = document.createElement('button');
-            b.type='button'; b.className='btn btn-outline-secondary btn-sm rounded-pill px-3'; b.innerText=t;
+            b.type='button'; 
+            // Começa como botão cinza sem preenchimento
+            b.className='btn btn-outline-secondary btn-sm rounded-pill px-3 fw-bold'; 
+            b.innerText=t;
             b.onclick = () => {
-                document.querySelectorAll('#slots button').forEach(x=>x.classList.replace('btn-dark','btn-outline-dark'));
-                b.classList.replace('btn-outline-dark','btn-dark');
+                // Tira o destaque de todos os botões (volta pro cinza)
+                document.querySelectorAll('#slots button').forEach(x => {
+                    x.className = 'btn btn-outline-secondary btn-sm rounded-pill px-3 fw-bold';
+                });
+                
+                // Coloca o destaque AZUL e com SOMBRA apenas no que foi clicado
+                b.className = 'btn btn-primary btn-sm rounded-pill px-3 fw-bold shadow';
+                
                 document.getElementById('time').value=t;
                 document.getElementById('btn').disabled=false;
             };
