@@ -283,22 +283,23 @@ def load_user(user_id): return Admin.query.get(int(user_id))
 try:
     with app.app_context():
         inspector = inspect(db.engine)
-        if not inspector.has_table("products"):
-            Product.__table__.create(db.engine)
-        if not inspector.has_table("product_sales"):
-            ProductSale.__table__.create(db.engine)
-            
-        if not inspector.has_table("subscription_plans"):
-            SubscriptionPlan.__table__.create(db.engine)
-        if not inspector.has_table("client_subscriptions"):
-            ClientSubscription.__table__.create(db.engine)
-            
-        if not inspector.has_table("blocked_days"):
-            BlockedDay.__table__.create(db.engine)
-            
+        
         if not inspector.has_table("establishments"): 
             db.create_all()
         else:
+            if not inspector.has_table("products"):
+                Product.__table__.create(db.engine)
+            if not inspector.has_table("product_sales"):
+                ProductSale.__table__.create(db.engine)
+                
+            if not inspector.has_table("subscription_plans"):
+                SubscriptionPlan.__table__.create(db.engine)
+            if not inspector.has_table("client_subscriptions"):
+                ClientSubscription.__table__.create(db.engine)
+                
+            if not inspector.has_table("blocked_days"):
+                BlockedDay.__table__.create(db.engine)
+                
             columns = [c['name'] for c in inspector.get_columns('day_schedules')]
             if 'pause2_start' not in columns:
                 with db.engine.connect() as conn:
@@ -827,15 +828,13 @@ def historico_atendimentos():
 @app.route('/api/clientes_inativos')
 @login_required
 def api_clientes_inativos():
-    # Proteção: Apenas Plano Gestão
+    
     if current_user.establishment.plan_type != 'gestao':
         return jsonify({'success': False, 'error': 'Funcionalidade exclusiva do Plano Gestão.'}), 403
 
-    # Define a data limite de 45 dias atrás
     limite = get_now_brazil().date() - timedelta(days=45)
     est_id = current_user.establishment_id
 
-    # Subquery: Descobre a última data em que o cliente (por telefone) foi atendido
     subquery = db.session.query(
         Appointment.client_phone,
         func.max(Appointment.appointment_date).label('ultima_data')
@@ -844,7 +843,6 @@ def api_clientes_inativos():
         Appointment.status.in_(['concluido', 'arquivado'])
     ).group_by(Appointment.client_phone).subquery()
 
-    # Query Principal: Pega os dados do cliente correspondentes a essa última data
     clientes_inativos = db.session.query(
         Appointment.client_name, 
         subquery.c.client_phone, 
@@ -869,7 +867,7 @@ def api_clientes_inativos():
     
     for nome, telefone, ultima_data in clientes_inativos:
         dias_ausente = (hoje - ultima_data).days
-        # Remove caracteres especiais do telefone para o link do WhatsApp
+  
         telefone_limpo = ''.join(filter(str.isdigit, telefone))
         
         resultado.append({
@@ -880,7 +878,6 @@ def api_clientes_inativos():
             'dias_ausente': dias_ausente
         })
         
-    # Ordena para mostrar no topo quem está sumido há mais tempo
     resultado.sort(key=lambda x: x['dias_ausente'], reverse=True)
 
     return jsonify({'success': True, 'clientes': resultado})
