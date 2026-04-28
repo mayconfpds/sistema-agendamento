@@ -75,6 +75,15 @@
                     <p class="text-slate-600 text-sm">Clientes marcam online 24h. O sistema cruza os horários, evita choques e nunca deixa buracos no seu dia.</p>
                 </div>
 
+		<div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 hover:shadow-md transition-shadow relative overflow-hidden">
+                    <div class="absolute top-0 right-0 bg-blue-500 text-white text-[10px] font-bold px-3 py-1 rounded-bl-lg uppercase tracking-wider">Plano Gestão</div>
+                    <div class="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 mb-5">
+                        <i class="bi bi-arrow-clockwise text-2xl"></i>
+                    </div>
+                    <h3 class="text-lg font-bold text-slate-900 mb-2">Recuperação de Clientes</h3>
+                    <p class="text-slate-600 text-sm">O sistema identifica automaticamente quem não agenda há mais de 45 dias. Reative-os com um clique via WhatsApp usando mensagens prontas.</p>
+                </div>
+
                 <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 hover:shadow-md transition-shadow relative overflow-hidden border-b-4 border-b-green-400">
                     <div class="absolute top-0 right-0 bg-green-500 text-white text-[10px] font-bold px-3 py-1 rounded-bl-lg uppercase tracking-wider">Novo</div>
                     <div class="w-12 h-12 rounded-xl bg-green-50 flex items-center justify-center text-green-600 mb-5">
@@ -132,7 +141,7 @@
                     <p class="text-slate-600 text-sm">Crie pacotes promocionais destacando o valor de economia para o cliente, aumentando o seu ticket médio.</p>
                 </div>
 
-                <div class="bg-white rounded-2xl p-6 md:p-8 shadow-sm border border-slate-100 hover:shadow-md transition-shadow lg:col-span-2 flex flex-col justify-center">
+                <div class="bg-white rounded-2xl p-6 md:p-8 shadow-sm border border-slate-100 hover:shadow-md transition-shadow lg:col-span-3 flex flex-col justify-center">
                     <div class="flex flex-col sm:flex-row items-start sm:items-center gap-5">
                         <div class="w-16 h-16 rounded-2xl bg-cyan-50 flex items-center justify-center text-cyan-600 flex-shrink-0">
                             <i class="bi bi-arrow-repeat text-3xl"></i>
@@ -144,18 +153,18 @@
                     </div>
                 </div>
 
-                <div class="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-6 md:p-8 shadow-lg border border-slate-700 hover:shadow-xl transition-shadow text-white relative overflow-hidden lg:col-span-2 flex flex-col justify-center">
+                <div class="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-6 md:p-8 shadow-lg border border-slate-700 hover:shadow-xl transition-shadow text-white relative overflow-hidden lg:col-span-4 flex flex-col justify-center">
                     <div class="absolute top-0 right-0 bg-yellow-500 text-slate-900 text-[10px] font-bold px-4 py-1 rounded-bl-xl uppercase tracking-wider">Receita Recorrente</div>
                     <div class="flex flex-col sm:flex-row items-start sm:items-center gap-5 relative z-10">
                         <div class="w-16 h-16 rounded-2xl bg-yellow-400/20 flex items-center justify-center text-yellow-400 flex-shrink-0 shadow-inner">
                             <i class="bi bi-star-fill text-3xl"></i>
                         </div>
-                        <div>
+                        <div class="flex-1">
                             <h3 class="text-xl font-bold text-white mb-2">Clube de Assinaturas (VIP)</h3>
-                            <p class="text-slate-300 text-sm leading-relaxed">Construa receita recorrente garantida. Crie planos mensais para os clientes; o sistema os identifica pelo número na vitrine e zera os valores dos serviços inclusos automaticamente no momento do agendamento.</p>
+                            <p class="text-slate-300 text-sm leading-relaxed md:max-w-4xl">Construa receita recorrente garantida. Crie planos mensais para os clientes; o sistema os identifica pelo número na vitrine e zera os valores dos serviços inclusos automaticamente no momento do agendamento.</p>
                         </div>
                     </div>
-                    <div class="absolute -bottom-10 -right-10 w-40 h-40 bg-yellow-500/10 blur-3xl rounded-full z-0"></div>
+                    <div class="absolute -bottom-10 -right-10 w-64 h-64 bg-yellow-500/10 blur-3xl rounded-full z-0"></div>
                 </div>
 
             </div>
@@ -274,6 +283,7 @@
                         <li class="flex items-start gap-3"><i class="bi bi-check-circle-fill text-white mt-1"></i> <span class="text-blue-50 font-bold">Cálculo de Comissões (%) Automático</span></li>
                         <li class="flex items-start gap-3"><i class="bi bi-check-circle-fill text-yellow-400 mt-1"></i> <span class="text-yellow-50 font-bold">Clube de Assinaturas (Membros VIP)</span></li>
                         <li class="flex items-start gap-3"><i class="bi bi-check-circle-fill text-white mt-1"></i> <span class="text-blue-50 font-bold">Painel de BI (Dashboard Avançado)</span></li>
+			<li class="flex items-start gap-3"><i class="bi bi-check-circle-fill text-white mt-1"></i> <span class="text-blue-50 font-bold">Recuperação de Clientes</span></li>
                     </ul>
                     <a href="{{ url_for('register_business', plan='gestao') }}" class="w-full py-4 text-center rounded-xl font-bold bg-white text-blue-700 hover:bg-blue-50 transition-colors shadow-lg">Teste 7 dias grátis</a>
                 </div>

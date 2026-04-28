@@ -20,8 +20,7 @@ from sqlalchemy import inspect
 from flask_migrate import Migrate
 import stripe
 import uuid
-# import holidays
-# import requests
+from sqlalchemy import func
 
 socket.setdefaulttimeout(15)
 
@@ -81,7 +80,6 @@ def send_email(subject, recipient, body):
         except Exception as e: print(f"\n❌ [ERRO BREVO] {e}")
     threading.Thread(target=_send_thread).start()
 
-# --- MODELOS ---
 class Establishment(db.Model):
     __tablename__ = 'establishments'
     id = db.Column(db.Integer, primary_key=True)
@@ -96,7 +94,7 @@ class Establishment(db.Model):
     trial_ends = db.Column(db.DateTime, nullable=True)
     loyalty_points_goal = db.Column(db.Integer, default=0)
     loyalty_reward = db.Column(db.String(150), nullable=True)
-    state = db.Column(db.String(2), default='PE') # Sigla do Estado
+    state = db.Column(db.String(2), default='PE')
     
     schedules = db.relationship('DaySchedule', backref='establishment', lazy=True, cascade="all, delete-orphan")
     admins = db.relationship('Admin', backref='establishment', lazy=True)
@@ -156,7 +154,7 @@ class SubscriptionPlan(db.Model):
     name = db.Column(db.String(100), nullable=False)
     price = db.Column(db.Float, nullable=False)
     description = db.Column(db.Text, nullable=True)
-    services_limit = db.Column(db.Integer, default=0) # 0 para ilimitado ou ex: 2 para 2 cortes/mês
+    services_limit = db.Column(db.Integer, default=0)
     establishment_id = db.Column(db.Integer, db.ForeignKey('establishments.id'), nullable=False)
 
 class ClientSubscription(db.Model):
@@ -166,7 +164,7 @@ class ClientSubscription(db.Model):
     client_phone = db.Column(db.String(20), nullable=False)
     plan_id = db.Column(db.Integer, db.ForeignKey('subscription_plans.id'), nullable=False)
     expiry_date = db.Column(db.DateTime, nullable=False)
-    status = db.Column(db.String(20), default='ativo') # 'ativo' ou 'cancelado'
+    status = db.Column(db.String(20), default='ativo')
     establishment_id = db.Column(db.Integer, db.ForeignKey('establishments.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=get_now_brazil)
     plan = db.relationship('SubscriptionPlan')
@@ -175,7 +173,7 @@ class BlockedDay(db.Model):
     __tablename__ = 'blocked_days'
     id = db.Column(db.Integer, primary_key=True)
     date = db.Column(db.Date, nullable=False)
-    reason = db.Column(db.String(255), nullable=True) # Ex: "Feriado: São João"
+    reason = db.Column(db.String(255), nullable=True)
     establishment_id = db.Column(db.Integer, db.ForeignKey('establishments.id'), nullable=False)
 
 class DaySchedule(db.Model):
@@ -282,7 +280,6 @@ class Blacklist(db.Model):
 @login_manager.user_loader
 def load_user(user_id): return Admin.query.get(int(user_id))
 
-# --- VERIFICADOR DO BANCO DE DADOS ---
 try:
     with app.app_context():
         inspector = inspect(db.engine)
@@ -340,7 +337,6 @@ try:
                     conn.execute(db.text("ALTER TABLE services ADD COLUMN is_club_included BOOLEAN DEFAULT FALSE;"))
                     conn.commit()
                     
-            # ADICIONE ESTE BLOCO:
             columns_sub = [c['name'] for c in inspector.get_columns('client_subscriptions')]
             if 'created_at' not in columns_sub:
                 with db.engine.connect() as conn:
@@ -349,7 +345,6 @@ try:
                 ClientSubscription.query.update({'created_at': get_now_brazil()})
                 db.session.commit()
                 
-            # ADICIONE ESTE BLOCO:
             columns_appts = [c['name'] for c in inspector.get_columns('appointments')]
             if 'edit_token' not in columns_appts:
                 with db.engine.connect() as conn:
@@ -410,7 +405,6 @@ def notification_worker():
 if not os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
     threading.Thread(target=notification_worker, daemon=True).start()
 
-# --- ROTAS DE PAGAMENTO E APLICATIVO ---
 @app.route('/pagamento')
 @login_required
 def payment():
@@ -515,14 +509,11 @@ def create_appointment(url_prefix):
     start_dt = datetime.combine(d, t)
     end_dt = start_dt + timedelta(minutes=total_dur)
     
-    # --- RECONHECIMENTO DE ASSINANTE VIP ---
     active_sub = ClientSubscription.query.filter_by(establishment_id=est.id, client_phone=client_phone, status='ativo').filter(ClientSubscription.expiry_date >= now).first()
     is_subscriber = False
     if active_sub:
         is_subscriber = True
-        # Zera apenas o valor dos serviços marcados como "Inclusos no Clube"
         total_price = sum(s.price for s in selected_services if not s.is_club_included)
-    # ---------------------------------------
     
     if start_dt < now: flash('Horário inválido.', 'danger'); return redirect(url_for('establishment_services', url_prefix=url_prefix))
 
@@ -549,21 +540,18 @@ def create_appointment(url_prefix):
     if overlap_count >= current_capacity:
         flash('Ops! Esse horário acabou de ser ocupado. Tente outro.', 'danger'); return redirect(url_for('schedule_service', url_prefix=url_prefix, service_id=selected_services[0].id))
 
-    token = str(uuid.uuid4()) # GERA A CHAVE MÁGICA
+    token = str(uuid.uuid4())
     
     appt = Appointment(client_name=request.form.get('client_name'), client_phone=client_phone, client_email=request.form.get('client_email'), appointment_date=d, appointment_time=t, establishment_id=est.id, total_duration=total_dur, total_price=total_price, professional_id=professional_id, commission_value=commission_value, edit_token=token)
     for s in selected_services: appt.services.append(s)
     db.session.add(appt); db.session.commit()
     
     send_email(f"Confirmado: {est.name}", appt.client_email, f"Agendado para {d.strftime('%d/%m')} às {t.strftime('%H:%M')}.")
-    # Monta o link mágico de reagendamento
     reagendar_link = f"{request.host_url.rstrip('/')}{url_for('reagendar_view', token=token)}"
 
-    # 1. Adicionamos o link no E-MAIL para o cliente nunca perder
     email_body = f"Seu horário na {est.name} está confirmado para {d.strftime('%d/%m')} às {t.strftime('%H:%M')}.\n\nCaso precise alterar o horário, acesse o seu link exclusivo: {reagendar_link}"
     send_email(f"Horário Confirmado: {est.name}", appt.client_email, email_body)
 
-    # 2. Mantemos o link no WhatsApp
     if is_subscriber:
         zap_msg = f"Olá, confirmo meu agendamento pelo Clube ({active_sub.plan.name}) para: {d.strftime('%d/%m')} às {t.strftime('%H:%M')}.\n\n📅 Precisa alterar o horário? Acesse: {reagendar_link}"
     else:
@@ -571,7 +559,6 @@ def create_appointment(url_prefix):
         
     zap_link = f"https://wa.me/55{est.contact_phone}?text={zap_msg}" if est.contact_phone else "#"
     
-    # 3. Enviamos o reagendar_link para o HTML exibir na tela
     return render_template('success_appointment.html', appointment=appt, zap_link=zap_link, reagendar_link=reagendar_link)
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -622,7 +609,6 @@ def admin_dashboard():
     
     return render_template('admin.html', appointments=appts, services=services, categories=categories, establishment=est, schedules=schedules, blacklists=blacklists, professionals=professionals, today_count=today_count)
 
-# --- PRODUTOS E ESTOQUE (COM TRATAMENTO DE ERROS ROBUSTO) ---
 @app.route('/admin/produto/adicionar', methods=['POST'])
 @login_required
 def add_product():
@@ -703,7 +689,6 @@ def reduce_stock(id):
         if p.stock_quantity >= quantidade:
             p.stock_quantity -= quantidade
             
-            # Registra a venda no relatório (KPIs)
             sale = ProductSale(product_name=p.name, quantity=quantidade, unit_price=p.price, total_price=p.price * quantidade, establishment_id=p.establishment_id)
             db.session.add(sale)
             db.session.commit()
@@ -714,7 +699,6 @@ def reduce_stock(id):
         db.session.rollback()
         return jsonify({'success': False, 'error': str(e)})
 
-# --- RELATÓRIOS AVANÇADOS DA LOJA (KPIs) ---
 
 @app.route('/admin/assinaturas/plano/adicionar', methods=['POST'])
 @login_required
@@ -805,7 +789,6 @@ def delete_subscriber(id):
         return jsonify({'success': True})
     return jsonify({'success': False}), 403
 
-# ... (Restante das rotas de admin antigas: alterar_senha, relatorios, historico, ajudas...) ...
 @app.route('/admin/alterar-senha', methods=['GET', 'POST'])
 @login_required
 def alterar_senha():
@@ -840,6 +823,67 @@ def historico_atendimentos():
     total_revenue = sum(a.total_price for a in appts if a.status in ['concluido', 'arquivado'])
     total_appts = len(appts)
     return render_template('historico.html', appointments=appts, establishment=est, start_date=start_date_str, end_date=end_date_str, total_revenue=total_revenue, total_appts=total_appts)
+
+@app.route('/api/clientes_inativos')
+@login_required
+def api_clientes_inativos():
+    # Proteção: Apenas Plano Gestão
+    if current_user.establishment.plan_type != 'gestao':
+        return jsonify({'success': False, 'error': 'Funcionalidade exclusiva do Plano Gestão.'}), 403
+
+    # Define a data limite de 45 dias atrás
+    limite = get_now_brazil().date() - timedelta(days=45)
+    est_id = current_user.establishment_id
+
+    # Subquery: Descobre a última data em que o cliente (por telefone) foi atendido
+    subquery = db.session.query(
+        Appointment.client_phone,
+        func.max(Appointment.appointment_date).label('ultima_data')
+    ).filter(
+        Appointment.establishment_id == est_id, 
+        Appointment.status.in_(['concluido', 'arquivado'])
+    ).group_by(Appointment.client_phone).subquery()
+
+    # Query Principal: Pega os dados do cliente correspondentes a essa última data
+    clientes_inativos = db.session.query(
+        Appointment.client_name, 
+        subquery.c.client_phone, 
+        subquery.c.ultima_data
+    ).join(
+        subquery, 
+        db.and_(
+            Appointment.client_phone == subquery.c.client_phone, 
+            Appointment.appointment_date == subquery.c.ultima_data
+        )
+    ).filter(
+        subquery.c.ultima_data <= limite, 
+        Appointment.establishment_id == est_id
+    ).group_by(
+        subquery.c.client_phone, 
+        Appointment.client_name, 
+        subquery.c.ultima_data
+    ).all()
+
+    resultado = []
+    hoje = get_now_brazil().date()
+    
+    for nome, telefone, ultima_data in clientes_inativos:
+        dias_ausente = (hoje - ultima_data).days
+        # Remove caracteres especiais do telefone para o link do WhatsApp
+        telefone_limpo = ''.join(filter(str.isdigit, telefone))
+        
+        resultado.append({
+            'nome': nome,
+            'telefone_exibicao': telefone,
+            'telefone_limpo': telefone_limpo,
+            'ultima_visita': ultima_data.strftime('%d/%m/%Y'),
+            'dias_ausente': dias_ausente
+        })
+        
+    # Ordena para mostrar no topo quem está sumido há mais tempo
+    resultado.sort(key=lambda x: x['dias_ausente'], reverse=True)
+
+    return jsonify({'success': True, 'clientes': resultado})
 
 @app.route('/admin/configurar', methods=['POST'])
 @login_required
@@ -1116,7 +1160,7 @@ def get_available_times():
     
     is_blocked = BlockedDay.query.filter_by(establishment_id=est_id, date=sel_date).first()
     if is_blocked:
-        return jsonify([]) # Retorna lista vazia, o que bloqueia a data no calendário do cliente
+        return jsonify([])
     
     est = Establishment.query.get(est_id)
     day_sched = DaySchedule.query.filter_by(establishment_id=est.id, day_index=sel_date.weekday()).first()
@@ -1204,7 +1248,6 @@ def relatorio_bi():
     except: 
         start_date = hoje - timedelta(days=30); end_date = hoje
 
-    # 1. MÉTRICAS DA AGENDA E AVALIAÇÕES
     appts = Appointment.query.filter(Appointment.establishment_id == est.id, Appointment.appointment_date >= start_date, Appointment.appointment_date <= end_date).all()
     concluidos = [a for a in appts if a.status in ['concluido', 'arquivado']]
     faltas = [a for a in appts if a.status == 'falta']
@@ -1220,7 +1263,6 @@ def relatorio_bi():
     comissoes = {}
     ranking_servicos = {}
     
-    # Preparando Gráficos (Agrupamento por Dia)
     grafico_datas = []
     grafico_agenda = {}
     grafico_loja = {}
@@ -1247,7 +1289,6 @@ def relatorio_bi():
             
     top_servicos = sorted(ranking_servicos.items(), key=lambda x: x[1]['receita'], reverse=True)[:5]
 
-    # 2. MÉTRICAS DA LOJA
     vendas = ProductSale.query.filter(ProductSale.establishment_id == est.id).all()
     vendas_periodo = [v for v in vendas if start_date <= v.sale_date.date() <= end_date]
     fat_loja = sum(v.total_price for v in vendas_periodo)
@@ -1268,18 +1309,15 @@ def relatorio_bi():
     estoque = Product.query.filter_by(establishment_id=est.id).all()
     capital_parado = sum(p.price * p.stock_quantity for p in estoque)
 
-    # 3. ASSINATURAS (MRR)
     now = get_now_brazil()
     subs_ativos = ClientSubscription.query.filter_by(establishment_id=est.id, status='ativo').filter(ClientSubscription.expiry_date >= now).all()
     mrr = sum(s.plan.price for s in subs_ativos)
     total_assinantes = len(subs_ativos)
 
-    # 4. CONSOLIDAÇÃO GERAL
     fat_total = fat_agenda + fat_loja
     total_transacoes = qtd_concluidos + len(vendas_periodo)
     ticket_medio = (fat_total / total_transacoes) if total_transacoes > 0 else 0
 
-    # Compilando listas para o JS do Chart.js
     chart_data_agenda = [grafico_agenda[d] for d in grafico_datas]
     chart_data_loja = [grafico_loja[d] for d in grafico_datas]
 
@@ -1291,65 +1329,24 @@ def relatorio_bi():
                            chart_labels=grafico_datas, chart_data_agenda=chart_data_agenda, chart_data_loja=chart_data_loja,
                            concluidos=concluidos, vendas_periodo=vendas_periodo)
 
-# def checar_feriados_e_notificar():
-#     daqui_a_3_dias = get_now_brazil().date() + timedelta(days=3)
-#     estabelecimentos = Establishment.query.filter_by(is_active=True).all()
-    
-#     for est in estabelecimentos:
-#         if not est.contact_phone: 
-#             continue
-            
-#         uf = est.state if est.state else 'BR' # Se não tiver estado, usa o calendário Nacional
-        
-#         try:
-#             if uf == 'BR': feriados_locais = holidays.BR()
-#             else: feriados_locais = holidays.BR(state=uf)
-#         except:
-#             feriados_locais = holidays.BR() # Fallback de segurança
-        
-#         if daqui_a_3_dias in feriados_locais:
-#             nome_feriado = feriados_locais.get(daqui_a_3_dias)
-#             data_formatada = daqui_a_3_dias.strftime('%d/%m')
-            
-#             mensagem = (
-#                 f"🤖 *Assistente Agenda Fácil*\n\n"
-#                 f"Olá, {est.name}! Notei que dia *{data_formatada}* é feriado de *{nome_feriado}* na sua região ({uf}).\n\n"
-#                 f"A barbearia vai funcionar neste dia?\n\n"
-#                 f"Responda apenas com o número:\n"
-#                 f"*1* - Sim, vamos abrir normalmente.\n"
-#                 f"*2* - Não, pode bloquear a agenda."
-#             )
-            
-#             # TODO: Substitua pela chamada da sua API gratuita (Evolution, Baileys, etc)
-#             print(f"Disparo para {est.contact_phone}: Feriado detectado ({nome_feriado} - {uf})")
-
 @app.route('/api/whatsapp/webhook', methods=['POST'])
 def whatsapp_webhook():
-    """ 
-    Rota que recebe as mensagens que chegam no WhatsApp do sistema.
-    O formato do JSON depende da API que você usar (Evolution, Z-API, etc).
-    """
+
     try:
         dados = request.json
         
-        # Exemplo genérico de extração de dados (Adapte conforme a sua API)
-        # Vamos supor que a API envia o telefone e o texto da mensagem:
-        telefone_remetente = dados.get('phone') # Ex: 558799999999
+        telefone_remetente = dados.get('phone')
         mensagem_texto = str(dados.get('text', '')).strip()
         
         if telefone_remetente and mensagem_texto:
-            # Remove o código do país para buscar no banco
             telefone_limpo = telefone_remetente.replace('55', '', 1) 
             
-            # Acha de qual barbearia é este número
             est = Establishment.query.filter(Establishment.contact_phone.like(f"%{telefone_limpo}%")).first()
             
             if est:
-                # O Bot estava esperando uma resposta para o feriado (daqui a 3 dias)
                 daqui_a_3_dias = get_now_brazil().date() + timedelta(days=3)
                 
                 if mensagem_texto == '2':
-                    # Verifica se já não está bloqueado para não duplicar
                     ja_bloqueado = BlockedDay.query.filter_by(establishment_id=est.id, date=daqui_a_3_dias).first()
                     if not ja_bloqueado:
                         novo_bloqueio = BlockedDay(
@@ -1360,13 +1357,10 @@ def whatsapp_webhook():
                         db.session.add(novo_bloqueio)
                         db.session.commit()
                         
-                        # Bot responde confirmando o bloqueio
                         msg_confirma = "✅ Agenda bloqueada com sucesso! Seus clientes não poderão marcar horários neste feriado. Bom descanso!"
-                        # Aqui você colocaria o código requests.post(...) para enviar o msg_confirma
                         
                 elif mensagem_texto == '1':
                     msg_confirma = "✅ Entendido! A agenda continuará aberta e recebendo marcações neste dia. Bom trabalho!"
-                    # requests.post(...) enviando msg_confirma
 
         return jsonify({"status": "success"})
     except Exception as e:
@@ -1426,15 +1420,12 @@ def upgrade_plano():
     novo_plano = request.form.get('plano_destino')
     
     if novo_plano == 'gestao':
-        # Deixando as datas baterem perfeitamente
         hoje = get_now_brazil().date()
         fim_teste = est.trial_ends
         
-        # Se fim_teste for um datetime completo, pegamos apenas a data
         if hasattr(fim_teste, 'date'):
             fim_teste = fim_teste.date()
             
-        # Verifica se o teste gratuito ainda é válido
         if not est.is_active and fim_teste and hoje <= fim_teste:
             est.plan_type = 'gestao'
             db.session.commit()

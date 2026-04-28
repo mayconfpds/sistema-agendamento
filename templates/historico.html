@@ -2,9 +2,24 @@
 {% block title %}Histórico de Atendimentos{% endblock %}
 {% block content %}
 <div class="container py-4">
+    
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h2 class="h4 mb-0 fw-bold"><i class="bi bi-journal-text text-primary"></i> Histórico de Atendimentos</h2>
-        <a href="{{ url_for('admin_dashboard') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i> Voltar</a>
+        <div class="d-flex gap-2">
+            {% if establishment.plan_type == 'gestao' %}
+                <button class="btn btn-warning btn-sm fw-bold shadow-sm" onclick="abrirModalInativos()">
+                    <i class="bi bi-person-exclamation"></i> Recuperar Clientes
+                </button>
+            {% else %}
+                <form method="POST" action="{{ url_for('upgrade_plano') }}" class="m-0" onsubmit="return confirm('Ferramenta exclusiva. Deseja evoluir para o plano Gestão agora?');">
+                    <input type="hidden" name="plano_destino" value="gestao">
+                    <button type="submit" class="btn btn-secondary btn-sm fw-bold shadow-sm" title="Exclusivo Plano Gestão">
+                        <i class="bi bi-lock-fill text-warning"></i> Recuperar Clientes
+                    </button>
+                </form>
+            {% endif %}
+            <a href="{{ url_for('admin_dashboard') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i> Voltar</a>
+        </div>
     </div>
 
     <div class="card shadow-sm border-0 mb-4 bg-body-tertiary">
@@ -60,7 +75,7 @@
                     {% for a in appointments %}
                     <tr>
                         <td>
-                            <div class="fw-bold text-dark">{{ a.appointment_date.strftime('%d/%m/%Y') }}</div>
+                            <div class="fw-bold text-body-emphasis">{{ a.appointment_date.strftime('%d/%m/%Y') }}</div>
                             <div class="small text-muted">{{ a.appointment_time.strftime('%H:%M') }}</div>
                         </td>
                         <td>
@@ -106,4 +121,94 @@
         </div>
     </div>
 </div>
+
+<div class="modal fade" id="modalInativos" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content bg-body border-0 shadow-lg rounded-4">
+            <div class="modal-header border-bottom-0 pb-0">
+                <h5 class="modal-title fw-bold text-body-emphasis">
+                    <i class="bi bi-arrow-clockwise text-warning"></i> Clientes a Recuperar (+45 dias)
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <p class="text-body-secondary small mb-3">Estes clientes não agendam nenhum serviço há mais de 45 dias. Envie uma mensagem para trazê-los de volta!</p>
+                <div id="loadingInativos" class="text-center py-4 d-none">
+                    <div class="spinner-border text-warning" role="status"></div>
+                    <p class="mt-2 small fw-bold">Buscando clientes...</p>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0" id="tabelaInativos">
+                        <thead class="table-tertiary">
+                            <tr>
+                                <th>Cliente</th>
+                                <th>Última Visita</th>
+                                <th>Tempo Sumido</th>
+                                <th class="text-end">Ação</th>
+                            </tr>
+                        </thead>
+                        <tbody id="corpoTabelaInativos">
+                            </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    async function abrirModalInativos() {
+        const modal = new bootstrap.Modal(document.getElementById('modalInativos'));
+        const corpoTabela = document.getElementById('corpoTabelaInativos');
+        const loading = document.getElementById('loadingInativos');
+        const tabela = document.getElementById('tabelaInativos');
+        const nomeBarbearia = "{{ establishment.name|e }}";
+        
+        corpoTabela.innerHTML = '';
+        tabela.classList.add('d-none');
+        loading.classList.remove('d-none');
+        modal.show();
+
+        try {
+            const res = await fetch('/api/clientes_inativos');
+            const data = await res.json();
+            
+            loading.classList.add('d-none');
+            tabela.classList.remove('d-none');
+
+            if (data.success && data.clientes.length > 0) {
+                let html = '';
+                data.clientes.forEach(c => {
+                    // Mensagem persuasiva de recuperação
+                    const msg = `Olá ${c.nome}! Aqui é do(a) ${nomeBarbearia}. Notamos que faz um tempo que você não nos visita. Que tal dar um trato no visual? Temos horários livres essa semana! 💈`;
+                    const urlZap = `https://wa.me/55${c.telefone_limpo}?text=${encodeURIComponent(msg)}`;
+                    
+                    html += `
+                    <tr>
+                        <td>
+                            <div class="fw-bold text-body-emphasis">${c.nome}</div>
+                            <div class="small text-muted"><i class="bi bi-whatsapp"></i> ${c.telefone_exibicao}</div>
+                        </td>
+                        <td class="small fw-bold">${c.ultima_visita}</td>
+                        <td><span class="badge bg-danger-subtle text-danger border border-danger-subtle">${c.dias_ausente} dias</span></td>
+                        <td class="text-end">
+                            <a href="${urlZap}" target="_blank" class="btn btn-success btn-sm fw-bold shadow-sm">
+                                <i class="bi bi-whatsapp"></i> Chamar
+                            </a>
+                        </td>
+                    </tr>`;
+                });
+                corpoTabela.innerHTML = html;
+            } else if (data.success) {
+                corpoTabela.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-muted">Ótima notícia! Nenhum cliente sumido há mais de 45 dias.</td></tr>';
+            } else {
+                corpoTabela.innerHTML = `<tr><td colspan="4" class="text-center py-4 text-danger">${data.error}</td></tr>`;
+            }
+        } catch (e) {
+            loading.classList.add('d-none');
+            tabela.classList.remove('d-none');
+            corpoTabela.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-danger">Erro de conexão. Tente novamente.</td></tr>';
+        }
+    }
+</script>
 {% endblock %}

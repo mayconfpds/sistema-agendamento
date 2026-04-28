@@ -1,0 +1,27 @@
+version: '3.3'
+
+services:
+  evolution-api:
+    image: atendai/evolution-api:latest
+    container_name: evolution_api
+    restart: always
+    ports:
+      - "8080:8080"
+    environment:
+      # --- CONFIGURAÇÕES BÁSICAS ---
+      - SERVER_URL=http://localhost:8080
+      - CONFIG_SESSION_PHONE_CLIENT=AgendaFacil
+      
+      # --- SEGURANÇA (A sua senha da API) ---
+      - AUTH_TYPE=apikey
+      - AUTH_API_KEY=SenhaSuperSeguraAgendaFacil123
+      
+      # --- BANCO DE DADOS DA EVOLUTION ---
+      - DATABASE_PROVIDER=sqlite
+      
+      # --- CONFIGURAÇÕES DE QR CODE E CONEXÃO ---
+      - QRCODE_LIMIT=30
+      - QRCODE_COLOR=#198754
+    volumes:
+      - ./instances:/evolution/instances
+      - ./store:/evolution/store
