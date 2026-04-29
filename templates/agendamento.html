@@ -23,19 +23,29 @@
                                    data-dur="{{ main_service.duration }}" data-price="{{ main_service.price }}" 
                                    data-isclub="{{ 'true' if main_service.is_club_included else 'false' }}"
                                    checked onclick="return false;" style="pointer-events: none;">
-                            <label class="form-check-label fw-bold">{{ main_service.name }} <span class="text-success">- R$ {{ "%.2f"|format(main_service.price) }}</span></label>
-                        </div>
+                            <label class="form-check-label fw-bold">
+    				{{ main_service.name }} 
+    				{% if main_service.is_hidden %}
+        			    <span class="badge bg-dark text-warning ms-1 align-middle" style="font-size: 0.75rem;">
+            				<i class="bi bi-star-fill"></i> Oferta Exclusiva
+        			    </span>
+    				{% endif %}
+    				<span class="text-success ms-1">- R$ {{ "%.2f"|format(main_service.price) }}</span>
+			    </label>
+			    </div>
                         
                         {% if other_services %}
                         <hr class="text-body-secondary">
                         <p class="small fw-bold text-body-secondary mb-2">Deseja adicionar algo mais?</p>
                         {% for s in other_services %}
-                        <div class="form-check mb-2">
-                            <input class="form-check-input service-cb" type="checkbox" name="services" value="{{ s.id }}" id="s_{{ s.id }}" 
-                                   data-dur="{{ s.duration }}" data-price="{{ s.price }}"
-                                   data-isclub="{{ 'true' if s.is_club_included else 'false' }}">
-                            <label class="form-check-label" for="s_{{ s.id }}">{{ s.name }} <span class="text-success fw-bold">+ R$ {{ "%.2f"|format(s.price) }}</span></label>
-                        </div>
+                            {% if not s.is_hidden %}
+                            <div class="form-check mb-2">
+                                <input class="form-check-input service-cb" type="checkbox" name="services" value="{{ s.id }}" id="s_{{ s.id }}" 
+                                       data-dur="{{ s.duration }}" data-price="{{ s.price }}"
+                                       data-isclub="{{ 'true' if s.is_club_included else 'false' }}">
+                                <label class="form-check-label" for="s_{{ s.id }}">{{ s.name }} <span class="text-success fw-bold">+ R$ {{ "%.2f"|format(s.price) }}</span></label>
+                            </div>
+                            {% endif %}
                         {% endfor %}
                         {% endif %}
                         

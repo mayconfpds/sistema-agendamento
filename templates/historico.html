@@ -83,8 +83,20 @@
                             <div class="small text-muted"><i class="bi bi-whatsapp"></i> {{ a.client_phone }}</div>
                         </td>
                         <td>
-                            <div class="small fw-bold">{{ a.service_names }}</div>
-                            <div class="text-success fw-bold small">R$ {{ "%.2f"|format(a.total_price) }}</div>
+                            <div class="small fw-bold mb-1">{{ a.service_names }}</div>
+                            {% set valor_real = a.services | sum(attribute='price') %}
+                            <div class="text-success fw-bold small">
+                                {% if a.total_price < valor_real %}
+                                    <span class="text-muted text-decoration-line-through me-1" style="font-size: 0.8rem;">R$ {{ "%.2f"|format(valor_real) }}</span>
+                                    {% if a.total_price == 0 %}
+                                        <span class="badge bg-warning text-dark shadow-sm">Plano VIP</span>
+                                    {% else %}
+                                        R$ {{ "%.2f"|format(a.total_price) }}
+                                    {% endif %}
+                                {% else %}
+                                    R$ {{ "%.2f"|format(a.total_price) }}
+                                {% endif %}
+                            </div>
                         </td>
                         <td>
                             {% if establishment.plan_type == 'gestao' and a.professional %}

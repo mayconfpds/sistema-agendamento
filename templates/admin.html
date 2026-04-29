@@ -147,7 +147,19 @@
                                     {% for a in appointments %}<tr>
                                         <td><div class="fw-bold text-primary">{{ a.appointment_date.strftime('%d/%m') }}</div><div class="text-body-emphasis">{{ a.appointment_time.strftime('%H:%M') }}</div><div class="small text-muted">{{ a.total_duration }}min</div></td>
                                         <td><div class="fw-bold text-body-emphasis">{{ a.service_names }}</div>
-                                            <div class="text-success fw-bold small">{% if a.total_price == 0 %}<span class="badge bg-warning text-dark">Plano VIP</span>{% else %}R$ {{ "%.2f"|format(a.total_price) }}{% endif %}</div>
+                                            {% set valor_real = a.services | sum(attribute='price') %}
+                                            <div class="text-success fw-bold small mt-1">
+                                                {% if a.total_price < valor_real %}
+                                                    <span class="text-muted text-decoration-line-through me-1" style="font-size: 0.75rem;">R$ {{ "%.2f"|format(valor_real) }}</span>
+                                                    {% if a.total_price == 0 %}
+                                                        <span class="badge bg-warning text-dark shadow-sm">Plano VIP</span>
+                                                    {% else %}
+                                                        R$ {{ "%.2f"|format(a.total_price) }} <span class="badge bg-warning text-dark ms-1 shadow-sm">VIP</span>
+                                                    {% endif %}
+                                                {% else %}
+                                                    R$ {{ "%.2f"|format(a.total_price) }}
+                                                {% endif %}
+                                            </div>
                                             <div class="mt-1 text-body-emphasis">
                                                 {{ a.client_name }} 
                                                 {% if a.active_subscription %}
@@ -192,16 +204,37 @@
                         <div class="card-header bg-body py-3 border-bottom d-flex justify-content-between align-items-center"><h6 class="mb-0 fw-bold text-body-emphasis"><i class="bi bi-scissors text-primary"></i> Serviços Oferecidos</h6><button class="btn btn-sm btn-primary fw-bold px-3 shadow-sm" onclick="abrirModalServico()"><i class="bi bi-plus-lg"></i> Novo Serviço</button></div>
                         <div class="card-body" id="container-lista-servicos">
                             <ul class="list-group list-group-flush small" style="max-height: 400px; overflow-y: auto;">
-                                {% for s in services %}<li class="list-group-item bg-transparent d-flex justify-content-between align-items-center px-0 py-2 border-bottom" 
-                                    data-id="{{ s.id }}" data-nome="{{ s.name|e }}" data-preco="{{ s.price }}" data-duracao="{{ s.duration }}" 
-                                    data-categoria="{{ s.category_id }}" data-iscombo="{{ 'true' if s.is_combo else 'false' }}" 
-                                    data-precooriginal="{{ s.original_price or '' }}" data-isclub="{{ 'true' if s.is_club_included else 'false' }}">
-                                    <div><span class="badge bg-secondary mb-1" style="font-size: 0.65rem;">{{ s.category.name if s.category else 'Geral' }}</span>
-                                        {% if s.is_combo %}<span class="badge bg-warning text-dark mb-1 ms-1 shadow-sm" style="font-size: 0.65rem;"><i class="bi bi-stars"></i> Promoção</span>{% endif %}
-                                        {% if s.is_club_included %}<span class="badge bg-success-subtle text-success mb-1 ms-1" style="font-size: 0.65rem;"><i class="bi bi-star-fill"></i> Clube</span>{% endif %}
-                                        <br><strong class="text-body-emphasis">{{ s.name }}</strong> <span class="text-muted">({{ s.duration }}m)</span><br>{% if s.is_combo and s.original_price %}<span class="text-muted text-decoration-line-through small me-1">R$ {{ "%.2f"|format(s.original_price) }}</span>{% endif %}<span class="text-success fw-bold fs-6">R$ {{ "%.2f"|format(s.price) }}</span></div>
-                                    <div class="d-flex gap-2"><button class="btn btn-secondary btn-sm shadow-sm" onclick="editarServico(this)"><i class="bi bi-pencil-fill"></i></button><button class="btn btn-outline-danger btn-sm shadow-sm" onclick="excluirServico({{ s.id }}, this)"><i class="bi bi-trash-fill"></i></button></div>
-                                </li>{% else %}<li class="list-group-item bg-transparent px-0 text-muted text-center border-0 py-4">Nenhum serviço.</li>{% endfor %}
+                                {% for s in services %}
+				<li class="list-group-item bg-transparent d-flex justify-content-between align-items-center px-0 py-2 border-bottom" 
+    				    data-id="{{ s.id }}" data-nome="{{ s.name|e }}" data-preco="{{ s.price }}" 					    data-duracao="{{ s.duration }}" 
+    				    data-categoria="{{ s.category_id }}" data-iscombo="{{ 'true' if s.is_combo else 'false' }}" 
+    				    data-precooriginal="{{ s.original_price or '' }}" data-isclub="{{ 'true' if s.is_club_included else 'false' }}"
+    				    data-ishidden="{{ 'true' if s.is_hidden else 'false' }}">
+    
+    				    <div>
+        				<span class="badge bg-secondary mb-1" style="font-size: 0.65rem;">{{ s.category.name if s.category else 'Geral' }}</span>
+       				 	{% if s.is_combo %}<span class="badge bg-warning text-dark mb-1 ms-1 shadow-sm" style="font-size: 0.65rem;"><i class="bi bi-stars"></i> Promoção</span>{% endif %}
+        				{% if s.is_club_included %}<span class="badge bg-success-subtle text-success mb-1 ms-1" style="font-size: 0.65rem;"><i class="bi bi-star-fill"></i> Clube</span>{% endif %}
+        				{% if s.is_hidden %}<span class="badge bg-dark text-warning mb-1 ms-1 shadow-sm" style="font-size: 0.65rem;"><i class="bi bi-eye-slash"></i> Oculto</span>{% endif %}
+        				<br>
+        				<strong class="text-body-emphasis">{{ s.name }}</strong> <span class="text-muted">({{ s.duration }}m)</span><br>
+        				{% if s.is_combo and s.original_price %}<span class="text-muted text-decoration-line-through small me-1">R$ {{ "%.2f"|format(s.original_price) }}</span>{% endif %}
+        				<span class="text-success fw-bold fs-6">R$ {{ "%.2f"|format(s.price) }}</span>
+    				    </div>
+    
+    				    <div class="d-flex gap-2">
+        				{% if s.is_hidden %}
+        				<button type="button" class="btn btn-outline-primary btn-sm border shadow-sm" onclick="copiarLink('{{ request.host_url }}b/{{ current_user.establishment.url_prefix }}/agendar/{{ s.id }}', this)" title="Copiar Link Exclusivo">
+            				    <i class="bi bi-link-45deg"></i>
+       	 				</button>
+        				{% endif %}
+        				<button class="btn btn-secondary btn-sm shadow-sm" onclick="editarServico(this)"><i class="bi bi-pencil-fill"></i></button>
+        				<button class="btn btn-outline-danger btn-sm shadow-sm" onclick="excluirServico({{ s.id }}, this)"><i class="bi bi-trash-fill"></i></button>
+    				    </div>
+				</li>
+				{% else %}
+				<li class="list-group-item bg-transparent px-0 text-muted text-center border-0 py-4">Nenhum serviço.</li>
+				{% endfor %}
                             </ul>
                         </div>
                     </div>
@@ -321,7 +354,10 @@
                                                 <div class="fs-5 fw-bold text-body-emphasis">R$ {{ "%.2f"|format(p.price) }}<small class="text-muted">/mês</small></div>
                                                 <span class="badge bg-body-tertiary text-body-emphasis border mt-1">Limite: {{ p.services_limit if p.services_limit > 0 else 'Ilimitado' }}</span>
                                             </div>
-                                            <button class="btn btn-secondary btn-sm border" onclick="editarPlano({{ p.id }}, '{{ p.name|e }}', {{ p.price }}, {{ p.services_limit }}, '{{ p.description|e }}')"><i class="bi bi-pencil"></i></button>
+                                            <div class="d-flex gap-2">
+    <button class="btn btn-secondary btn-sm border shadow-sm" onclick="editarPlano({{ p.id }}, '{{ p.name|e }}', {{ p.price }}, {{ p.services_limit }}, '{{ p.description|e }}')"><i class="bi bi-pencil"></i></button>
+    <button class="btn btn-outline-danger btn-sm border shadow-sm" onclick="excluirPlano({{ p.id }})"><i class="bi bi-trash"></i></button>
+</div>
                                         </div>
                                     </div>
                                 </div>
@@ -374,6 +410,13 @@
             <div class="mb-3"><label class="form-label small fw-bold text-body-emphasis">Nome do Serviço</label><input type="text" id="servicoNome" name="name" class="form-control shadow-sm" required></div>
             <div class="row g-3 mb-2"><div class="col-6"><label class="form-label small fw-bold text-body-emphasis">Preço (R$)</label><input type="number" step="0.01" id="servicoPreco" name="price" class="form-control shadow-sm" required></div><div class="col-6"><label class="form-label small fw-bold text-body-emphasis">Duração (Min)</label><input type="number" id="servicoDuracao" name="duration" class="form-control shadow-sm" required></div></div>
             <div class="form-check form-switch fw-bold text-success mb-3"><input class="form-check-input" type="checkbox" id="servicoIsClub" name="is_club_included"><label class="form-check-label ms-1" for="servicoIsClub"><i class="bi bi-star-fill"></i> Incluso no Clube?</label></div>
+	    <div class="form-check form-switch mb-3">
+    		<input class="form-check-input" type="checkbox" id="servicoIsHidden" name="is_hidden" value="true">
+    		<label class="form-check-label fw-bold" for="servicoIsHidden">
+        	    <i class="bi bi-eye-slash-fill text-secondary"></i> Oculto (Link Exclusivo)
+    		</label>
+    		<div class="form-text small">Se marcado, o serviço desaparece da vitrine e só pode ser agendado por quem tiver o link direto.</div>
+	    </div>
             <div class="bg-body-tertiary p-3 rounded-3 border shadow-sm"><div class="form-check form-switch fw-bold text-primary mb-0"><input class="form-check-input" type="checkbox" id="servicoIsCombo" name="is_combo" onchange="document.getElementById('divOriginalPrice').classList.toggle('d-none', !this.checked)"><label class="form-check-label ms-1" for="servicoIsCombo"> É Promoção / Pacote?</label></div>
                 <div class="input-group input-group-sm mt-3 d-none" id="divOriginalPrice"><span class="input-group-text bg-body text-muted border-end-0">Preço Antigo: R$</span><input type="number" step="0.01" id="servicoOriginalPrice" name="original_price" class="form-control border-start-0"></div></div>
         </form></div>
@@ -540,6 +583,27 @@
         if(novoConteudo) { document.getElementById(containerId).innerHTML = novoConteudo.innerHTML; }
     }
 
+    // =========================================================================
+    // NOVO MOTOR INTELIGENTE: Atualiza qualquer select (Lista Suspensa) na hora
+    // =========================================================================
+    function atualizarSelects(selectName, acao, id, novoNome = null) {
+        document.querySelectorAll(`select[name="${selectName}"]`).forEach(select => {
+            if (acao === 'adicionar' && novoNome) {
+                if (!Array.from(select.options).some(opt => opt.value == id)) {
+                    select.add(new Option(novoNome, id));
+                }
+            } else if (acao === 'editar' && novoNome) {
+                Array.from(select.options).forEach(opt => {
+                    if (opt.value == id) opt.text = novoNome;
+                });
+            } else if (acao === 'excluir') {
+                Array.from(select.options).forEach(opt => {
+                    if (opt.value == id) opt.remove();
+                });
+            }
+        });
+    }
+
     async function submeterFormAJAX(event, formElement, containerId) {
         event.preventDefault(); 
         const btn = formElement.querySelector('button[type="submit"]') || formElement.querySelector('button');
@@ -551,20 +615,11 @@
                 if(formElement.tagName === 'FORM' && formElement.elements.length > 2 && !formElement.dataset.noReset) { formElement.reset(); }
                 await atualizarContainerSilenciosamente(containerId);
                 
-                // === ATUALIZAÇÃO INSTANTÂNEA DOS SELECTS ===
+                // Dispara o motor de adição instantânea
                 if (data.id && data.name) {
-                    if (formElement.action.includes('/admin/categoria/adicionar')) {
-                        document.querySelectorAll('select[name="category_id"]').forEach(select => select.add(new Option(data.name, data.id)));
-                    } 
-                    else if (formElement.action.includes('/admin/profissional/adicionar')) {
-                        document.querySelectorAll('select[name="professional_id"]').forEach(select => select.add(new Option(data.name, data.id)));
-                    }
-                    else if (formElement.action.includes('/admin/assinaturas/plano/adicionar')) {
-                        document.querySelectorAll('select[name="plan_id"]').forEach(select => select.add(new Option(data.name, data.id)));
-                    }
+                    if (formElement.action.includes('/categoria/adicionar')) atualizarSelects('category_id', 'adicionar', data.id, data.name);
+                    else if (formElement.action.includes('/profissional/adicionar')) atualizarSelects('professional_id', 'adicionar', data.id, data.name);
                 }
-                // ==========================================
-
             } else { alert(data.error || 'Erro.'); }
         } catch (e) { alert('Erro de conexão.'); } finally { if(document.body.contains(btn)) { btn.innerHTML = iconeOriginal; btn.disabled = false; } }
     }
@@ -572,30 +627,84 @@
     async function excluirItemAJAX(event, formElement, containerId, mensagemConfirmacao) {
         event.preventDefault(); if (mensagemConfirmacao && !confirm(mensagemConfirmacao)) return;
         const res = await fetch(formElement.action, { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' } });
-        if ((await res.json()).success) { await atualizarContainerSilenciosamente(containerId); }
+        const data = await res.json();
+        
+        if (data.success) { 
+            await atualizarContainerSilenciosamente(containerId); 
+            
+            // Dispara o motor de exclusão instantânea
+            const parts = formElement.action.split('/').filter(Boolean);
+            const id = parts[parts.length - 1]; // Pega o ID no final da URL
+            
+            if (formElement.action.includes('/categoria/excluir')) atualizarSelects('category_id', 'excluir', id);
+            else if (formElement.action.includes('/profissional/excluir')) atualizarSelects('professional_id', 'excluir', id);
+            
+        } else {
+            alert(data.error || 'Erro ao excluir o item.');
+        }
     }
 
     function abrirModalServico() {
-        document.getElementById('formServico').reset(); document.getElementById('servicoId').value = '';
-        document.getElementById('modalServicoTitle').innerText = 'Novo Serviço'; document.getElementById('divOriginalPrice').classList.add('d-none');
+        document.getElementById('formServico').reset(); 
+        document.getElementById('servicoId').value = '';
+        document.getElementById('modalServicoTitle').innerText = 'Novo Serviço'; 
+        document.getElementById('divOriginalPrice').classList.add('d-none');
+        document.getElementById('servicoIsHidden').checked = false; // NOVO: Limpa o oculto
         new bootstrap.Modal(document.getElementById('modalServico')).show();
     }
+
     function editarServico(btn) {
-        const li = btn.closest('li'); document.getElementById('servicoId').value = li.dataset.id; document.getElementById('servicoNome').value = li.dataset.nome;
-        document.getElementById('servicoPreco').value = li.dataset.preco; document.getElementById('servicoDuracao').value = li.dataset.duracao;
+        const li = btn.closest('li'); 
+        document.getElementById('servicoId').value = li.dataset.id; 
+        document.getElementById('servicoNome').value = li.dataset.nome;
+        document.getElementById('servicoPreco').value = li.dataset.preco; 
+        document.getElementById('servicoDuracao').value = li.dataset.duracao;
         document.getElementById('servicoCategoria').value = li.dataset.categoria;
         document.getElementById('servicoIsClub').checked = li.dataset.isclub === 'true';
-        const isCombo = li.dataset.iscombo === 'true'; document.getElementById('servicoIsCombo').checked = isCombo;
-        document.getElementById('divOriginalPrice').classList.toggle('d-none', !isCombo); document.getElementById('servicoOriginalPrice').value = li.dataset.precooriginal;
+        
+        // NOVO: Puxa o status oculto do banco
+        document.getElementById('servicoIsHidden').checked = li.dataset.ishidden === 'true'; 
+        
+        const isCombo = li.dataset.iscombo === 'true'; 
+        document.getElementById('servicoIsCombo').checked = isCombo;
+        document.getElementById('divOriginalPrice').classList.toggle('d-none', !isCombo); 
+        document.getElementById('servicoOriginalPrice').value = li.dataset.precooriginal;
+        
         new bootstrap.Modal(document.getElementById('modalServico')).show();
     }
+
     async function salvarServico() {
-        const id = document.getElementById('servicoId').value; const form = document.getElementById('formServico');
-        const formData = new FormData(form); formData.append('is_club_included', document.getElementById('servicoIsClub').checked);
+        const id = document.getElementById('servicoId').value; 
+        const form = document.getElementById('formServico');
+        const formData = new FormData(form); 
+        
+        formData.append('is_club_included', document.getElementById('servicoIsClub').checked);
+        formData.append('is_hidden', document.getElementById('servicoIsHidden').checked); // NOVO: Envia para o Python
+        
         const url = id ? `/admin/servico/editar/${id}` : '/admin/servico/adicionar';
         const res = await fetch(url, { method: 'POST', body: formData, headers: { 'X-Requested-With': 'XMLHttpRequest' } });
-        if ((await res.json()).success) { bootstrap.Modal.getInstance(document.getElementById('modalServico')).hide(); await atualizarContainerSilenciosamente('container-lista-servicos'); }
+        if ((await res.json()).success) { 
+            bootstrap.Modal.getInstance(document.getElementById('modalServico')).hide(); 
+            await atualizarContainerSilenciosamente('container-lista-servicos'); 
+        }
     }
+
+    // NOVA FUNÇÃO: Copiar link mágico para o WhatsApp
+    function copiarLink(url, btn) {
+        navigator.clipboard.writeText(url).then(() => {
+            const iconeOriginal = btn.innerHTML;
+            btn.innerHTML = '<i class="bi bi-check2"></i> Copiado!';
+            btn.classList.replace('btn-outline-primary', 'btn-success');
+            
+            setTimeout(() => {
+                btn.innerHTML = iconeOriginal;
+                btn.classList.replace('btn-success', 'btn-outline-primary');
+            }, 2500);
+        }).catch(err => {
+            alert("Erro ao copiar o link. Tente manualmente.");
+        });
+    }
+
     async function excluirServico(id, btn) {
         if (!confirm('Excluir?')) return;
         const res = await fetch(`/admin/servicos/excluir/${id}`, { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' } });
@@ -636,7 +745,12 @@
     async function salvarProfissional() {
         const id = document.getElementById('profId').value;
         const res = await fetch(`/admin/profissional/editar/${id}`, { method: 'POST', body: new FormData(document.getElementById('formProfissional')), headers: {'X-Requested-With': 'XMLHttpRequest'} });
-        if((await res.json()).success) { bootstrap.Modal.getInstance(document.getElementById('modalProfissional')).hide(); await atualizarContainerSilenciosamente('container-equipe'); }
+        const data = await res.json();
+        if(data.success) { 
+            bootstrap.Modal.getInstance(document.getElementById('modalProfissional')).hide(); 
+            await atualizarContainerSilenciosamente('container-equipe'); 
+            atualizarSelects('professional_id', 'editar', data.id, data.name); // Dispara motor
+        }
     }
 
     function abrirModalPlano() { document.getElementById('formPlano').reset(); new bootstrap.Modal(document.getElementById('modalPlano')).show(); }
@@ -645,14 +759,40 @@
         document.getElementById('editPlanPrice').value = price; document.getElementById('editPlanLimit').value = limit;
         document.getElementById('editPlanDesc').value = desc; new bootstrap.Modal(document.getElementById('modalEditarPlano')).show();
     }
+    
     async function salvarPlano() {
         const res = await fetch('/admin/assinaturas/plano/adicionar', { method: 'POST', body: new FormData(document.getElementById('formPlano')), headers: {'X-Requested-With': 'XMLHttpRequest'} });
-        if((await res.json()).success) { bootstrap.Modal.getInstance(document.getElementById('modalPlano')).hide(); await atualizarContainerSilenciosamente('container-lista-planos'); }
+        const data = await res.json();
+        if (data.success) { 
+            bootstrap.Modal.getInstance(document.getElementById('modalPlano')).hide(); 
+            await atualizarContainerSilenciosamente('container-lista-planos'); 
+            atualizarSelects('plan_id', 'adicionar', data.id, data.name); // Dispara motor
+        } else {
+            alert(data.error || 'Erro ao salvar plano.');
+        }
     }
+
     async function salvarEdicaoPlano() {
         const id = document.getElementById('editPlanID').value;
         const res = await fetch(`/admin/assinaturas/plano/editar/${id}`, { method: 'POST', body: new FormData(document.getElementById('formEditarPlano')), headers: {'X-Requested-With': 'XMLHttpRequest'} });
-        if((await res.json()).success) { bootstrap.Modal.getInstance(document.getElementById('modalEditarPlano')).hide(); await atualizarContainerSilenciosamente('container-lista-planos'); }
+        const data = await res.json();
+        if(data.success) { 
+            bootstrap.Modal.getInstance(document.getElementById('modalEditarPlano')).hide(); 
+            await atualizarContainerSilenciosamente('container-lista-planos'); 
+            atualizarSelects('plan_id', 'editar', data.id, data.name); // Dispara motor
+        }
+    }
+
+    async function excluirPlano(id) {
+        if(!confirm('Tem certeza que deseja excluir este plano?')) return;
+        const res = await fetch(`/admin/assinaturas/plano/excluir/${id}`, { method: 'POST', headers: {'X-Requested-With': 'XMLHttpRequest'} });
+        const data = await res.json();
+        if(data.success) { 
+            await atualizarContainerSilenciosamente('container-lista-planos'); 
+            atualizarSelects('plan_id', 'excluir', id); // Dispara motor
+        } else {
+            alert(data.error || 'Erro ao excluir o plano.');
+        }
     }
 
     function abrirModalAssinante() { document.getElementById('formAssinante').reset(); new bootstrap.Modal(document.getElementById('modalAssinante')).show(); }

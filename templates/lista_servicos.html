@@ -34,54 +34,66 @@
     <div class="tab-content">
         <div class="tab-pane fade show active" id="tab-servicos">
             <div class="accordion shadow-sm rounded-4 overflow-hidden border-0" id="accordionCategorias">
+                {% set primeira_categoria_aberta = namespace(aberta=false) %}
+                
                 {% for c in categories %}
-                    {% if c.services|length > 0 %}
+                    {% set contagem = namespace(visiveis=0) %}
+                    {% for s in c.services %}
+                        {% if not s.is_hidden %}
+                            {% set contagem.visiveis = contagem.visiveis + 1 %}
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if contagem.visiveis > 0 %}
                     <div class="accordion-item border-0 border-bottom">
                         <h2 class="accordion-header" id="heading-{{ c.id }}">
-                            <button class="accordion-button {% if not loop.first %}collapsed{% endif %} fw-bold fs-5 bg-body text-body-emphasis py-4" type="button" data-bs-toggle="collapse" data-bs-target="#cat-{{ c.id }}" aria-expanded="{% if loop.first %}true{% else %}false{% endif %}" aria-controls="cat-{{ c.id }}">
+                            <button class="accordion-button {% if primeira_categoria_aberta.aberta %}collapsed{% endif %} fw-bold fs-5 bg-body text-body-emphasis py-4" type="button" data-bs-toggle="collapse" data-bs-target="#cat-{{ c.id }}" aria-expanded="{% if not primeira_categoria_aberta.aberta %}true{% else %}false{% endif %}" aria-controls="cat-{{ c.id }}">
                                 <i class="bi bi-tag-fill text-primary me-3"></i> {{ c.name }} 
-                                <span class="badge bg-body-tertiary text-secondary border ms-3 rounded-pill" style="font-size: 0.85rem;">{{ c.services|length }}</span>
+                                <span class="badge bg-body-tertiary text-secondary border ms-3 rounded-pill" style="font-size: 0.85rem;">{{ contagem.visiveis }}</span>
                             </button>
                         </h2>
                         
-                        <div id="cat-{{ c.id }}" class="accordion-collapse collapse {% if loop.first %}show{% endif %}" aria-labelledby="heading-{{ c.id }}" data-bs-parent="#accordionCategorias">
+                        <div id="cat-{{ c.id }}" class="accordion-collapse collapse {% if not primeira_categoria_aberta.aberta %}show{% endif %}" aria-labelledby="heading-{{ c.id }}" data-bs-parent="#accordionCategorias">
                             <div class="accordion-body bg-body-tertiary p-3 p-md-4">
                                 <div class="d-flex flex-column gap-3">
                                     {% for s in c.services %}
-                                    <div class="card shadow-sm w-100 rounded-3 overflow-hidden {% if s.is_combo %}border-warning border-2{% else %}border-0{% endif %}">
-                                        <div class="card-body d-flex flex-column flex-md-row justify-content-between align-items-center gap-3 p-4">
-                                            <div class="text-center text-md-start">
-                                                <h5 class="fw-bold text-body-emphasis mb-1">
-                                                    {{ s.name }}
-                                                    {% if s.is_combo %}
-                                                        <span class="badge bg-warning text-body-emphasis ms-2 align-middle shadow-sm" style="font-size: 0.7rem;"><i class="bi bi-stars"></i> PROMO</span>
-                                                    {% endif %}
-                                                </h5>
-                                                <div class="text-body-secondary small"><i class="bi bi-clock"></i> {{ s.duration }} min</div>
+                                        {% if not s.is_hidden %}
+                                        <div class="card shadow-sm w-100 rounded-3 overflow-hidden {% if s.is_combo %}border-warning border-2{% else %}border-0{% endif %}">
+                                            <div class="card-body d-flex flex-column flex-md-row justify-content-between align-items-center gap-3 p-4">
+                                                <div class="text-center text-md-start">
+                                                    <h5 class="fw-bold text-body-emphasis mb-1">
+                                                        {{ s.name }}
+                                                        {% if s.is_combo %}
+                                                            <span class="badge bg-warning text-body-emphasis ms-2 align-middle shadow-sm" style="font-size: 0.7rem;"><i class="bi bi-stars"></i> PROMO</span>
+                                                        {% endif %}
+                                                    </h5>
+                                                    <div class="text-body-secondary small"><i class="bi bi-clock"></i> {{ s.duration }} min</div>
+                                                </div>
+                                                
+                                                <div class="d-flex align-items-center gap-4">
+                                                    <div class="text-end">
+                                                        {% if s.is_combo and s.original_price %}
+                                                            <div class="text-body-secondary text-decoration-line-through" style="font-size: 0.85rem; margin-bottom: -2px;">R$ {{ "%.2f"|format(s.original_price) }}</div>
+                                                        {% endif %}
+                                                        <span class="text-success fw-black fs-4 mb-0">R$ {{ "%.2f"|format(s.price) }}</span>
+                                                    </div>
+                                                    <a href="{{ url_for('schedule_service', url_prefix=establishment.url_prefix, service_id=s.id) }}" class="btn btn-primary fw-bold rounded-pill px-4 py-2">Agendar</a>
+                                                </div>
                                             </div>
                                             
-                                            <div class="d-flex align-items-center gap-4">
-                                                <div class="text-end">
-                                                    {% if s.is_combo and s.original_price %}
-                                                        <div class="text-body-secondary text-decoration-line-through" style="font-size: 0.85rem; margin-bottom: -2px;">R$ {{ "%.2f"|format(s.original_price) }}</div>
-                                                    {% endif %}
-                                                    <span class="text-success fw-black fs-4 mb-0">R$ {{ "%.2f"|format(s.price) }}</span>
-                                                </div>
-                                                <a href="{{ url_for('schedule_service', url_prefix=establishment.url_prefix, service_id=s.id) }}" class="btn btn-primary fw-bold rounded-pill px-4 py-2">Agendar</a>
+                                            {% if s.is_combo and s.original_price and s.original_price > s.price %}
+                                            <div class="card-footer bg-warning-subtle border-0 text-center py-2">
+                                                <small class="text-body-emphasis fw-bold"><i class="bi bi-piggy-bank-fill text-success"></i> Excelente escolha! Economize R$ {{ "%.2f"|format(s.original_price - s.price) }} neste pacote.</small>
                                             </div>
-                                        </div>
-                                        
-                                        {% if s.is_combo and s.original_price and s.original_price > s.price %}
-                                        <div class="card-footer bg-warning-subtle border-0 text-center py-2">
-                                            <small class="text-body-emphasis fw-bold"><i class="bi bi-piggy-bank-fill text-success"></i> Excelente escolha! Economize R$ {{ "%.2f"|format(s.original_price - s.price) }} neste pacote.</small>
+                                            {% endif %}
                                         </div>
                                         {% endif %}
-                                    </div>
                                     {% endfor %}
                                 </div>
                             </div>
                         </div>
                     </div>
+                    {% set primeira_categoria_aberta.aberta = true %}
                     {% endif %}
                 {% endfor %}
             </div>
@@ -92,7 +104,6 @@
                 {% for p in establishment.products %}
                 <div class="col-md-6 col-lg-4">
                     <div class="card h-100 border-0 shadow-sm rounded-4 overflow-hidden position-relative {% if p.stock_quantity <= 0 %}opacity-75 bg-body-tertiary{% endif %}">
-                        
                         {% if p.stock_quantity <= 0 %}
                             <div class="position-absolute top-50 start-50 translate-middle badge bg-dark fs-5 shadow" style="z-index: 10;">ESGOTADO</div>
                         {% endif %}
@@ -121,9 +132,12 @@
                     </div>
                 </div>
                 {% else %}
-                <div class="text-center text-body-secondary py-5 w-100">
-                    <i class="bi bi-shop text-light d-block mb-3" style="font-size: 5rem !important;"></i>
-                    <p class="fs-5">A nossa loja virtual ainda não possui produtos.</p>
+                <div class="col-12 text-center text-body-secondary py-5">
+                    <div class="bg-body-tertiary rounded-circle d-inline-flex align-items-center justify-content-center mb-3 shadow-sm border" style="width: 110px; height: 110px;">
+                        <i class="bi bi-shop text-body-secondary" style="font-size: 3rem;"></i>
+                    </div>
+                    <h4 class="fw-bold text-body-emphasis">A loja está vazia</h4>
+                    <p class="fs-6">A nossa loja virtual ainda não possui produtos cadastrados no momento.</p>
                 </div>
                 {% endfor %}
             </div>
@@ -135,7 +149,6 @@
                 <h2 class="h3 font-bold text-body-emphasis mb-2">Assine e Economize</h2>
                 <p class="text-body-secondary">Garanta o seu visual sempre em dia pagando um valor fixo mensal.</p>
             </div>
-            
             <div class="row g-4 justify-content-center">
                 {% for p in establishment.subscription_plans %}
                 <div class="col-md-6 col-lg-5">
@@ -163,15 +176,17 @@
                     </div>
                 </div>
                 {% else %}
-                <div class="text-center text-body-secondary py-5 w-100">
-                    <i class="bi bi-award text-light d-block mb-3" style="font-size: 5rem !important;"></i>
-                    <p class="fs-5">O clube de assinaturas estará disponível em breve.</p>
+                <div class="col-12 text-center text-body-secondary py-5">
+                    <div class="bg-body-tertiary rounded-circle d-inline-flex align-items-center justify-content-center mb-3 shadow-sm border" style="width: 110px; height: 110px;">
+                        <i class="bi bi-award text-body-secondary" style="font-size: 3rem;"></i>
+                    </div>
+                    <h4 class="fw-bold text-body-emphasis">Em Breve</h4>
+                    <p class="fs-6">O nosso clube de assinaturas estará disponível em breve. Fique atento!</p>
                 </div>
                 {% endfor %}
             </div>
         </div>
         {% endif %}
-
     </div>
 </div>
 

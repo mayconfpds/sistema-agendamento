@@ -225,6 +225,7 @@ class Service(db.Model):
     is_combo = db.Column(db.Boolean, default=False)
     original_price = db.Column(db.Float, nullable=True)
     is_club_included = db.Column(db.Boolean, default=False)
+    is_hidden = db.Column(db.Boolean, default=False)
 
 class Client(db.Model):
     __tablename__ = 'clients'
@@ -470,7 +471,7 @@ def register_business():
 def establishment_services(url_prefix):
     est = Establishment.query.filter_by(url_prefix=url_prefix).first_or_404()
     if not est.has_access: return render_template('error_inactive.html', message="O período de teste ou assinatura deste estabelecimento expirou."), 403
-    services = Service.query.filter_by(establishment_id=est.id).order_by(Service.name).all()
+    services = Service.query.filter_by(establishment_id=est.id, is_hidden=False).all()
     categories = Category.query.filter_by(establishment_id=est.id).all()
     return render_template('lista_servicos.html', services=services, categories=categories, establishment=est)
 
@@ -479,7 +480,11 @@ def schedule_service(url_prefix, service_id):
     est = Establishment.query.filter_by(url_prefix=url_prefix).first_or_404()
     if not est.has_access: return "Inativo", 403
     main_service = Service.query.get_or_404(service_id)
-    other_services = Service.query.filter(Service.establishment_id == est.id, Service.id != service_id).order_by(Service.name).all()
+    other_services = Service.query.filter(
+        Service.establishment_id == est.id, 
+        Service.id != service_id, 
+        Service.is_hidden == False
+    ).all()
     professionals = Professional.query.filter_by(establishment_id=est.id).all() if est.plan_type == 'gestao' else []
     return render_template('agendamento.html', main_service=main_service, other_services=other_services, establishment=est, professionals=professionals)
 
@@ -714,6 +719,7 @@ def add_subscription_plan():
         
         plan = SubscriptionPlan(name=name, price=price, services_limit=limit, description=desc, establishment_id=current_user.establishment_id)
         db.session.add(plan); db.session.commit()
+        
         return jsonify({'success': True, 'id': plan.id, 'name': plan.name})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
@@ -730,7 +736,23 @@ def edit_subscription_plan(id):
     plan.description = request.form.get('description', plan.description)
     
     db.session.commit()
-    return jsonify({'success': True})
+
+    return jsonify({'success': True, 'id': plan.id, 'name': plan.name})
+
+@app.route('/admin/assinaturas/plano/excluir/<int:id>', methods=['POST'])
+@login_required
+def delete_subscription_plan(id):
+    plan = SubscriptionPlan.query.get_or_404(id)
+    if plan.establishment_id != current_user.establishment_id:
+        return jsonify({'success': False, 'error': 'Acesso negado.'}), 403
+    
+    try:
+        db.session.delete(plan)
+        db.session.commit()
+        return jsonify({'success': True})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': 'Não é possível excluir um plano que já possui clientes assinantes vinculados a ele.'})
 
 @app.route('/admin/assinaturas/cliente/adicionar', methods=['POST'])
 @login_required
@@ -956,9 +978,10 @@ def add_service():
     duration = request.form.get('duration')
     category_id = request.form.get('category_id')
     is_combo = str(request.form.get('is_combo')).lower() in ['true', 'on', '1']
+    is_hidden = request.form.get('is_hidden') == 'true'
     original_price = request.form.get('original_price')
     if name and price_val and duration and category_id:
-        s = Service(name=name, price=float(str(price_val).replace(',', '.')), duration=int(duration), category_id=category_id, establishment_id=current_user.establishment_id)
+        s = Service(name=name, price=float(str(price_val).replace(',', '.')), duration=int(duration), category_id=category_id, is_hidden=is_hidden, establishment_id=current_user.establishment_id)
         s.is_combo = is_combo
         s.is_club_included = str(request.form.get('is_club_included')).lower() in ['true', 'on', '1']
         if is_combo and original_price and str(original_price).strip() != '': s.original_price = float(str(original_price).replace(',', '.'))
@@ -979,6 +1002,7 @@ def edit_service(id):
     category_id = request.form.get('category_id')
     if category_id: s.category_id = int(category_id)
     s.is_combo = str(request.form.get('is_combo')).lower() in ['true', 'on', '1']
+    s.is_hidden = request.form.get('is_hidden') == 'true'
     s.is_club_included = str(request.form.get('is_club_included')).lower() in ['true', 'on', '1']
     original_price = request.form.get('original_price')
     if s.is_combo and original_price and str(original_price).strip() != '': s.original_price = float(str(original_price).replace(',', '.'))
@@ -1011,11 +1035,13 @@ def complete_appointment(id):
     if a.establishment_id != current_user.establishment_id: return jsonify({'success': False, 'error': 'Erro de acesso'}), 403
     est = a.establishment
     if est.plan_type == 'gestao':
-        prof_id = request.form.get('professional_id')
-        if prof_id: a.professional_id = int(prof_id)
-        if a.professional_id:
-            prof = Professional.query.get(a.professional_id)
-            if prof: a.commission_value = a.total_price * (prof.commission_rate / 100.0)
+            prof_id = request.form.get('professional_id')
+            if prof_id: a.professional_id = int(prof_id)
+            if a.professional_id:
+                prof = Professional.query.get(a.professional_id)
+                if prof: 
+                    valor_real_servicos = sum(s.price for s in a.services)
+                    a.commission_value = valor_real_servicos * (prof.commission_rate / 100.0)
     a.status = 'concluido'
     msg_fidelidade = ""
     if est.loyalty_points_goal and est.loyalty_points_goal > 0:
@@ -1125,7 +1151,9 @@ def edit_professional(id):
     commission = request.form.get('commission_rate')
     if commission: p.commission_rate = float(str(commission).replace(',', '.'))
     db.session.commit()
-    if request.headers.get('X-Requested-With') == 'XMLHttpRequest': return jsonify({'success': True})
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest': 
+
+        return jsonify({'success': True, 'id': p.id, 'name': p.name})
     return redirect(url_for('admin_dashboard'))
 
 @app.route('/admin/profissional/excluir/<int:id>', methods=['POST'])
@@ -1260,6 +1288,7 @@ def relatorio_bi():
     qtd_avaliacoes = len(avaliacoes)
 
     comissoes = {}
+    desempenho_profissionais = {} # NOVO: Dados detalhados da equipe
     ranking_servicos = {}
     
     grafico_datas = []
@@ -1275,19 +1304,41 @@ def relatorio_bi():
         grafico_loja[d_str] = 0.0
 
     for a in concluidos:
-        if a.professional and a.commission_value:
-            comissoes[a.professional.name] = comissoes.get(a.professional.name, 0) + a.commission_value
+        # NOVO: Agrupamento de Desempenho e Comissões da Equipe
+        if a.professional:
+            prof_name = a.professional.name
+            if prof_name not in desempenho_profissionais:
+                desempenho_profissionais[prof_name] = {'faturamento': 0.0, 'atendimentos': 0, 'comissao': 0.0, 'soma_notas': 0, 'qtd_notas': 0}
+            
+            desempenho_profissionais[prof_name]['faturamento'] += a.total_price
+            desempenho_profissionais[prof_name]['atendimentos'] += 1
+            
+            if a.commission_value:
+                comissoes[prof_name] = comissoes.get(prof_name, 0) + a.commission_value
+                desempenho_profissionais[prof_name]['comissao'] += a.commission_value
+                
+            if a.rating:
+                desempenho_profissionais[prof_name]['soma_notas'] += a.rating
+                desempenho_profissionais[prof_name]['qtd_notas'] += 1
+
+        # Ranking de Serviços
         for s in a.services:
             if s.name not in ranking_servicos: ranking_servicos[s.name] = {'qtd': 0, 'receita': 0}
             ranking_servicos[s.name]['qtd'] += 1
             ranking_servicos[s.name]['receita'] += s.price
         
+        # Gráfico Agenda
         d_str = a.appointment_date.strftime('%d/%m')
         if d_str in grafico_agenda:
             grafico_agenda[d_str] += a.total_price
             
+    # Finaliza os cálculos de notas por profissional
+    for prof_name, dados in desempenho_profissionais.items():
+        dados['nota_media'] = (dados['soma_notas'] / dados['qtd_notas']) if dados['qtd_notas'] > 0 else 0
+            
     top_servicos = sorted(ranking_servicos.items(), key=lambda x: x[1]['receita'], reverse=True)[:5]
 
+    # --- CÁLCULOS DA LOJA ---
     vendas = ProductSale.query.filter(ProductSale.establishment_id == est.id).all()
     vendas_periodo = [v for v in vendas if start_date <= v.sale_date.date() <= end_date]
     fat_loja = sum(v.total_price for v in vendas_periodo)
@@ -1308,11 +1359,43 @@ def relatorio_bi():
     estoque = Product.query.filter_by(establishment_id=est.id).all()
     capital_parado = sum(p.price * p.stock_quantity for p in estoque)
 
+    # --- ASSINATURAS E INDICADORES DE FIDELIZAÇÃO (NOVO) ---
     now = get_now_brazil()
     subs_ativos = ClientSubscription.query.filter_by(establishment_id=est.id, status='ativo').filter(ClientSubscription.expiry_date >= now).all()
     mrr = sum(s.plan.price for s in subs_ativos)
     total_assinantes = len(subs_ativos)
 
+    telefones_periodo = set(a.client_phone for a in concluidos)
+    total_clientes_unicos_periodo = len(telefones_periodo)
+    clientes_recorrentes = 0
+    clientes_novos = 0
+    soma_dias_retorno = 0
+    qtd_retornos = 0
+
+    # Total histórico de clientes para taxa de adesão VIP
+    total_clientes_base = db.session.query(Appointment.client_phone).filter_by(establishment_id=est.id).filter(Appointment.status.in_(['concluido', 'arquivado'])).distinct().count()
+    taxa_adesao_vip = (total_assinantes / total_clientes_base * 100) if total_clientes_base > 0 else 0
+
+    for telefone in telefones_periodo:
+        historico_cliente = Appointment.query.filter_by(establishment_id=est.id, client_phone=telefone).filter(Appointment.status.in_(['concluido', 'arquivado'])).order_by(Appointment.appointment_date.asc()).all()
+        
+        if historico_cliente:
+            primeira_visita = historico_cliente[0].appointment_date
+            if start_date <= primeira_visita <= end_date:
+                clientes_novos += 1
+            else:
+                clientes_recorrentes += 1
+
+            for i in range(1, len(historico_cliente)):
+                delta_dias = (historico_cliente[i].appointment_date - historico_cliente[i-1].appointment_date).days
+                if delta_dias > 0:
+                    soma_dias_retorno += delta_dias
+                    qtd_retornos += 1
+
+    taxa_retencao = (clientes_recorrentes / total_clientes_unicos_periodo * 100) if total_clientes_unicos_periodo > 0 else 0
+    frequencia_media = (soma_dias_retorno / qtd_retornos) if qtd_retornos > 0 else 0
+    
+    # --- TOTAIS GERAIS ---
     fat_total = fat_agenda + fat_loja
     total_transacoes = qtd_concluidos + len(vendas_periodo)
     ticket_medio = (fat_total / total_transacoes) if total_transacoes > 0 else 0
@@ -1326,7 +1409,10 @@ def relatorio_bi():
                            top_servicos=top_servicos, top_produtos=top_produtos, comissoes=comissoes, capital_parado=capital_parado,
                            ticket_medio=ticket_medio, media_avaliacoes=media_avaliacoes, qtd_avaliacoes=qtd_avaliacoes,
                            chart_labels=grafico_datas, chart_data_agenda=chart_data_agenda, chart_data_loja=chart_data_loja,
-                           concluidos=concluidos, vendas_periodo=vendas_periodo)
+                           concluidos=concluidos, vendas_periodo=vendas_periodo,
+                           desempenho_profissionais=desempenho_profissionais, taxa_retencao=taxa_retencao,
+                           frequencia_media=frequencia_media, taxa_adesao_vip=taxa_adesao_vip, 
+                           clientes_novos=clientes_novos, clientes_recorrentes=clientes_recorrentes)
 
 @app.route('/api/whatsapp/webhook', methods=['POST'])
 def whatsapp_webhook():
