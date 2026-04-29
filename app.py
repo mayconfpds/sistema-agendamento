@@ -22,6 +22,7 @@ from flask_migrate import upgrade
 import stripe
 import uuid
 from sqlalchemy import func
+from sqlalchemy import text
 
 socket.setdefaulttimeout(15)
 
@@ -1529,11 +1530,14 @@ def upgrade_plano():
 
 with app.app_context():
     db.create_all()
+    
     try:
-        upgrade()
-        print("Estrutura do banco de dados atualizada com sucesso no Render!")
+        db.session.execute(text("ALTER TABLE services ADD COLUMN is_hidden BOOLEAN DEFAULT FALSE;"))
+        db.session.commit()
+        print("Sucesso: Coluna is_hidden adicionada na marra no PostgreSQL!")
     except Exception as e:
-        print(f"Aviso sobre atualização de banco: {e}")
+        db.session.rollback() 
+        print(f"Aviso (a coluna já deve existir): {e}")
 
 if __name__ == '__main__':
     app.run(debug=True)
