@@ -18,6 +18,7 @@ from werkzeug.utils import secure_filename
 from datetime import datetime, time, timedelta
 from sqlalchemy import inspect
 from flask_migrate import Migrate
+from flask_migrate import upgrade
 import stripe
 import uuid
 from sqlalchemy import func
@@ -1525,6 +1526,14 @@ def upgrade_plano():
             
     flash('Plano inválido.', 'danger')
     return redirect(url_for('planos'))
+
+with app.app_context():
+    db.create_all()
+    try:
+        upgrade()
+        print("Estrutura do banco de dados atualizada com sucesso no Render!")
+    except Exception as e:
+        print(f"Aviso sobre atualização de banco: {e}")
 
 if __name__ == '__main__':
     app.run(debug=True)
