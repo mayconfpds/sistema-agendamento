@@ -376,26 +376,47 @@
                             <button class="btn btn-success btn-sm fw-bold shadow-sm" onclick="abrirModalAssinante()"><i class="bi bi-person-plus-fill"></i> Registrar</button>
                         </div>
                         <div class="card-body p-0" id="container-lista-assinantes">
-                            <table class="table table-hover mb-0 align-middle"><thead class="table-tertiary text-body-emphasis"><tr><th>Data</th><th>Cliente / Plano</th><th>Status</th><th>Ações</th></tr></thead>
-                                <tbody>
-                                    {% for s in establishment.subscriptions|sort(attribute='id', reverse=True) %}
-                                    <tr>
-                                        <td class="small text-muted">{{ s.created_at.strftime('%d/%m/%Y') }}</td>
-                                        <td>
-                                            <div class="fw-bold text-body-emphasis">{{ s.client_name }}</div>
-                                            <div class="small"><span class="badge bg-primary-subtle text-primary border border-primary-subtle">{{ s.plan.name }}</span></div>
-                                        </td>
-                                        <td>{% if s.status == 'ativo' %}<span class="badge bg-success">Ativo</span>{% else %}<span class="badge bg-danger">Cancelado</span>{% endif %}</td>
-                                        <td><div class="d-flex gap-1">
-                                            <button class="btn btn-secondary btn-sm border" onclick="editarAssinante({{ s.id }}, '{{ s.client_name|e }}', '{{ s.client_phone }}', {{ s.plan_id }}, '{{ s.expiry_date.strftime('%Y-%m-%d') }}', '{{ s.status }}')"><i class="bi bi-pencil"></i></button>
-                                            <button class="btn btn-outline-danger btn-sm border" onclick="excluirAssinante({{ s.id }})"><i class="bi bi-trash"></i></button>
-                                        </div></td>
-                                    </tr>
-                                    {% else %}<tr><td colspan="4" class="text-center py-5 text-muted">Nenhum assinante registrado no histórico.</td></tr>{% endfor %}
-                                </tbody>
-                            </table>
+			
+			    <div class="p-3 bg-body-tertiary border-bottom">
+        			<div class="input-group input-group-sm" style="max-width: 300px;">
+            			    <span class="input-group-text bg-transparent border-end-0 border-secondary-subtle"><i class="bi bi-search text-muted"></i></span>
+            			    <input type="text" id="buscaAssinante" class="form-control border-start-0 border-secondary-subtle" placeholder="Buscar por nome ou plano..." onkeyup="filtrarAssinantes()">
+        			</div>
+    			    </div>
+
+                            <div class="table-responsive">
+                                <table class="table table-hover mb-0 align-middle" style="min-width: 600px;">
+                                    <thead class="table-tertiary text-body-emphasis">
+                                        <tr>
+                                            <th>Data</th>
+                                            <th>Cliente / Plano</th>
+                                            <th>Status</th>
+                                            <th>Ações</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for s in establishment.subscriptions|sort(attribute='id', reverse=True) %}
+                                        <tr>
+                                            <td class="small text-muted">{{ s.created_at.strftime('%d/%m/%Y') }}</td>
+                                            <td>
+                                                <div class="fw-bold text-body-emphasis">{{ s.client_name }}</div>
+                                                <div class="small"><span class="badge bg-primary-subtle text-primary border border-primary-subtle">{{ s.plan.name }}</span></div>
+                                            </td>
+                                            <td>{% if s.status == 'ativo' %}<span class="badge bg-success">Ativo</span>{% else %}<span class="badge bg-danger">Cancelado</span>{% endif %}</td>
+                                            <td>
+                                                <div class="d-flex gap-1">
+                                                    <button class="btn btn-secondary btn-sm border" onclick="editarAssinante({{ s.id }}, '{{ s.client_name|e }}', '{{ s.client_phone }}', {{ s.plan_id }}, '{{ s.expiry_date.strftime('%Y-%m-%d') }}', '{{ s.status }}')"><i class="bi bi-pencil"></i></button>
+                                                    <button class="btn btn-outline-danger btn-sm border" onclick="excluirAssinante({{ s.id }})"><i class="bi bi-trash"></i></button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        {% else %}
+                                        <tr><td colspan="4" class="text-center py-5 text-muted">Nenhum assinante registrado no histórico.</td></tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
-                    </div>
                 </div>
             </div>
         </div>
@@ -815,6 +836,19 @@
         if(!confirm('Excluir assinante permanentemente?')) return;
         const res = await fetch(`/admin/assinaturas/cliente/excluir/${id}`, { method: 'POST', headers: {'X-Requested-With': 'XMLHttpRequest'} });
         if((await res.json()).success) await atualizarContainerSilenciosamente('container-lista-assinantes');
+    }
+    // Filtro para o Histórico de Assinantes
+    function filtrarAssinantes() {
+        let input = document.getElementById('buscaAssinante').value.toLowerCase();
+        let linhas = document.querySelectorAll('#tabelaAssinantes tbody tr');
+    
+        linhas.forEach(linha => {
+            // Ignora a linha de "Nenhum assinante registrado" caso ela exista
+            if (linha.querySelector('td') && linha.querySelector('td').colSpan == 4) return;
+        
+            let texto = linha.innerText.toLowerCase();
+            linha.style.display = texto.includes(input) ? '' : 'none';
+        });
     }
 </script>
 {% endblock %}

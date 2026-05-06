@@ -24,6 +24,26 @@ import uuid
 from sqlalchemy import func
 from sqlalchemy import text
 
+def enviar_notificacao_telegram(nome_estabelecimento, telefone_responsavel):
+    # Substitua pelas suas chaves geradas no Telegram
+    TOKEN = "8690359557:AAG5ZgOS1ay4oXDwvuh98mb-6IA7brehpI0"
+    CHAT_ID = "5445877792"
+    
+    mensagem = (
+        f"🚀 *NOVA ASSINATURA - TESTE GRÁTIS!*\n\n"
+        f"💈 *Estabelecimento:* {nome_estabelecimento}\n"
+        f"📱 *Contato:* {telefone_responsavel}\n\n"
+        f"A base de clientes está a crescer! 💰"
+    )
+    
+    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+    
+    try:
+        # Envia a requisição silenciosamente para não atrasar o ecrã de registo do cliente
+        requests.post(url, data={'chat_id': CHAT_ID, 'text': mensagem, 'parse_mode': 'Markdown'}, timeout=3)
+    except Exception as e:
+        print(f"Erro ao enviar notificação para o Telegram: {e}")
+
 socket.setdefaulttimeout(15)
 
 app = Flask(__name__)
@@ -455,12 +475,16 @@ def register_business():
         username = request.form.get('username')
         is_master = (username == 'admin_demo') 
         plan_chosen = request.form.get('plan_type') or request.args.get('plan') or 'solo'
+        
         est = Establishment(
             name=request.form.get('business_name'), url_prefix=request.form.get('url_prefix').lower().strip(), 
             contact_phone=request.form.get('contact_phone'), contact_email=request.form.get('contact_email'), 
             is_active=is_master, capacity=1, plan_type=plan_chosen, trial_ends=get_now_brazil() + timedelta(days=7)
         )
         db.session.add(est); db.session.commit()
+        
+        enviar_notificacao_telegram(est.name, est.contact_phone)
+        
         for i in range(7): db.session.add(DaySchedule(establishment_id=est.id, day_index=i, is_active=(i < 5), work_start=time(9,0), work_end=time(18,0)))
         adm = Admin(username=username, establishment_id=est.id)
         adm.set_password(request.form.get('password'))
@@ -1540,4 +1564,4 @@ with app.app_context():
         print(f"Aviso (a coluna já deve existir): {e}")
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True) 
