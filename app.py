@@ -25,23 +25,23 @@ from sqlalchemy import func
 from sqlalchemy import text
 
 def enviar_notificacao_telegram(nome_estabelecimento, telefone_responsavel):
-    # ATENÇÃO: Confirme se colou os seus códigos reais aqui em baixo
     TOKEN = "8690359557:AAG5ZgOS1ay4oXDwvuh98mb-6IA7brehpI0"
     CHAT_ID = "5445877792"
     
+    # Substituímos os asteriscos por tags <b> (bold) do HTML
     mensagem = (
-        f"🚀 *NOVA ASSINATURA - TESTE GRÁTIS!*\n\n"
-        f"💈 *Estabelecimento:* {nome_estabelecimento}\n"
-        f"📱 *Contato:* {telefone_responsavel}\n\n"
+        f"🚀 <b>NOVA ASSINATURA - TESTE GRÁTIS!</b>\n\n"
+        f"💈 <b>Estabelecimento:</b> {nome_estabelecimento}\n"
+        f"📱 <b>Contato:</b> {telefone_responsavel}\n\n"
         f"A base de clientes está a crescer! 💰"
     )
     
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
     
     try:
-        resposta = requests.post(url, data={'chat_id': CHAT_ID, 'text': mensagem, 'parse_mode': 'Markdown'}, timeout=5)
+        # Trocamos o parse_mode para 'HTML'
+        resposta = requests.post(url, data={'chat_id': CHAT_ID, 'text': mensagem, 'parse_mode': 'HTML'}, timeout=5)
         
-        # Se o Telegram recusar a mensagem, ele vai explicar o porquê aqui:
         if resposta.status_code != 200:
             print(f"ERRO DO TELEGRAM: {resposta.status_code} - {resposta.text}")
         else:
