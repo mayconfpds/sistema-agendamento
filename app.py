@@ -25,7 +25,7 @@ from sqlalchemy import func
 from sqlalchemy import text
 
 def enviar_notificacao_telegram(nome_estabelecimento, telefone_responsavel):
-    # Substitua pelas suas chaves geradas no Telegram
+    # ATENÇÃO: Confirme se colou os seus códigos reais aqui em baixo
     TOKEN = "8690359557:AAG5ZgOS1ay4oXDwvuh98mb-6IA7brehpI0"
     CHAT_ID = "5445877792"
     
@@ -39,10 +39,16 @@ def enviar_notificacao_telegram(nome_estabelecimento, telefone_responsavel):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
     
     try:
-        # Envia a requisição silenciosamente para não atrasar o ecrã de registo do cliente
-        requests.post(url, data={'chat_id': CHAT_ID, 'text': mensagem, 'parse_mode': 'Markdown'}, timeout=3)
+        resposta = requests.post(url, data={'chat_id': CHAT_ID, 'text': mensagem, 'parse_mode': 'Markdown'}, timeout=5)
+        
+        # Se o Telegram recusar a mensagem, ele vai explicar o porquê aqui:
+        if resposta.status_code != 200:
+            print(f"ERRO DO TELEGRAM: {resposta.status_code} - {resposta.text}")
+        else:
+            print("Sucesso: Notificação do Telegram enviada!")
+            
     except Exception as e:
-        print(f"Erro ao enviar notificação para o Telegram: {e}")
+        print(f"ERRO DE CONEXÃO (Python): {e}")
 
 socket.setdefaulttimeout(15)
 
