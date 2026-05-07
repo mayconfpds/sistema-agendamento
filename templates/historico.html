@@ -22,6 +22,13 @@
         </div>
     </div>
 
+    <div class="p-3 bg-body-tertiary border-bottom rounded-top">
+        <div class="input-group input-group-sm" style="max-width: 300px;">
+            <span class="input-group-text bg-transparent border-end-0 border-secondary-subtle"><i class="bi bi-search text-muted"></i></span>
+            <input type="text" id="buscaHistorico" class="form-control border-start-0 border-secondary-subtle" placeholder="Buscar por nome do cliente..." onkeyup="filtrarHistorico()">
+        </div>
+    </div>
+
     <div class="card shadow-sm border-0 mb-4 bg-body-tertiary">
         <div class="card-body">
             <form method="GET" action="{{ url_for('historico_atendimentos') }}" class="row g-3 align-items-end">
@@ -61,7 +68,7 @@
 
     <div class="card shadow-sm border-0">
         <div class="card-body p-0 table-responsive">
-            <table class="table table-hover align-middle mb-0">
+            <table class="table table-hover align-middle mb-0" id="tabelaHistorico">
                 <thead class="table-secondary">
                     <tr>
                         <th>Data</th>
@@ -169,6 +176,20 @@
 </div>
 
 <script>
+    // Função NOVA para filtrar os clientes na tabela de histórico
+    function filtrarHistorico() {
+        let input = document.getElementById('buscaHistorico').value.toLowerCase();
+        let linhas = document.querySelectorAll('#tabelaHistorico tbody tr');
+        
+        linhas.forEach(linha => {
+            // Ignora a linha de "Nenhum agendamento encontrado"
+            if (linha.querySelector('td') && linha.querySelector('td').colSpan == 5) return;
+            
+            let texto = linha.innerText.toLowerCase();
+            linha.style.display = texto.includes(input) ? '' : 'none';
+        });
+    }
+
     async function abrirModalInativos() {
         const modal = new bootstrap.Modal(document.getElementById('modalInativos'));
         const corpoTabela = document.getElementById('corpoTabelaInativos');
@@ -191,7 +212,6 @@
             if (data.success && data.clientes.length > 0) {
                 let html = '';
                 data.clientes.forEach(c => {
-                    // Mensagem persuasiva de recuperação
                     const msg = `Olá ${c.nome}! Aqui é do(a) ${nomeBarbearia}. Notamos que faz um tempo que você não nos visita. Que tal dar um trato no visual? Temos horários livres essa semana! 💈`;
                     const urlZap = `https://wa.me/55${c.telefone_limpo}?text=${encodeURIComponent(msg)}`;
                     

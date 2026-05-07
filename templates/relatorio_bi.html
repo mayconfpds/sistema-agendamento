@@ -12,13 +12,22 @@
             <p class="text-body-secondary mb-0">Gestão estratégica de faturamento, equipa e fidelização.</p>
         </div>
         
-        <div class="d-flex gap-2 align-items-center">
-            <button class="btn btn-outline-secondary fw-bold shadow-sm" onclick="window.print()"><i class="bi bi-printer"></i> Imprimir</button>
-            <form method="GET" action="{{ url_for('relatorio_bi') }}" class="d-flex bg-body p-1 rounded-pill shadow-sm border">
-                <input type="date" name="start_date" class="form-control border-0 bg-transparent fw-bold text-body-secondary" value="{{ start_date }}" required>
-                <span class="d-flex align-items-center px-2 text-body-secondary">até</span>
-                <input type="date" name="end_date" class="form-control border-0 bg-transparent fw-bold text-body-secondary" value="{{ end_date }}" required>
-                <button type="submit" class="btn btn-primary rounded-pill px-3 ms-2"><i class="bi bi-search"></i></button>
+        <div class="d-flex flex-column flex-md-row gap-3 align-items-md-center">
+            <button class="btn btn-outline-secondary btn-sm fw-bold shadow-sm d-none d-md-inline-block" onclick="window.print()"><i class="bi bi-printer"></i> Imprimir</button>
+            
+            <form method="GET" action="{{ url_for('relatorio_bi') }}" class="w-100">
+                <div class="row g-2 align-items-center bg-body p-2 rounded-4 shadow-sm border m-0">
+                    <div class="col-5 col-md-auto">
+                        <input type="date" name="start_date" class="form-control form-control-sm border-0 bg-body-tertiary fw-bold text-body-secondary text-center rounded-3" value="{{ start_date }}" required>
+                    </div>
+                    <div class="col-2 col-md-auto text-center small fw-bold text-muted px-0">até</div>
+                    <div class="col-5 col-md-auto">
+                        <input type="date" name="end_date" class="form-control form-control-sm border-0 bg-body-tertiary fw-bold text-body-secondary text-center rounded-3" value="{{ end_date }}" required>
+                    </div>
+                    <div class="col-12 col-md-auto mt-2 mt-md-0 ps-md-2">
+                        <button type="submit" class="btn btn-primary btn-sm w-100 rounded-pill shadow-sm px-3"><i class="bi bi-search"></i> <span class="d-md-none">Filtrar</span></button>
+                    </div>
+                </div>
             </form>
         </div>
     </div>
