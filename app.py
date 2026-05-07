@@ -10,7 +10,7 @@ import threading
 import time as time_module
 import socket
 import requests
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session, send_file
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -23,6 +23,9 @@ import stripe
 import uuid
 from sqlalchemy import func
 from sqlalchemy import text
+import csv
+import io
+import zipfile
 
 def enviar_notificacao_telegram(nome_estabelecimento, telefone_responsavel):
     TOKEN = "8690359557:AAG5ZgOS1ay4oXDwvuh98mb-6IA7brehpI0"
@@ -1291,6 +1294,149 @@ def check_novos_agendamentos():
     if not current_user.establishment.has_access: return jsonify({'max_id': 0})
     ultimo = Appointment.query.filter_by(establishment_id=current_user.establishment_id).order_by(Appointment.id.desc()).first()
     return jsonify({'max_id': ultimo.id if ultimo else 0})
+
+@app.route('/admin/exportar_dados')
+@login_required
+def export_data():
+    est_id = current_user.establishment.id
+    
+    # Cria um arquivo ZIP na memória do servidor
+    memory_file = io.BytesIO()
+    
+    with zipfile.ZipFile(memory_file, 'w') as zf:
+        
+        # 1. Planilha de Serviços
+        servicos = Service.query.filter_by(establishment_id=est_id).all()
+        si = io.StringIO()
+        cw = csv.writer(si)
+        cw.writerow(['ID', 'Nome', 'Preco', 'Duracao_Minutos', 'Categoria', 'Promocao', 'Oculto'])
+        for s in servicos:
+            cat_nome = s.category.name if s.category else 'Geral'
+            cw.writerow([s.id, s.name, s.price, s.duration, cat_nome, 'Sim' if s.is_combo else 'Nao', 'Sim' if s.is_hidden else 'Nao'])
+        zf.writestr('meus_servicos.csv', si.getvalue())
+        
+        # 2. Planilha de Produtos (Estoque)
+        produtos = Product.query.filter_by(establishment_id=est_id).all()
+        pi = io.StringIO()
+        cw = csv.writer(pi)
+        cw.writerow(['ID', 'Nome', 'Preco', 'Estoque_Atual', 'Descricao'])
+        for p in produtos:
+            cw.writerow([p.id, p.name, p.price, p.stock_quantity, p.description])
+        zf.writestr('meus_produtos.csv', pi.getvalue())
+        
+        # 3. Planilha de Clientes / Agendamentos
+        agendamentos = Appointment.query.filter_by(establishment_id=est_id).order_by(Appointment.appointment_date.desc()).all()
+        ai = io.StringIO()
+        cw = csv.writer(ai)
+        cw.writerow(['Data', 'Hora', 'Nome_Cliente', 'WhatsApp', 'Servicos_Realizados', 'Valor_Pago', 'Status'])
+        for a in agendamentos:
+            cw.writerow([a.appointment_date.strftime('%d/%m/%Y'), a.appointment_time.strftime('%H:%M'), a.client_name, a.client_phone, a.service_names, a.total_price, a.status])
+        zf.writestr('meu_historico_clientes.csv', ai.getvalue())
+
+    # Prepara o arquivo ZIP para ser baixado
+    memory_file.seek(0)
+    return send_file(
+        memory_file,
+        mimetype='application/zip',
+        as_attachment=True,
+        download_name='backup_agendafacil.zip'
+    )
+    
+@app.route('/admin/importar_dados', methods=['POST'])
+@login_required
+def import_data():
+    if 'file' not in request.files:
+        flash('Nenhum arquivo enviado.', 'danger')
+        return redirect(url_for('admin_dashboard'))
+    
+    file = request.files['file']
+    tipo_importacao = request.form.get('tipo_importacao')
+    
+    if file.filename == '':
+        flash('Por favor, selecione um arquivo CSV.', 'warning')
+        return redirect(url_for('admin_dashboard'))
+
+    if file and file.filename.endswith('.csv'):
+        try:
+            raw_bytes = file.stream.read()
+            try:
+                texto_csv = raw_bytes.decode("utf-8-sig")
+            except UnicodeDecodeError:
+                texto_csv = raw_bytes.decode("latin-1")
+                
+            stream = io.StringIO(texto_csv, newline=None)
+            
+            primeira_linha = texto_csv.split('\n')[0]
+            delimitador = ';' if primeira_linha.count(';') > primeira_linha.count(',') else ','
+            
+            reader = csv.DictReader(stream, delimiter=delimitador)
+            
+            count = 0
+            est_id = current_user.establishment.id
+
+            for row in reader:
+                # CORREÇÃO CRÍTICA: Se for nulo, vira vazio (''), e não a palavra 'None'
+                row_limpa = {str(k).strip().upper(): (str(v).strip() if v is not None else '') for k, v in row.items() if k is not None}
+                
+                if not row_limpa or not any(row_limpa.values()): 
+                    continue
+
+                if tipo_importacao == 'servicos':
+                    nome = row_limpa.get('NOME', '')
+                    
+                    # Ignora se for vazio ou se por acaso a palavra 'None' tiver passado
+                    if not nome or nome.lower() == 'none':
+                        continue
+                        
+                    preco_str = row_limpa.get('PRECO', '0').replace(',', '.')
+                    duracao_str = row_limpa.get('DURACAO_MINUTOS', '30')
+                    promocao = row_limpa.get('PROMOCAO', '').lower()
+                    oculto = row_limpa.get('OCULTO', '').lower()
+                    
+                    if not duracao_str.isdigit(): duracao_str = '30'
+
+                    novo_servico = Service(
+                        name=nome,
+                        price=float(preco_str) if preco_str.replace('.','',1).isdigit() else 0.0,
+                        duration=int(duracao_str),
+                        establishment_id=est_id,
+                        is_combo=(promocao == 'sim'),
+                        is_hidden=(oculto == 'sim')
+                    )
+                    db.session.add(novo_servico)
+                
+                elif tipo_importacao == 'produtos':
+                    nome = row_limpa.get('NOME', '')
+                    if not nome or nome.lower() == 'none':
+                        continue
+
+                    preco_str = row_limpa.get('PRECO', '0').replace(',', '.')
+                    estoque_str = row_limpa.get('ESTOQUE_ATUAL', '0')
+                    descricao = row_limpa.get('DESCRICAO', '')
+                    
+                    if not estoque_str.isdigit(): estoque_str = '0'
+
+                    novo_produto = Product(
+                        name=nome,
+                        price=float(preco_str) if preco_str.replace('.','',1).isdigit() else 0.0,
+                        stock_quantity=int(estoque_str),
+                        description=descricao,
+                        establishment_id=est_id
+                    )
+                    db.session.add(novo_produto)
+                
+                count += 1
+            
+            db.session.commit()
+            flash(f'Sucesso! {count} itens válidos foram importados.', 'success')
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Erro de formato no arquivo: {e}', 'danger')
+    else:
+        flash('Formato de arquivo inválido. Use apenas .csv', 'danger')
+
+    return redirect(url_for('admin_dashboard'))
 
 @app.route('/admin/relatorio_bi')
 @login_required

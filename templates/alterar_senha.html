@@ -1,5 +1,5 @@
 {% extends 'layout.html' %}
-{% block title %}Alterar Senha{% endblock %}
+{% block title %}Segurança e Dados{% endblock %}
 {% block content %}
 <div class="container py-4" style="max-width: 800px;">
     <div class="d-flex align-items-center mb-4 gap-3">
@@ -7,39 +7,91 @@
             <i class="bi bi-shield-lock fs-3"></i>
         </div>
         <div>
-            <h2 class="h3 mb-0 fw-bold text-body-emphasis">Segurança e Senha</h2>
-            <p class="text-body-secondary mb-0">Atualize a sua senha de acesso ao painel da Agenda Fácil.</p>
+            <h2 class="h3 mb-0 fw-bold text-body-emphasis">Segurança e Dados</h2>
+            <p class="text-body-secondary mb-0">Atualize a sua senha de acesso e gerencie a portabilidade das suas informações.</p>
         </div>
     </div>
 
-    <div class="row">
-        <div class="col-md-8 col-lg-7">
-            <div class="card shadow-sm border-0">
+    <div class="row g-4">
+        <div class="col-md-6">
+            <div class="card shadow-sm border-0 h-100">
                 <div class="card-body p-4 p-md-5">
+                    <h5 class="fw-bold mb-4 text-body-emphasis"><i class="bi bi-key text-primary me-2"></i> Alterar Senha</h5>
+                    
                     <form method="POST">
                         <div class="mb-4">
                             <label class="form-label fw-bold small text-body-secondary">Senha Atual</label>
-                            <input type="password" name="senha_atual" class="form-control form-control-lg bg-body-tertiary" required>
+                            <input type="password" name="senha_atual" class="form-control bg-body-tertiary" required>
                         </div>
-                        
-                        <hr class="text-body-secondary opacity-25 my-4">
                         
                         <div class="mb-3">
                             <label class="form-label fw-bold small text-body-secondary">Nova Senha</label>
-                            <input type="password" name="nova_senha" class="form-control form-control-lg" placeholder="Mínimo 6 caracteres" required minlength="6">
+                            <input type="password" name="nova_senha" class="form-control" placeholder="Mínimo 6 caracteres" required minlength="6">
                         </div>
                         
                         <div class="mb-4">
                             <label class="form-label fw-bold small text-body-secondary">Confirmar Nova Senha</label>
-                            <input type="password" name="confirmar_senha" class="form-control form-control-lg" required minlength="6">
+                            <input type="password" name="confirmar_senha" class="form-control" required minlength="6">
                         </div>
                         
-                        <button type="submit" class="btn btn-primary btn-lg w-100 fw-bold shadow-sm">
+                        <button type="submit" class="btn btn-primary w-100 fw-bold shadow-sm">
                             Guardar Nova Senha
                         </button>
                     </form>
                 </div>
             </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-body p-4 p-md-5">
+                    <h5 class="fw-bold mb-3 text-body-emphasis"><i class="bi bi-database-fill-gear text-primary me-2"></i> Portabilidade</h5>
+                    <p class="small text-muted mb-4">Tenha total controle sobre as suas informações. Exporte para backup ou importe dados de outros sistemas.</p>
+                    
+                    <div class="p-3 border rounded-3 bg-body-tertiary mb-3">
+                        <h6 class="fw-bold small mb-1"><i class="bi bi-download me-1"></i> Exportar Backup</h6>
+                        <p class="text-muted mb-3" style="font-size: 0.75rem;">Baixe suas planilhas (Serviços, Produtos e Clientes) num arquivo .zip.</p>
+                        <a href="{{ url_for('export_data') }}" class="btn btn-outline-primary btn-sm fw-bold w-100">Baixar Meus Dados</a>
+                    </div>
+
+                    <div class="p-3 border rounded-3 bg-body-tertiary">
+                        <h6 class="fw-bold small mb-1"><i class="bi bi-upload me-1"></i> Importar Dados</h6>
+                        <p class="text-muted mb-3" style="font-size: 0.75rem;">Cadastre serviços ou produtos em massa subindo um arquivo .csv.</p>
+                        <button class="btn btn-primary btn-sm fw-bold w-100" data-bs-toggle="modal" data-bs-target="#modalImportar">Iniciar Importação</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalImportar" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+            <form action="{{ url_for('import_data') }}" method="POST" enctype="multipart/form-data">
+                <div class="modal-header border-0">
+                    <h5 class="modal-title fw-bold">Importar do Excel (CSV)</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">O que deseja importar?</label>
+                        <select name="tipo_importacao" class="form-select" required>
+                            <option value="servicos">Serviços</option>
+                            <option value="produtos">Produtos (Loja)</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Selecione o arquivo .csv</label>
+                        <input type="file" name="file" class="form-control" accept=".csv" required>
+                        <div class="form-text" style="font-size: 0.75rem;">Certifique-se de que o arquivo contém as colunas: <strong>Nome, Preco</strong>.</div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0">
+                    <button type="button" class="btn btn-light btn-sm fw-bold" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary btn-sm fw-bold px-4">Processar e Salvar</button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
