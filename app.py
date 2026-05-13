@@ -1708,7 +1708,7 @@ with app.app_context():
     db.create_all()
     
     try:
-        db.session.execute(text("ALTER TABLE services ADD COLUMN is_hidden BOOLEAN DEFAULT FALSE;"))
+        db.session.execute(text("ALTER TABLE services ADD COLUMN IF NOT EXISTS is_hidden BOOLEAN DEFAULT FALSE;"))
         db.session.commit()
         print("Sucesso: Coluna is_hidden adicionada na marra no PostgreSQL!")
     except Exception as e:
