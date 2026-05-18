@@ -26,6 +26,17 @@ from sqlalchemy import text
 import csv
 import io
 import zipfile
+from functools import wraps
+
+def super_admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        # Verifica se está logado e se possui a flag de super administrador
+        if not current_user.is_authenticated or not getattr(current_user, 'is_super_admin', False):
+            flash('Acesso restrito à administração do sistema.', 'danger')
+            return redirect(url_for('admin_dashboard'))
+        return f(*args, **kwargs)
+    return decorated_function
 
 def enviar_notificacao_telegram(nome_estabelecimento, telefone_responsavel):
     TOKEN = "8690359557:AAG5ZgOS1ay4oXDwvuh98mb-6IA7brehpI0"
@@ -228,6 +239,8 @@ class Admin(UserMixin, db.Model):
     establishment_id = db.Column(db.Integer, db.ForeignKey('establishments.id'), nullable=False)
     def set_password(self, password): self.password_hash = generate_password_hash(password)
     def check_password(self, password): return check_password_hash(self.password_hash, password)
+    
+    is_super_admin = db.Column(db.Boolean, default=False)
 
 class Category(db.Model):
     __tablename__ = 'categories'
@@ -1704,11 +1717,55 @@ def upgrade_plano():
     flash('Plano inválido.', 'danger')
     return redirect(url_for('planos'))
 
+@app.route('/master/dashboard')
+@login_required
+@super_admin_required
+def master_dashboard():
+    # Métricas Globais para o seu controle
+    total_estabelecimentos = Establishment.query.count()
+    ativos = Establishment.query.filter_by(is_active=True).count()
+    
+    # Contagem de planos baseada nos tipos existentes
+    plano_gestao = Establishment.query.filter_by(plan_type='gestao').count()
+    plano_solo = Establishment.query.filter_by(plan_type='solo').count()
+    
+    estabelecimentos = Establishment.query.order_by(Establishment.id.desc()).all()
+    
+    return render_template('master_dashboard.html', 
+                           estabelecimentos=estabelecimentos,
+                           total=total_estabelecimentos,
+                           ativos=ativos,
+                           plano_gestao=plano_gestao,
+                           plano_solo=plano_solo)
+
+@app.route('/master/estabelecimento/editar/<int:id>', methods=['POST'])
+@login_required
+@super_admin_required
+def master_editar_estabelecimento(id):
+    est = Establishment.query.get_or_404(id)
+    
+    # Atualização de dados gerenciais
+    est.name = request.form.get('name')
+    est.plan_type = request.form.get('plan_type')
+    est.is_active = 'is_active' in request.form
+    
+    # Tratamento seguro da data de vencimento do trial
+    trial_str = request.form.get('trial_ends')
+    if trial_str:
+        try:
+            est.trial_ends = datetime.strptime(trial_str, '%Y-%m-%d')
+        except ValueError:
+            pass
+
+    db.session.commit()
+    flash(f'Estabelecimento {est.name} atualizado com sucesso!', 'success')
+    return redirect(url_for('master_dashboard'))
+
 with app.app_context():
     db.create_all()
     
     try:
-        db.session.execute(text("ALTER TABLE services ADD COLUMN IF NOT EXISTS is_hidden BOOLEAN DEFAULT FALSE;"))
+        db.session.execute(text("ALTER TABLE admins ADD COLUMN IF NOT EXISTS is_super_admin BOOLEAN DEFAULT FALSE;"))
         db.session.commit()
         print("Sucesso: Coluna is_hidden adicionada na marra no PostgreSQL!")
     except Exception as e:
@@ -1716,4 +1773,4 @@ with app.app_context():
         print(f"Aviso (a coluna já deve existir): {e}")
 
 if __name__ == '__main__':
-    app.run(debug=True) 
+    app.run(debug=True)

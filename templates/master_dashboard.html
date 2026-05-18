@@ -1,0 +1,171 @@
+{% extends 'layout.html' %}
+{% block title %}Painel Master Gerencial{% endblock %}
+{% block content %}
+<div class="container py-4">
+    
+    <div class="d-flex align-items-center mb-4 gap-3">
+        <div class="bg-dark text-warning p-3 rounded-circle shadow-sm">
+            <i class="bi bi-sliders fs-3"></i>
+        </div>
+        <div>
+            <h2 class="h3 mb-0 fw-bold text-body-emphasis">Banco de Dados Gerencial</h2>
+            <p class="text-body-secondary mb-0">Controle global de estabelecimentos, licenças e planos ativos.</p>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-md-3">
+            <div class="card border-0 shadow-sm bg-dark text-white rounded-4">
+                <div class="card-body">
+                    <h6 class="small fw-bold opacity-75 text-uppercase">Total de Contas</h6>
+                    <h3 class="fw-bold mb-0">{{ total }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card border-0 shadow-sm bg-success text-white rounded-4">
+                <div class="card-body">
+                    <h6 class="small fw-bold opacity-75 text-uppercase">Ativos Agora</h6>
+                    <h3 class="fw-bold mb-0">{{ ativos }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card border-0 shadow-sm bg-primary text-white rounded-4">
+                <div class="card-body">
+                    <h6 class="small fw-bold opacity-75 text-uppercase">Plano Gestão</h6>
+                    <h3 class="fw-bold mb-0">{{ plano_gestao }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card border-0 shadow-sm bg-secondary text-white rounded-4">
+                <div class="card-body">
+                    <h6 class="small fw-bold opacity-75 text-uppercase">Plano Solo</h6>
+                    <h3 class="fw-bold mb-0">{{ plano_solo }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0 rounded-4 overflow-hidden">
+        <div class="p-3 bg-light border-bottom d-flex justify-content-between align-items-center">
+            <div class="input-group input-group-sm" style="max-width: 300px;">
+                <span class="input-group-text bg-white border-secondary-subtle"><i class="bi bi-search"></i></span>
+                <input type="text" id="buscaMaster" class="form-control border-secondary-subtle" placeholder="Buscar negócio ou link..." onkeyup="filtrarMaster()">
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0" id="tabelaMaster">
+                <thead class="table-dark">
+                    <tr>
+                        <th class="ps-4">ID / Estabelecimento</th>
+                        <th>Link Interno</th>
+                        <th>Contato</th>
+                        <th>Plano</th>
+                        <th>Expiração do Trial</th>
+                        <th>Status</th>
+                        <th class="text-end pe-4">Ação</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for e in estabelecimentos %}
+                    <tr>
+                        <td class="ps-4">
+                            <div class="fw-bold text-body-emphasis">{{ e.name }}</div>
+                            <span class="badge bg-light text-muted border">ID: {{ e.id }}</span>
+                        </td>
+                        <td><code class="small">/{{ e.url_prefix }}</code></td>
+                        <td>
+                            <div class="small fw-bold">{{ e.contact_email or '-' }}</div>
+                            <div class="small text-muted">{{ e.contact_phone or '-' }}</div>
+                        </td>
+                        <td>
+                            {% if e.plan_type == 'gestao' %}
+                                <span class="badge bg-primary">Gestão</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Solo</span>
+                            {% endif %}
+                        </td>
+                        <td class="small fw-bold text-muted">
+                            {{ e.trial_ends.strftime('%d/%m/%Y') if e.trial_ends else 'Sem limite' }}
+                        </td>
+                        <td>
+                            {% if e.is_active %}
+                                <span class="badge bg-success-subtle text-success border border-success-subtle">Ativo</span>
+                            {% else %}
+                                <span class="badge bg-danger-subtle text-danger border border-danger-subtle">Bloqueado</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end pe-4">
+                            <button class="btn btn-outline-dark btn-sm fw-bold" onclick="abrirModalEdicaoMaster({{ e.id }}, '{{ e.name|e }}', '{{ e.plan_type }}', '{{ e.trial_ends.strftime('%Y-%m-%d') if e.trial_ends else '' }}', {{ 'true' if e.is_active else 'false' }})">
+                                <i class="bi bi-pencil-square"></i> Gerenciar
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalEdicaoMaster" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <form id="formMaster" method="POST" action="">
+                <div class="modal-header border-bottom-0 pb-0">
+                    <h5 class="modal-title fw-bold text-body-emphasis"><i class="bi bi-gear-fill text-warning"></i> Alterar Parâmetros da Conta</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Nome do Estabelecimento</label>
+                        <input type="text" name="name" id="masterName" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Nível de Acesso (Plano)</label>
+                        <select name="plan_type" id="masterPlan" class="form-select">
+                            <option value="solo">Solo</option>
+                            <option value="gestao">Gestão</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Data de Fim do Trial</label>
+                        <input type="date" name="trial_ends" id="masterTrial" class="form-control">
+                    </div>
+                    <div class="form-check form-switch mt-4">
+                        <input class="form-check-input" type="checkbox" name="is_active" id="masterActive">
+                        <label class="form-check-label fw-bold small" for="masterActive">Conta Ativa (Permitir acesso ao painel)</label>
+                    </div>
+                </div>
+                <div class="modal-footer border-top-0">
+                    <button type="button" class="btn btn-light btn-sm fw-bold" data-bs-dismiss="modal">Fechar</button>
+                    <button type="submit" class="btn btn-dark btn-sm fw-bold px-4">Salvar Alterações</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function abrirModalEdicaoMaster(id, name, plano, trial, ativo) {
+    document.getElementById('formMaster').action = `/master/estabelecimento/editar/${id}`;
+    document.getElementById('masterName').value = name;
+    document.getElementById('masterPlan').value = plano;
+    document.getElementById('masterTrial').value = trial;
+    document.getElementById('masterActive').checked = ativo;
+    
+    new bootstrap.Modal(document.getElementById('modalEdicaoMaster')).show();
+}
+
+function filtrarMaster() {
+    let input = document.getElementById('buscaMaster').value.toLowerCase();
+    let linhas = document.querySelectorAll('#tabelaMaster tbody tr');
+    linhas.forEach(linha => {
+        let texto = linha.innerText.toLowerCase();
+        linha.style.display = texto.includes(input) ? '' : 'none';
+    });
+}
+</script>
+{% endblock %}

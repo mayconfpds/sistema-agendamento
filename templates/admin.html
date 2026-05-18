@@ -55,10 +55,10 @@
 
     <ul class="nav nav-pills mb-4 bg-body p-2 rounded-pill d-inline-flex border" id="adminTabs">
         <li class="nav-item"><a class="nav-link active fw-bold rounded-pill" data-bs-toggle="pill" href="#tab-agenda" id="btn-tab-agenda"><i class="bi bi-calendar3"></i> Agenda & Configurações</a></li>
-        <li class="nav-item"><a class="nav-link fw-bold rounded-pill text-body-emphasis" data-bs-toggle="pill" href="#tab-loja" id="btn-tab-loja"><i class="bi bi-bag-check"></i> Loja & Estoque</a></li>
+        <li class="nav-item"><a class="nav-link fw-bold rounded-pill" data-bs-toggle="pill" href="#tab-loja" id="btn-tab-loja"><i class="bi bi-bag-check"></i> Loja & Estoque</a></li>
         
         {% if establishment.plan_type == 'gestao' %}
-            <li class="nav-item"><a class="nav-link fw-bold rounded-pill text-body-emphasis" data-bs-toggle="pill" href="#tab-assinaturas" id="btn-tab-assinaturas"><i class="bi bi-person-vcard"></i> Assinaturas</a></li>
+            <li class="nav-item"><a class="nav-link fw-bold rounded-pill" data-bs-toggle="pill" href="#tab-assinaturas" id="btn-tab-assinaturas"><i class="bi bi-person-vcard"></i> Assinaturas</a></li>
         {% else %}
             <li class="nav-item">
                 <a href="javascript:void(0)" onclick="confirmarUpgradeMenu()" class="nav-link fw-bold rounded-pill text-body-secondary">
