@@ -1767,7 +1767,7 @@ with app.app_context():
     try:
         db.session.execute(text("ALTER TABLE admins ADD COLUMN IF NOT EXISTS is_super_admin BOOLEAN DEFAULT FALSE;"))
         
-        meu_admin = Admin.query.filter_by(username='admin_master').first()
+        meu_admin = Admin.query.filter_by(username='admin_demo').first()
         if meu_admin:
             meu_admin.is_super_admin = True
             db.session.commit()
