@@ -1766,8 +1766,13 @@ with app.app_context():
     
     try:
         db.session.execute(text("ALTER TABLE admins ADD COLUMN IF NOT EXISTS is_super_admin BOOLEAN DEFAULT FALSE;"))
-        db.session.commit()
-        print("Sucesso: Coluna is_hidden adicionada na marra no PostgreSQL!")
+        
+        meu_admin = Admin.query.filter_by(username='admin_master').first()
+        if meu_admin:
+            meu_admin.is_super_admin = True
+            db.session.commit()
+            print("Sucesso: O usuário agora é Super Admin!")
+            
     except Exception as e:
         db.session.rollback() 
         print(f"Aviso (a coluna já deve existir): {e}")
