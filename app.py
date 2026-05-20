@@ -151,9 +151,26 @@ class Establishment(db.Model):
 
     @property
     def has_access(self):
-        if self.is_active: return True
-        if self.trial_ends and get_now_brazil() < self.trial_ends: return True
-        return False
+        # 1. Se você bloqueou a conta manualmente pelo painel master, o bloqueio é imediato
+        if not self.is_active:
+            return False
+            
+        # 2. Verificação do vencimento (Trial ou Assinatura) com o período de carência
+        if self.trial_ends:
+            # Pegamos a data atual (apenas ano, mês e dia)
+            hoje = datetime.now().date()
+            
+            # Garantimos que a data do banco esteja no formato de data puro para comparação
+            data_vencimento = self.trial_ends.date() if hasattr(self.trial_ends, 'date') else self.trial_ends
+            
+            # A MÁGICA DA CARÊNCIA: O prazo real é o vencimento + 3 dias
+            prazo_limite = data_vencimento + timedelta(days=3)
+            
+            # Se hoje já passou do prazo limite com carência, bloqueia
+            if hoje > prazo_limite:
+                return False
+                
+        return True
 
     @property
     def trial_days_left(self):
@@ -455,20 +472,48 @@ if not os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
 @app.route('/pagamento')
 @login_required
 def payment():
+    # Nota: Se "is_active" for True durante o período de teste, remova ou ajuste 
+    # esta primeira linha para que o usuário consiga acessar a página e cadastrar o cartão.
     if current_user.establishment.is_active: return redirect(url_for('admin_dashboard'))
+    
     plan_chosen = request.args.get('plan')
     if plan_chosen in ['solo', 'gestao']:
         current_user.establishment.plan_type = plan_chosen
         db.session.commit()
+        
     try:
         success_url = request.host_url.replace('http://', 'https://') + 'pagamento/sucesso'
         cancel_url = request.host_url.replace('http://', 'https://') + 'pagamento/cancelado'
         price_id = STRIPE_PRICE_GESTAO if current_user.establishment.plan_type == 'gestao' else STRIPE_PRICE_SOLO
+        
         if not price_id: return "Erro: IDs da Stripe não configurados.", 500
-        session = stripe.checkout.Session.create(
-            payment_method_types=['card'], line_items=[{'price': price_id, 'quantity': 1}],
-            mode='subscription', allow_promotion_codes=True, success_url=success_url, cancel_url=cancel_url, customer_email=current_user.establishment.contact_email,
-        )
+        
+        # 1. Configuração base do Checkout da Stripe
+        checkout_params = {
+            "payment_method_types": ['card'],
+            "line_items": [{'price': price_id, 'quantity': 1}],
+            "mode": 'subscription',
+            "allow_promotion_codes": True,
+            "success_url": success_url,
+            "cancel_url": cancel_url,
+            "customer_email": current_user.establishment.contact_email
+        }
+        
+        # 2. A MÁGICA DO TESTE GRÁTIS: Calcula se ainda tem dias sobrando
+        est = current_user.establishment
+        if est.trial_ends and est.has_access:
+            vencimento_unix = int(time.mktime(est.trial_ends.timetuple()))
+            agora_unix = int(time.time())
+            
+            # O Stripe exige que o trial_end seja no mínimo 48h (172800 seg) no futuro.
+            if vencimento_unix > (agora_unix + 172800):
+                checkout_params["subscription_data"] = {
+                    "trial_end": vencimento_unix
+                }
+        
+        # 3. Cria a sessão desempacotando o dicionário de parâmetros
+        session = stripe.checkout.Session.create(**checkout_params)
+        
         return redirect(session.url, code=303)
     except Exception as e:
         return f"<div style='padding:40px; text-align:center;'> <h2 style='color:red;'>Erro na Stripe</h2> <p><b>{str(e)}</b></p> <a href='/logout'>Sair</a> </div>", 500

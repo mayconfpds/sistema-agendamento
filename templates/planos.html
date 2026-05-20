@@ -31,11 +31,17 @@
                         <li class="mb-3 text-body-secondary"><i class="bi bi-x-circle-fill text-secondary me-2"></i> Gestão de Equipe e Comissões</li>
                     </ul>
                     
-                    {% if current_user.is_authenticated and not current_user.establishment.has_access %}
-                        <a href="{{ url_for('payment', plan='solo') }}" class="btn btn-outline-primary py-3 fw-bold rounded-pill w-100">Assinar Plano Solo</a>
+                    {% if not current_user.is_authenticated %}
+                        <a href="{{ url_for('register_business', plan='solo') }}" class="btn btn-outline-dark py-3 fw-bold rounded-pill w-100 shadow-sm">Começar Teste Grátis</a>
+                    {% elif not current_user.establishment.has_access %}
+                        <a href="{{ url_for('payment', plan='solo') }}" class="btn btn-outline-dark py-3 fw-bold rounded-pill w-100 shadow-sm">Assinar Plano Solo</a>
                     {% else %}
-                        <a href="{{ url_for('register_business', plan='solo') }}" class="btn btn-outline-primary py-3 fw-bold rounded-pill w-100">Começar Teste Grátis</a>
+                        <a href="{{ url_for('payment', plan='solo') }}" class="btn btn-outline-dark py-2 fw-bold rounded-pill w-100 shadow-sm d-flex flex-column align-items-center justify-content-center">
+                            <span>Ativar Assinatura (Manter dias grátis)</span>
+                            <small class="fw-normal opacity-75" style="font-size: 0.75rem;">Será cobrado em {{ current_user.establishment.trial_ends.strftime('%d/%m/%Y') }}</small>
+                        </a>
                     {% endif %}
+
                 </div>
             </div>
         </div>
@@ -57,11 +63,17 @@
                         <li class="mb-3"><i class="bi bi-check-circle-fill text-success me-2"></i> Relatórios Financeiros Avançados</li>
                     </ul>
                     
-                    {% if current_user.is_authenticated and not current_user.establishment.has_access %}
+                    {% if not current_user.is_authenticated %}
+                        <a href="{{ url_for('register_business', plan='gestao') }}" class="btn btn-primary py-3 fw-bold rounded-pill w-100 shadow-sm">Começar Teste Grátis</a>
+                    {% elif not current_user.establishment.has_access %}
                         <a href="{{ url_for('payment', plan='gestao') }}" class="btn btn-primary py-3 fw-bold rounded-pill w-100 shadow-sm">Assinar Plano Gestão</a>
                     {% else %}
-                        <a href="{{ url_for('register_business', plan='gestao') }}" class="btn btn-primary py-3 fw-bold rounded-pill w-100 shadow-sm">Começar Teste Grátis</a>
+                        <a href="{{ url_for('payment', plan='gestao') }}" class="btn btn-primary py-2 fw-bold rounded-pill w-100 shadow-sm d-flex flex-column align-items-center justify-content-center">
+                            <span>Ativar Assinatura (Manter dias grátis)</span>
+                            <small class="fw-normal text-white-50" style="font-size: 0.75rem;">Será cobrado em {{ current_user.establishment.trial_ends.strftime('%d/%m/%Y') }}</small>
+                        </a>
                     {% endif %}
+                    
                 </div>
             </div>
         </div>
