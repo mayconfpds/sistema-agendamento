@@ -98,9 +98,9 @@
                             {% endif %}
                         </td>
                         <td class="text-end pe-4">
-                            <button class="btn btn-outline-dark btn-sm fw-bold" onclick="abrirModalEdicaoMaster({{ e.id }}, '{{ e.name|e }}', '{{ e.plan_type }}', '{{ e.trial_ends.strftime('%Y-%m-%d') if e.trial_ends else '' }}', {{ 'true' if e.is_active else 'false' }})">
-                                <i class="bi bi-pencil-square"></i> Gerenciar
-                            </button>
+                            <button class="btn btn-outline-dark btn-sm fw-bold" onclick='abrirModalEdicaoMaster({{ e.id }}, "{{ e.name|e }}", "{{ e.plan_type }}", "{{ e.trial_ends.strftime("%Y-%m-%d") if e.trial_ends else "" }}", {{ "true" if e.is_active else "false" }}, {{ e.internal_notes | tojson | safe if e.internal_notes else '""' }})'>
+                                    <i class="bi bi-pencil-square"></i> Gerir
+                                </button>
                         </td>
                     </tr>
                     {% endfor %}
@@ -118,27 +118,47 @@
                     <h5 class="modal-title fw-bold text-body-emphasis"><i class="bi bi-gear-fill text-warning"></i> Alterar Parâmetros da Conta</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
+                
                 <div class="modal-body p-4">
+                    <div class="p-3 bg-light border rounded-3 mb-4 d-flex justify-content-between align-items-center">
+                        <div>
+                            <small class="text-muted d-block fw-bold">ID do Estabelecimento</small>
+                            <strong id="masterIdLabel" class="small">#</strong>
+                        </div>
+                        <a href="#" id="linkImpersonate" class="btn btn-sm btn-warning fw-bold shadow-sm">
+                            <i class="bi bi-eye-fill"></i> Aceder ao Painel
+                        </a>
+                    </div>
+
                     <div class="mb-3">
                         <label class="form-label small fw-bold">Nome do Estabelecimento</label>
                         <input type="text" name="name" id="masterName" class="form-control" required>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label small fw-bold">Nível de Acesso (Plano)</label>
-                        <select name="plan_type" id="masterPlan" class="form-select">
-                            <option value="solo">Solo</option>
-                            <option value="gestao">Gestão</option>
-                        </select>
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Nível de Acesso (Plano)</label>
+                            <select name="plan_type" id="masterPlan" class="form-select">
+                                <option value="solo">Solo</option>
+                                <option value="gestao">Gestão</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Fim do Trial / Vencimento</label>
+                            <input type="date" name="trial_ends" id="masterTrial" class="form-control">
+                        </div>
                     </div>
+
                     <div class="mb-3">
-                        <label class="form-label small fw-bold">Data de Fim do Trial</label>
-                        <input type="date" name="trial_ends" id="masterTrial" class="form-control">
+                        <label class="form-label small fw-bold">Notas Internas (Privado)</label>
+                        <textarea name="internal_notes" id="masterNotes" class="form-control" rows="3" placeholder="Ex: Cliente pediu mais 3 dias para a equipa testar..."></textarea>
                     </div>
+
                     <div class="form-check form-switch mt-4">
                         <input class="form-check-input" type="checkbox" name="is_active" id="masterActive">
-                        <label class="form-check-label fw-bold small" for="masterActive">Conta Ativa (Permitir acesso ao painel)</label>
+                        <label class="form-check-label fw-bold small" for="masterActive">Conta Ativa (Permitir acesso)</label>
                     </div>
                 </div>
+
                 <div class="modal-footer border-top-0">
                     <button type="button" class="btn btn-light btn-sm fw-bold" data-bs-dismiss="modal">Fechar</button>
                     <button type="submit" class="btn btn-dark btn-sm fw-bold px-4">Salvar Alterações</button>
@@ -149,12 +169,19 @@
 </div>
 
 <script>
-function abrirModalEdicaoMaster(id, name, plano, trial, ativo) {
+function abrirModalEdicaoMaster(id, name, plano, trial, ativo, notas) {
     document.getElementById('formMaster').action = `/master/estabelecimento/editar/${id}`;
+    document.getElementById('masterIdLabel').innerText = '#' + id;
     document.getElementById('masterName').value = name;
     document.getElementById('masterPlan').value = plano;
     document.getElementById('masterTrial').value = trial;
     document.getElementById('masterActive').checked = ativo;
+    
+    // Tratamento das notas (substituindo valores nulos por vazio)
+    document.getElementById('masterNotes').value = (notas && notas !== 'None') ? notas : '';
+    
+    // Atualiza o link do botão para fazer o login na conta do cliente
+    document.getElementById('linkImpersonate').href = `/master/impersonate/${id}`;
     
     new bootstrap.Modal(document.getElementById('modalEdicaoMaster')).show();
 }

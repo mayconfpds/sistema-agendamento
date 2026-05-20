@@ -137,6 +137,7 @@ class Establishment(db.Model):
     loyalty_points_goal = db.Column(db.Integer, default=0)
     loyalty_reward = db.Column(db.String(150), nullable=True)
     state = db.Column(db.String(2), default='PE')
+    internal_notes = db.Column(db.Text, nullable=True)
     
     schedules = db.relationship('DaySchedule', backref='establishment', lazy=True, cascade="all, delete-orphan")
     admins = db.relationship('Admin', backref='establishment', lazy=True)
@@ -1748,6 +1749,7 @@ def master_editar_estabelecimento(id):
     est.name = request.form.get('name')
     est.plan_type = request.form.get('plan_type')
     est.is_active = 'is_active' in request.form
+    est.internal_notes = request.form.get('internal_notes', '')
     
     # Tratamento seguro da data de vencimento do trial
     trial_str = request.form.get('trial_ends')
@@ -1761,21 +1763,52 @@ def master_editar_estabelecimento(id):
     flash(f'Estabelecimento {est.name} atualizado com sucesso!', 'success')
     return redirect(url_for('master_dashboard'))
 
+@app.route('/master/impersonate/<int:id>')
+@login_required
+@super_admin_required
+def master_impersonate(id):
+    est = Establishment.query.get_or_404(id)
+    # Procura o primeiro administrador associado a este estabelecimento
+    admin_cliente = Admin.query.filter_by(establishment_id=est.id).first()
+    
+    if not admin_cliente:
+        flash("Este estabelecimento ainda não tem um administrador registado.", "danger")
+        return redirect(url_for('master_dashboard'))
+        
+    # Guarda o seu ID de Super Admin na "mochila" da sessão
+    session['master_admin_id'] = current_user.id
+    
+    # Faz login automático no perfil do cliente
+    login_user(admin_cliente)
+    flash(f"A aceder ao painel de controlo como: {est.name}", "warning")
+    return redirect(url_for('admin_dashboard'))
+
+@app.route('/master/revert')
+@login_required
+def master_revert():
+    # Verifica se existe um ID guardado na mochila
+    master_id = session.get('master_admin_id')
+    if not master_id:
+        return redirect(url_for('admin_dashboard'))
+        
+    master_admin = Admin.query.get(master_id)
+    if master_admin:
+        # Faz o seu login real de volta e esvazia a mochila
+        login_user(master_admin)
+        session.pop('master_admin_id', None) 
+        flash("Sessão revertida. Bem-vindo de volta ao Painel Master.", "success")
+        return redirect(url_for('master_dashboard'))
+        
+    return redirect(url_for('login'))
+
 with app.app_context():
     db.create_all()
     
     try:
-        db.session.execute(text("ALTER TABLE admins ADD COLUMN IF NOT EXISTS is_super_admin BOOLEAN DEFAULT FALSE;"))
-        
-        meu_admin = Admin.query.filter_by(username='admin_demo').first()
-        if meu_admin:
-            meu_admin.is_super_admin = True
-            db.session.commit()
-            print("Sucesso: O usuário agora é Super Admin!")
-            
+        db.session.execute(db.text('ALTER TABLE establishments ADD COLUMN IF NOT EXISTS internal_notes TEXT;'))
+        db.session.commit()
     except Exception as e:
-        db.session.rollback() 
-        print(f"Aviso (a coluna já deve existir): {e}")
+        db.session.rollback()
 
 if __name__ == '__main__':
     app.run(debug=True)

@@ -49,6 +49,16 @@
     </style>
 </head>
 <body>
+
+    {% if session.get('master_admin_id') %}
+<div class="bg-warning text-dark text-center py-2 fw-bold shadow-sm" style="z-index: 1050; position: relative;">
+    <i class="bi bi-eye-fill"></i> Está a aceder como cliente. 
+    <a href="{{ url_for('master_revert') }}" class="text-danger ms-3 text-decoration-underline">
+        <i class="bi bi-arrow-return-left"></i> Voltar para o Painel Master
+    </a>
+</div>
+{% endif %}
+
     <nav class="navbar navbar-expand-lg border-bottom shadow-sm sticky-top py-2 bg-body">
         <div class="container">
             <a class="navbar-brand fw-bold text-body-emphasis" href="{{ url_for('index') }}">
