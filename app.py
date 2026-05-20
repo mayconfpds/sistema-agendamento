@@ -497,21 +497,27 @@ def payment():
             "customer_email": current_user.establishment.contact_email
         }
         
-        # 2. A MÁGICA DO TESTE GRÁTIS: Calcula se ainda tem dias sobrando
+        # A MÁGICA CORRIGIDA: Usando .timestamp() nativo
         est = current_user.establishment
         if est.trial_ends and est.has_access:
-            vencimento_unix = int(time.mktime(est.trial_ends.timetuple()))
-            agora_unix = int(time.time())
+            from datetime import datetime
             
-            # O Stripe exige que o trial_end seja no mínimo 48h (172800 seg) no futuro.
+            agora_unix = int(datetime.now().timestamp())
+            
+            # Garante que a data está no formato correto antes de converter
+            data_venc = est.trial_ends
+            if not isinstance(data_venc, datetime):
+                from datetime import time as dt_time
+                data_venc = datetime.combine(data_venc, dt_time.min)
+                
+            vencimento_unix = int(data_venc.timestamp())
+            
             if vencimento_unix > (agora_unix + 172800):
                 checkout_params["subscription_data"] = {
                     "trial_end": vencimento_unix
                 }
         
-        # 3. Cria a sessão desempacotando o dicionário de parâmetros
         session = stripe.checkout.Session.create(**checkout_params)
-        
         return redirect(session.url, code=303)
     except Exception as e:
         return f"<div style='padding:40px; text-align:center;'> <h2 style='color:red;'>Erro na Stripe</h2> <p><b>{str(e)}</b></p> <a href='/logout'>Sair</a> </div>", 500
