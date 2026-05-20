@@ -151,26 +151,24 @@ class Establishment(db.Model):
 
     @property
     def has_access(self):
-        # 1. Se você bloqueou a conta manualmente pelo painel master, o bloqueio é imediato
-        if not self.is_active:
-            return False
+        # 1. Se a conta já está com a assinatura paga (is_active = True), o acesso é garantido
+        if self.is_active:
+            return True
             
-        # 2. Verificação do vencimento (Trial ou Assinatura) com o período de carência
+        # 2. Se a conta NÃO está ativa (ex: usuário no teste grátis), verificamos o prazo
         if self.trial_ends:
-            # Pegamos a data atual (apenas ano, mês e dia)
             hoje = datetime.now().date()
-            
-            # Garantimos que a data do banco esteja no formato de data puro para comparação
             data_vencimento = self.trial_ends.date() if hasattr(self.trial_ends, 'date') else self.trial_ends
             
-            # A MÁGICA DA CARÊNCIA: O prazo real é o vencimento + 3 dias
+            # A carência de 3 dias
             prazo_limite = data_vencimento + timedelta(days=3)
             
-            # Se hoje já passou do prazo limite com carência, bloqueia
-            if hoje > prazo_limite:
-                return False
+            # Se ainda estiver dentro do prazo (ou carência), liberamos o acesso
+            if hoje <= prazo_limite:
+                return True
                 
-        return True
+        # 3. Se não tem assinatura ativa e o prazo (com carência) já estourou, bloqueia
+        return False
 
     @property
     def trial_days_left(self):
