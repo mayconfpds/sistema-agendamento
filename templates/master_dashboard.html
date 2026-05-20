@@ -159,9 +159,17 @@
                     </div>
                 </div>
 
-                <div class="modal-footer border-top-0">
-                    <button type="button" class="btn btn-light btn-sm fw-bold" data-bs-dismiss="modal">Fechar</button>
-                    <button type="submit" class="btn btn-dark btn-sm fw-bold px-4">Salvar Alterações</button>
+                <div class="modal-footer d-flex justify-content-between">
+                    <form id="formExcluirMaster" method="POST" action="" onsubmit="return confirm('ATENÇÃO: Esta ação é irreversível! Isso apagará permanentemente este estabelecimento, todos os profissionais, clientes e agendamentos vinculados. Deseja mesmo continuar?');">
+                        <button type="submit" class="btn btn-outline-danger btn-sm">
+                            <i class="bi bi-trash3-fill"></i> Excluir Conta do Sistema
+                        </button>
+                    </form>
+
+                    <div>
+                        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Fechar</button>
+                        <button type="submit" form="formMaster" class="btn btn-dark btn-sm fw-bold px-3">Salvar Alterações</button>
+                    </div>
                 </div>
             </form>
         </div>
@@ -171,6 +179,7 @@
 <script>
 function abrirModalEdicaoMaster(id, name, plano, trial, ativo, notas) {
     document.getElementById('formMaster').action = `/master/estabelecimento/editar/${id}`;
+    document.getElementById('formExcluirMaster').action = `/master/estabelecimento/excluir/${id}`;
     document.getElementById('masterIdLabel').innerText = '#' + id;
     document.getElementById('masterName').value = name;
     document.getElementById('masterPlan').value = plano;

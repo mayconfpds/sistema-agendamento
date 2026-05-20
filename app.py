@@ -1844,6 +1844,31 @@ def master_revert():
         
     return redirect(url_for('login'))
 
+@app.route('/master/estabelecimento/excluir/<int:id>', methods=['POST'])
+@login_required
+@super_admin_required
+def master_excluir_estabelecimento(id):
+    try:
+        est = Establishment.query.get_or_404(id)
+        
+        # 1. Remove os administradores vinculados a este estabelecimento primeiro
+        Admin.query.filter_by(establishment_id=est.id).delete()
+        
+        # Nota: Se você tiver outras tabelas vinculadas (como Professional, Appointment, Service)
+        # e não configurou o 'cascade' no relacionamento, limpe-as aqui antes de deletar o estabelecimento:
+        # Exemplo: Professional.query.filter_by(establishment_id=est.id).delete()
+        
+        # 2. Deleta o estabelecimento
+        db.session.delete(est)
+        db.session.commit()
+        
+        flash(f"O estabelecimento '{est.name}' e seus acessos foram excluídos permanentemente!", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Erro ao excluir estabelecimento: {e}", "danger")
+        
+    return redirect(url_for('master_dashboard'))
+
 with app.app_context():
     db.create_all()
     
