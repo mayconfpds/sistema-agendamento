@@ -531,7 +531,8 @@ def index(): return render_template('index.html')
 
 @app.route('/planos')
 def planos():
-    if current_user.is_authenticated and current_user.establishment.has_access: return redirect(url_for('admin_dashboard'))
+    if current_user.is_authenticated and current_user.establishment.is_active:
+        return redirect(url_for('admin_dashboard'))
     return render_template('planos.html')
 
 @app.route('/cadastro-negocio', methods=['GET', 'POST'])

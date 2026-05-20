@@ -98,9 +98,16 @@
                             {% endif %}
                         </td>
                         <td class="text-end pe-4">
-                            <button class="btn btn-outline-dark btn-sm fw-bold" onclick='abrirModalEdicaoMaster({{ e.id }}, "{{ e.name|e }}", "{{ e.plan_type }}", "{{ e.trial_ends.strftime("%Y-%m-%d") if e.trial_ends else "" }}", {{ "true" if e.is_active else "false" }}, {{ e.internal_notes | tojson | safe if e.internal_notes else '""' }})'>
-                                    <i class="bi bi-pencil-square"></i> Gerir
-                                </button>
+                            <button class="btn btn-outline btn-sm fw-bold" 
+                                    onclick="abrirModalEdicaoMaster(this)"
+                                    data-id="{{ e.id }}"
+                                    data-name="{{ e.name }}"
+                                    data-plan="{{ e.plan_type }}"
+                                    data-trial="{{ e.trial_ends.strftime('%Y-%m-%d') if e.trial_ends else '' }}"
+                                    data-active="{{ 'true' if e.is_active else 'false' }}"
+                                    data-notes="{{ e.internal_notes or '' }}">
+                                <i class="bi bi-pencil-square"></i> Gerir
+                            </button>
                         </td>
                     </tr>
                     {% endfor %}
@@ -177,21 +184,31 @@
 </div>
 
 <script>
-function abrirModalEdicaoMaster(id, name, plano, trial, ativo, notas) {
+function abrirModalEdicaoMaster(botao) {
+    // Captura os dados guardados nos atributos data-* do botão
+    const id = botao.getAttribute('data-id');
+    const name = botao.getAttribute('data-name');
+    const plano = botao.getAttribute('data-plan');
+    const trial = botao.getAttribute('data-trial');
+    const ativo = botao.getAttribute('data-active') === 'true';
+    const notas = botao.getAttribute('data-notes');
+
+    // Configura as rotas dos formulários
     document.getElementById('formMaster').action = `/master/estabelecimento/editar/${id}`;
     document.getElementById('formExcluirMaster').action = `/master/estabelecimento/excluir/${id}`;
+
+    // Preenche os campos do modal
     document.getElementById('masterIdLabel').innerText = '#' + id;
     document.getElementById('masterName').value = name;
     document.getElementById('masterPlan').value = plano;
     document.getElementById('masterTrial').value = trial;
     document.getElementById('masterActive').checked = ativo;
+    document.getElementById('masterNotes').value = notas;
     
-    // Tratamento das notas (substituindo valores nulos por vazio)
-    document.getElementById('masterNotes').value = (notas && notas !== 'None') ? notas : '';
-    
-    // Atualiza o link do botão para fazer o login na conta do cliente
+    // Atualiza o link de impersonate
     document.getElementById('linkImpersonate').href = `/master/impersonate/${id}`;
     
+    // Abre o modal do Bootstrap
     new bootstrap.Modal(document.getElementById('modalEdicaoMaster')).show();
 }
 
