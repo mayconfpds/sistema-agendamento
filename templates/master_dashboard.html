@@ -98,14 +98,14 @@
                             {% endif %}
                         </td>
                         <td class="text-end pe-4">
-                            <button class="btn btn-outline btn-sm fw-bold" 
+                            <button class="btn btn-outline-dark btn-sm fw-bold" 
                                     onclick="abrirModalEdicaoMaster(event.currentTarget)"
                                     data-id="{{ e.id }}"
-                                    data-name="{{ e.name }}"
+                                    data-name="{{ e.name|e }}"
                                     data-plan="{{ e.plan_type }}"
                                     data-trial="{{ e.trial_ends.strftime('%Y-%m-%d') if e.trial_ends else '' }}"
                                     data-active="{{ 'true' if e.is_active else 'false' }}"
-                                    data-notes="{{ e.internal_notes or '' }}">
+                                    data-notes="{{ e.internal_notes|e if e.internal_notes else '' }}">
                                 <i class="bi bi-pencil-square"></i> Gerir
                             </button>
                         </td>
@@ -185,7 +185,7 @@
 
 <script>
 function abrirModalEdicaoMaster(botao) {
-    // Captura os dados guardados nos atributos data-* do botão
+    // 1. Extrai os dados do botão de forma segura
     const id = botao.getAttribute('data-id');
     const name = botao.getAttribute('data-name');
     const plano = botao.getAttribute('data-plan');
@@ -193,11 +193,14 @@ function abrirModalEdicaoMaster(botao) {
     const ativo = botao.getAttribute('data-active') === 'true';
     const notas = botao.getAttribute('data-notes');
 
-    // Configura as rotas dos formulários
-    document.getElementById('formMaster').action = `/master/estabelecimento/editar/${id}`;
-    document.getElementById('formExcluirMaster').action = `/master/estabelecimento/excluir/${id}`;
+    // 2. Verifica se encontrou os formulários e os atualiza
+    const formMaster = document.getElementById('formMaster');
+    const formExcluir = document.getElementById('formExcluirMaster');
+    
+    if (formMaster) formMaster.action = `/master/estabelecimento/editar/${id}`;
+    if (formExcluir) formExcluir.action = `/master/estabelecimento/excluir/${id}`;
 
-    // Preenche os campos do modal
+    // 3. Preenche os campos de texto
     document.getElementById('masterIdLabel').innerText = '#' + id;
     document.getElementById('masterName').value = name;
     document.getElementById('masterPlan').value = plano;
@@ -205,11 +208,13 @@ function abrirModalEdicaoMaster(botao) {
     document.getElementById('masterActive').checked = ativo;
     document.getElementById('masterNotes').value = notas;
     
-    // Atualiza o link de impersonate
-    document.getElementById('linkImpersonate').href = `/master/impersonate/${id}`;
+    // 4. Link para aceder como cliente
+    const linkImp = document.getElementById('linkImpersonate');
+    if (linkImp) linkImp.href = `/master/impersonate/${id}`;
     
-    // Abre o modal do Bootstrap
-    new bootstrap.Modal(document.getElementById('modalEdicaoMaster')).show();
+    // 5. Exibe o modal
+    const modal = new bootstrap.Modal(document.getElementById('modalEdicaoMaster'));
+    modal.show();
 }
 
 function filtrarMaster() {
