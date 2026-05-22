@@ -2217,50 +2217,55 @@ def master_revert():
 @super_admin_required
 def master_excluir_estabelecimento(id):
     try:
-        # Injeções da Etapa 5 (Vinculando CPF a tudo)
-        db.session.execute(db.text('ALTER TABLE appointments ADD COLUMN IF NOT EXISTS client_cpf VARCHAR(14);'))
-        db.session.execute(db.text('ALTER TABLE blacklists ADD COLUMN IF NOT EXISTS client_cpf VARCHAR(14);'))
-        db.session.execute(db.text('ALTER TABLE client_subscriptions ADD COLUMN IF NOT EXISTS client_cpf VARCHAR(14);'))
+        est = Establishment.query.get_or_404(id)
         
-        # Injeção para o Admin (Dono)
-        db.session.execute(db.text('ALTER TABLE admins ADD COLUMN IF NOT EXISTS cpf VARCHAR(14);'))
-        db.session.execute(db.text('ALTER TABLE admins ADD COLUMN IF NOT EXISTS birth_date DATE;'))
+        # 1. Remove os administradores vinculados a este estabelecimento primeiro
+        Admin.query.filter_by(establishment_id=est.id).delete()
         
-        # Injeção para o Cliente
-        db.session.execute(db.text('ALTER TABLE clients ADD COLUMN IF NOT EXISTS cpf VARCHAR(14);'))
-        db.session.execute(db.text('ALTER TABLE clients ADD COLUMN IF NOT EXISTS birth_date DATE;'))
+        # Nota: Se você tiver outras tabelas vinculadas (como Professional, Appointment, Service)
+        # e não configurou o 'cascade' no relacionamento, limpe-as aqui antes de deletar o estabelecimento:
+        # Exemplo: Professional.query.filter_by(establishment_id=est.id).delete()
         
-        # Injeção para o Profissional
-        db.session.execute(db.text('ALTER TABLE professionals ADD COLUMN IF NOT EXISTS cpf VARCHAR(14);'))
-        db.session.execute(db.text('ALTER TABLE professionals ADD COLUMN IF NOT EXISTS birth_date DATE;'))
-        
-        db.session.execute(db.text('ALTER TABLE admins ADD COLUMN IF NOT EXISTS is_super_admin BOOLEAN DEFAULT FALSE;'))
-        
+        # 2. Deleta o estabelecimento
+        db.session.delete(est)
         db.session.commit()
         
-        meu_admin = Admin.query.filter_by(username='admin_demo').first()
-        if meu_admin:
-            meu_admin.is_super_admin = True
-            db.session.commit()
-            print("Sucesso: O usuário agora é Super Admin!")
-            
-        if not inspector.has_table("commission_tiers"):
-                    CommissionTier.__table__.create(db.engine)
-            
+        flash(f"O estabelecimento '{est.name}' e seus acessos foram excluídos permanentemente!", "success")
     except Exception as e:
         db.session.rollback()
-        print(f"Aviso na atualização do banco: {e}")
+        flash(f"Erro ao excluir estabelecimento: {e}", "danger")
         
     return redirect(url_for('master_dashboard'))
-
+    
 with app.app_context():
+    # 1. Cria todas as tabelas básicas
     db.create_all()
     
+    # 2. Verifica coluna por coluna e cria se faltar (Isso resolve o erro 500)
+    engine = db.engine
+    inspector = inspect(engine)
+    
+    def garantir_coluna(tabela, coluna, tipo):
+        colunas = [c['name'] for c in inspector.get_columns(tabela)]
+        if coluna not in colunas:
+            print(f"Adicionando coluna {coluna} na tabela {tabela}...")
+            with engine.connect() as conn:
+                conn.execute(text(f"ALTER TABLE {tabela} ADD COLUMN {coluna} {tipo}"))
+                conn.commit()
+
     try:
-        db.session.execute(db.text('ALTER TABLE establishments ADD COLUMN IF NOT EXISTS internal_notes TEXT;'))
-        db.session.commit()
+        garantir_coluna('admins', 'cpf', 'VARCHAR(14)')
+        garantir_coluna('admins', 'birth_date', 'DATE')
+        garantir_coluna('clients', 'cpf', 'VARCHAR(14)')
+        garantir_coluna('clients', 'birth_date', 'DATE')
+        garantir_coluna('professionals', 'cpf', 'VARCHAR(14)')
+        garantir_coluna('professionals', 'birth_date', 'DATE')
+        garantir_coluna('appointments', 'client_cpf', 'VARCHAR(14)')
+        garantir_coluna('blacklists', 'client_cpf', 'VARCHAR(14)')
+        garantir_coluna('client_subscriptions', 'client_cpf', 'VARCHAR(14)')
+        garantir_coluna('admins', 'is_super_admin', 'BOOLEAN DEFAULT FALSE')
     except Exception as e:
-        db.session.rollback()
+        print(f"Erro na verificação de colunas: {e}")
 
 if __name__ == '__main__':
     app.run(debug=True)
