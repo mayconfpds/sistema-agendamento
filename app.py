@@ -27,6 +27,27 @@ import csv
 import io
 import zipfile
 from functools import wraps
+from sqlalchemy import extract
+import re
+
+def validar_cpf(cpf):
+    # Remove qualquer pontuação, deixando apenas os números
+    cpf = re.sub(r'[^0-9]', '', str(cpf))
+    
+    # Verifica tamanho ou se é uma sequência repetida (ex: 111.111.111-11)
+    if len(cpf) != 11 or cpf == cpf[0] * 11:
+        return False
+        
+    # Validação do 1º dígito verificador
+    soma = sum(int(cpf[i]) * (10 - i) for i in range(9))
+    digito1 = (soma * 10 % 11) % 10
+    
+    # Validação do 2º dígito verificador
+    soma = sum(int(cpf[i]) * (11 - i) for i in range(10))
+    digito2 = (soma * 10 % 11) % 10
+    
+    # Retorna True se os dígitos calculados baterem com os digitados
+    return cpf[-2:] == f"{digito1}{digito2}"
 
 def super_admin_required(f):
     @wraps(f)
@@ -221,6 +242,7 @@ class ClientSubscription(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     client_name = db.Column(db.String(150), nullable=False)
     client_phone = db.Column(db.String(20), nullable=False)
+    client_cpf = db.Column(db.String(14), nullable=True)
     plan_id = db.Column(db.Integer, db.ForeignKey('subscription_plans.id'), nullable=False)
     expiry_date = db.Column(db.DateTime, nullable=False)
     status = db.Column(db.String(20), default='ativo')
@@ -254,6 +276,8 @@ class Admin(UserMixin, db.Model):
     username = db.Column(db.String(50), unique=True, nullable=False)
     password_hash = db.Column(db.String(256), nullable=False)
     establishment_id = db.Column(db.Integer, db.ForeignKey('establishments.id'), nullable=False)
+    cpf = db.Column(db.String(14), unique=True, nullable=True) # CPF do dono é único no SaaS todo
+    birth_date = db.Column(db.Date, nullable=True)
     def set_password(self, password): self.password_hash = generate_password_hash(password)
     def check_password(self, password): return check_password_hash(self.password_hash, password)
     
@@ -273,7 +297,57 @@ class Professional(db.Model):
     commission_rate = db.Column(db.Float, default=0.0) 
     is_active = db.Column(db.Boolean, default=True)
     establishment_id = db.Column(db.Integer, db.ForeignKey('establishments.id'), nullable=False)
+    cpf = db.Column(db.String(14), nullable=True)
+    birth_date = db.Column(db.Date, nullable=True)
     appointments = db.relationship('Appointment', backref='professional', lazy=True)
+    
+class CommissionTier(db.Model):
+    __tablename__ = 'commission_tiers'
+    id = db.Column(db.Integer, primary_key=True)
+    professional_id = db.Column(db.Integer, db.ForeignKey('professionals.id'), nullable=False)
+    min_services = db.Column(db.Integer, nullable=False)
+    commission_rate = db.Column(db.Float, nullable=False)
+    
+    professional = db.relationship('Professional', backref=db.backref('tiers', cascade="all, delete-orphan", lazy=True))
+
+def calcular_taxa_comissao(prof_id, data_base=None):
+    import datetime
+    if not data_base: data_base = get_now_brazil().date()
+    elif isinstance(data_base, datetime.datetime): data_base = data_base.date()
+        
+    prof = Professional.query.get(prof_id)
+    if not prof: return 0.0
+    if not prof.tiers: return prof.commission_rate
+        
+    mes_atual = data_base.month
+    ano_atual = data_base.year
+    
+    # Puxa apenas os serviços JÁ CONCLUÍDOS no passado
+    todos_concluidos = Appointment.query.filter(
+        Appointment.professional_id == prof.id, 
+        Appointment.status.in_(['concluido', 'arquivado'])
+    ).all()
+    
+    qtd_passados_no_mes = sum(1 for a in todos_concluidos if a.appointment_date and a.appointment_date.month == mes_atual and a.appointment_date.year == ano_atual)
+    
+    # A CORREÇÃO: O serviço que estamos fechando agora é o passado + 1!
+    servico_atual = qtd_passados_no_mes + 1 
+    
+    taxa_final = prof.commission_rate
+    faixas = sorted(prof.tiers, key=lambda x: x.min_services)
+    
+    for faixa in faixas:
+        if servico_atual >= faixa.min_services:
+            taxa_final = faixa.commission_rate
+            
+    # Print para você ver a perfeição no Log
+    print(f"\n--- COMISSÃO PROGRESSIVA [{prof.name}] ---")
+    print(f"Serviços anteriores no mês: {qtd_passados_no_mes}")
+    print(f"Este é o serviço Nº: {servico_atual}")
+    print(f"Taxa aplicada A ESTE serviço: {taxa_final}%")
+    print(f"---------------------------------------\n")
+            
+    return taxa_final
 
 class Service(db.Model):
     __tablename__ = 'services'
@@ -295,6 +369,8 @@ class Client(db.Model):
     name = db.Column(db.String(150), nullable=False)
     points = db.Column(db.Integer, default=0)
     establishment_id = db.Column(db.Integer, db.ForeignKey('establishments.id'), nullable=False)
+    cpf = db.Column(db.String(14), nullable=True) 
+    birth_date = db.Column(db.Date, nullable=True)
 
 appointment_services = db.Table('appointment_services',
     db.Column('appointment_id', db.Integer, db.ForeignKey('appointments.id'), primary_key=True),
@@ -306,6 +382,7 @@ class Appointment(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     client_name = db.Column(db.String(150), nullable=False)
     client_phone = db.Column(db.String(20), nullable=False)
+    client_cpf = db.Column(db.String(14), nullable=True)
     client_email = db.Column(db.String(120), nullable=False)
     appointment_date = db.Column(db.Date, nullable=False)
     appointment_time = db.Column(db.Time, nullable=False)
@@ -324,9 +401,19 @@ class Appointment(db.Model):
     def service_names(self):
         return " + ".join([s.name for s in self.services])
     
+    # 1. Atualizamos o Loyalty para usar o CPF (que havia faltado na Etapa 5)
     @property
     def client_loyalty(self):
-        return Client.query.filter_by(establishment_id=self.establishment_id, phone=self.client_phone).first()
+        if self.client_cpf:
+            return Client.query.filter_by(establishment_id=self.establishment_id, cpf=self.client_cpf).first()
+        return None
+        
+    # 2. NOVA PROPRIEDADE: Busca o perfil do cliente para ler o aniversário
+    @property
+    def client_profile(self):
+        if self.client_cpf:
+            return Client.query.filter_by(establishment_id=self.establishment_id, cpf=self.client_cpf).first()
+        return None
     
     @property
     def active_subscription(self):
@@ -337,6 +424,7 @@ class Blacklist(db.Model):
     __tablename__ = 'blacklists'
     id = db.Column(db.Integer, primary_key=True)
     client_phone = db.Column(db.String(20), nullable=False)
+    client_cpf = db.Column(db.String(14), nullable=True)
     establishment_id = db.Column(db.Integer, db.ForeignKey('establishments.id'), nullable=False)
 
 @login_manager.user_loader
@@ -468,6 +556,29 @@ def notification_worker():
 if not os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
     threading.Thread(target=notification_worker, daemon=True).start()
 
+@app.route('/api/cliente/buscar_cpf/<cpf>')
+def buscar_cliente_cpf(cpf):
+    # Recebemos o ID do estabelecimento para garantir que só buscamos
+    # clientes que já visitaram este estabelecimento específico
+    est_id = request.args.get('est_id')
+    
+    if not est_id:
+        return jsonify({"erro": "ID do estabelecimento não fornecido"}), 400
+        
+    # Procura o cliente pelo CPF e ID do estabelecimento
+    cliente = Client.query.filter_by(cpf=cpf, establishment_id=est_id).first()
+    
+    if cliente:
+        return jsonify({
+            "encontrado": True,
+            "nome": cliente.name,
+            "phone": cliente.phone,
+            # Converte a data para o formato que o campo <input type="date"> exige
+            "birth_date": cliente.birth_date.strftime('%Y-%m-%d') if cliente.birth_date else ''
+        })
+    else:
+        return jsonify({"encontrado": False})
+
 @app.route('/pagamento')
 @login_required
 def payment():
@@ -544,27 +655,80 @@ def planos():
 
 @app.route('/cadastro-negocio', methods=['GET', 'POST'])
 def register_business():
-    if current_user.is_authenticated: return redirect(url_for('admin_dashboard'))
+    # Se já estiver logado, não tem por que criar conta
+    if current_user.is_authenticated: 
+        return redirect(url_for('admin_dashboard'))
+        
     if request.method == 'POST':
+        from datetime import datetime, date
+        
+        cpf_digitado = request.form.get('cpf')
+        data_nasc_digitada = request.form.get('birth_date')
+
+        # 1. Validação Matemática do CPF
+        if not validar_cpf(cpf_digitado):
+            flash("O CPF inserido é inválido. Por favor, verifique os números digitados.", "danger")
+            return redirect(request.url)
+
+        # 2. Verificação de Unicidade
+        cpf_existente = Admin.query.filter_by(cpf=cpf_digitado).first()
+        if cpf_existente:
+            flash("Este CPF já está registado na nossa plataforma. Por favor, inicie sessão.", "warning")
+            return redirect(url_for('login'))
+
+        # 3. Validação de Idade
+        try:
+            data_nasc = datetime.strptime(data_nasc_digitada, '%Y-%m-%d').date()
+            hoje = date.today()
+            idade = hoje.year - data_nasc.year - ((hoje.month, hoje.day) < (data_nasc.month, data_nasc.day))
+            if idade < 18:
+                flash("Por questões legais, é necessário ter pelo menos 18 anos para registar um estabelecimento.", "danger")
+                return redirect(request.url)
+        except ValueError:
+            flash("Formato de data de nascimento inválido.", "danger")
+            return redirect(request.url)
+
+        # === SE TUDO PASSAR, SALVA NO BANCO ===
         username = request.form.get('username')
         is_master = (username == 'admin_demo') 
         plan_chosen = request.form.get('plan_type') or request.args.get('plan') or 'solo'
         
+        # Cria o Estabelecimento
         est = Establishment(
-            name=request.form.get('business_name'), url_prefix=request.form.get('url_prefix').lower().strip(), 
-            contact_phone=request.form.get('contact_phone'), contact_email=request.form.get('contact_email'), 
-            is_active=is_master, capacity=1, plan_type=plan_chosen, trial_ends=get_now_brazil() + timedelta(days=7)
+            name=request.form.get('business_name'), 
+            url_prefix=request.form.get('url_prefix').lower().strip(), 
+            contact_phone=request.form.get('contact_phone'), 
+            contact_email=request.form.get('contact_email'), 
+            is_active=is_master, 
+            capacity=1, 
+            plan_type=plan_chosen, 
+            trial_ends=get_now_brazil() + timedelta(days=7)
         )
-        db.session.add(est); db.session.commit()
+        db.session.add(est)
+        db.session.commit()
         
         enviar_notificacao_telegram(est.name, est.contact_phone)
         
-        for i in range(7): db.session.add(DaySchedule(establishment_id=est.id, day_index=i, is_active=(i < 5), work_start=time(9,0), work_end=time(18,0)))
-        adm = Admin(username=username, establishment_id=est.id)
+        # Cria os horários padrão
+        for i in range(7): 
+            db.session.add(DaySchedule(establishment_id=est.id, day_index=i, is_active=(i < 5), work_start=time(9,0), work_end=time(18,0)))
+        
+        # Cria o Admin vinculando o CPF e Data de Nascimento
+        adm = Admin(
+            username=username, 
+            establishment_id=est.id,
+            cpf=cpf_digitado,
+            birth_date=data_nasc
+        )
         adm.set_password(request.form.get('password'))
-        db.session.add(adm); db.session.commit()
+        db.session.add(adm)
+        db.session.commit()
+        
+        # Faz o login automático e manda para o painel
         login_user(adm)
         return redirect(url_for('admin_dashboard'))
+        
+    # Se for apenas um 'GET' (acessar a página), mostra o formulário normalmente
     return render_template('register.html')
 
 @app.route('/b/<url_prefix>')
@@ -592,13 +756,20 @@ def schedule_service(url_prefix, service_id):
 def create_appointment(url_prefix):
     est = Establishment.query.filter_by(url_prefix=url_prefix).first_or_404()
     if not est.has_access: return "Inativo", 403
-    client_phone = request.form.get('client_phone').strip()
     
-    if Blacklist.query.filter_by(establishment_id=est.id, client_phone=client_phone).first():
+    client_phone = request.form.get('client_phone').strip()
+    client_cpf = request.form.get('client_cpf').strip()
+    client_name = request.form.get('client_name')
+    client_email = request.form.get('client_email')
+    client_birth_date = request.form.get('client_birth_date')
+    
+    # 1. Checa bloqueio por CPF
+    if Blacklist.query.filter_by(establishment_id=est.id, client_cpf=client_cpf).first():
         flash('Agendamento bloqueado. Por favor, entre em contato com o estabelecimento.', 'danger'); return redirect(url_for('establishment_services', url_prefix=url_prefix))
 
+    # 2. Checa limite de horários simultâneos por CPF
     now = get_now_brazil()
-    user_appts = Appointment.query.filter_by(establishment_id=est.id, client_phone=client_phone).all()
+    user_appts = Appointment.query.filter_by(establishment_id=est.id, client_cpf=client_cpf).all()
     futuros_pendentes = [a for a in user_appts if datetime.combine(a.appointment_date, a.appointment_time) >= now and a.status == 'pendente']
     if len(futuros_pendentes) >= 4:
         flash('Limite de horários simultâneos atingido (Máx: 4).', 'warning'); return redirect(url_for('establishment_services', url_prefix=url_prefix))
@@ -615,7 +786,8 @@ def create_appointment(url_prefix):
     start_dt = datetime.combine(d, t)
     end_dt = start_dt + timedelta(minutes=total_dur)
     
-    active_sub = ClientSubscription.query.filter_by(establishment_id=est.id, client_phone=client_phone, status='ativo').filter(ClientSubscription.expiry_date >= now).first()
+    # 3. Checa clube de assinaturas por CPF
+    active_sub = ClientSubscription.query.filter_by(establishment_id=est.id, client_cpf=client_cpf, status='ativo').filter(ClientSubscription.expiry_date >= now).first()
     is_subscriber = False
     if active_sub:
         is_subscriber = True
@@ -631,7 +803,9 @@ def create_appointment(url_prefix):
         prof = Professional.query.get(int(prof_id))
         if prof and prof.establishment_id == est.id:
             professional_id = prof.id
-            commission_value = total_price * (prof.commission_rate / 100.0)
+            # SUBSTITUA A LINHA ANTIGA POR ESTAS DUAS:
+            taxa_dinamica = calcular_taxa_comissao(prof.id, d)
+            commission_value = total_price * (taxa_dinamica / 100.0)
 
     appts_on_day = Appointment.query.filter_by(appointment_date=d, establishment_id=est.id).filter(Appointment.status == 'pendente')
     if professional_id: appts_on_day = appts_on_day.filter_by(professional_id=professional_id)
@@ -648,9 +822,28 @@ def create_appointment(url_prefix):
 
     token = str(uuid.uuid4())
     
-    appt = Appointment(client_name=request.form.get('client_name'), client_phone=client_phone, client_email=request.form.get('client_email'), appointment_date=d, appointment_time=t, establishment_id=est.id, total_duration=total_dur, total_price=total_price, professional_id=professional_id, commission_value=commission_value, edit_token=token)
+    # 4. Salva o agendamento com o CPF
+    appt = Appointment(client_name=client_name, client_phone=client_phone, client_email=client_email, client_cpf=client_cpf, appointment_date=d, appointment_time=t, establishment_id=est.id, total_duration=total_dur, total_price=total_price, professional_id=professional_id, commission_value=commission_value, edit_token=token)
     for s in selected_services: appt.services.append(s)
-    db.session.add(appt); db.session.commit()
+    db.session.add(appt)
+    
+    # 5. ATUALIZA OU CRIA O CLIENTE NO CRM CENTRAL (Ancorado no CPF)
+    cliente_crm = Client.query.filter_by(cpf=client_cpf, establishment_id=est.id).first()
+    if cliente_crm:
+        cliente_crm.name = client_name
+        cliente_crm.phone = client_phone
+        if client_birth_date:
+            try: cliente_crm.birth_date = datetime.strptime(client_birth_date, '%Y-%m-%d').date()
+            except: pass
+    else:
+        try: bdate = datetime.strptime(client_birth_date, '%Y-%m-%d').date() if client_birth_date else None
+        except: bdate = None
+        cliente_crm = Client(cpf=client_cpf, name=client_name, phone=client_phone, birth_date=bdate, establishment_id=est.id)
+        db.session.add(cliente_crm)
+
+    db.session.commit()
+    
+    # O RESTANTE (Envio de email e whatsapp) CONTINUA INTACTO DAQUI PARA BAIXO...
     
     send_email(f"Confirmado: {est.name}", appt.client_email, f"Agendado para {d.strftime('%d/%m')} às {t.strftime('%H:%M')}.")
     reagendar_link = f"{request.host_url.rstrip('/')}{url_for('reagendar_view', token=token)}"
@@ -713,7 +906,14 @@ def admin_dashboard():
     
     recent_sales = ProductSale.query.filter_by(establishment_id=est.id).order_by(ProductSale.sale_date.desc()).limit(15).all()
     
-    return render_template('admin.html', appointments=appts, services=services, categories=categories, establishment=est, schedules=schedules, blacklists=blacklists, professionals=professionals, today_count=today_count)
+    mes_atual = get_now_brazil().month
+    aniv_equipe = Professional.query.filter(
+        Professional.establishment_id == current_user.establishment_id,
+        extract('month', Professional.birth_date) == mes_atual
+    ).all()
+    # Lembre-se de adicionar aniv_equipe=aniv_equipe no seu render_template!
+    
+    return render_template('admin.html', appointments=appts, services=services, categories=categories, establishment=est, schedules=schedules, blacklists=blacklists, professionals=professionals, today_count=today_count, aniv_equipe=aniv_equipe)
 
 @app.route('/admin/produto/adicionar', methods=['POST'])
 @login_required
@@ -860,13 +1060,25 @@ def add_subscriber():
     try:
         name = request.form.get('client_name')
         phone = request.form.get('client_phone').strip()
+        client_cpf = request.form.get('client_cpf', '').strip()
         plan_id = request.form.get('plan_id')
         meses = int(request.form.get('months', 1))
         
+        if not validar_cpf(client_cpf):
+            return jsonify({'success': False, 'error': 'O CPF informado é inválido. Verifique os números digitados.'})
+        
         expiry = get_now_brazil() + timedelta(days=30 * meses)
         
-        sub = ClientSubscription(client_name=name, client_phone=phone, plan_id=plan_id, expiry_date=expiry, establishment_id=current_user.establishment_id)
-        db.session.add(sub); db.session.commit()
+        sub = ClientSubscription(
+            client_name=name, 
+            client_phone=phone, 
+            client_cpf=client_cpf,
+            plan_id=plan_id, 
+            expiry_date=expiry, 
+            establishment_id=current_user.establishment_id
+        )
+        db.session.add(sub)
+        db.session.commit()
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
@@ -934,18 +1146,61 @@ def alterar_senha():
 def historico_atendimentos():
     if not current_user.establishment.has_access: return redirect(url_for('planos'))
     est = current_user.establishment
-    start_date_str = request.args.get('start_date'); end_date_str = request.args.get('end_date')
+    
+    # 1. FILTRO AUTOMÁTICO IGUAL AO DO PAINEL BI (Últimos 30 dias por padrão)
+    hoje = get_now_brazil().date()
+    start_date_str = request.args.get('start_date', (hoje - timedelta(days=30)).strftime('%Y-%m-%d'))
+    end_date_str = request.args.get('end_date', hoje.strftime('%Y-%m-%d'))
+    
     query = Appointment.query.filter_by(establishment_id=est.id)
+    
     if start_date_str:
-        try: start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date(); query = query.filter(Appointment.appointment_date >= start_date)
+        try: 
+            start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+            query = query.filter(Appointment.appointment_date >= start_date)
         except: pass
+        
     if end_date_str:
-        try: end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date(); query = query.filter(Appointment.appointment_date <= end_date)
+        try: 
+            end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+            query = query.filter(Appointment.appointment_date <= end_date)
         except: pass
+        
+    # 2. ORDEM EXATA: Do mais recente para o mais antigo (descendente)
     appts = query.order_by(Appointment.appointment_date.desc(), Appointment.appointment_time.desc()).all()
+    
     total_revenue = sum(a.total_price for a in appts if a.status in ['concluido', 'arquivado'])
     total_appts = len(appts)
+    
     return render_template('historico.html', appointments=appts, establishment=est, start_date=start_date_str, end_date=end_date_str, total_revenue=total_revenue, total_appts=total_appts)
+
+@app.route('/api/clientes/aniversariantes')
+@login_required
+def api_aniversariantes():
+    if current_user.establishment.plan_type != 'gestao':
+        return jsonify({'success': False, 'error': 'Funcionalidade exclusiva do plano Gestão.'})
+
+    mes_atual = get_now_brazil().month
+
+    # Busca clientes deste estabelecimento que nasceram no mês atual
+    clientes = Client.query.filter(
+        Client.establishment_id == current_user.establishment_id,
+        extract('month', Client.birth_date) == mes_atual
+    ).all()
+
+    lista = []
+    for c in clientes:
+        lista.append({
+            'nome': c.name,
+            'telefone': c.phone,
+            'dia': c.birth_date.day,
+            'data_formatada': c.birth_date.strftime('%d/%m')
+        })
+
+    # Ordena a lista pelo dia do mês (do dia 1 ao 31)
+    lista.sort(key=lambda x: x['dia'])
+
+    return jsonify({'success': True, 'clientes': lista})
 
 @app.route('/api/clientes_inativos')
 @login_required
@@ -958,7 +1213,7 @@ def api_clientes_inativos():
     est_id = current_user.establishment_id
 
     subquery = db.session.query(
-        Appointment.client_phone,
+        Appointment.client_cpf,
         func.max(Appointment.appointment_date).label('ultima_data')
     ).filter(
         Appointment.establishment_id == est_id, 
@@ -1134,29 +1389,41 @@ def complete_appointment(id):
     a = Appointment.query.get_or_404(id)
     if a.establishment_id != current_user.establishment_id: return jsonify({'success': False, 'error': 'Erro de acesso'}), 403
     est = a.establishment
+    
+    # 1. Calcula a comissão APENAS para este serviço específico
     if est.plan_type == 'gestao':
-            prof_id = request.form.get('professional_id')
-            if prof_id: a.professional_id = int(prof_id)
-            if a.professional_id:
-                prof = Professional.query.get(a.professional_id)
-                if prof: 
-                    valor_real_servicos = sum(s.price for s in a.services)
-                    a.commission_value = valor_real_servicos * (prof.commission_rate / 100.0)
+        prof_id = request.form.get('professional_id')
+        if prof_id: a.professional_id = int(prof_id)
+        if a.professional_id:
+            prof = Professional.query.get(a.professional_id)
+            if prof:
+                valor_real_servicos = sum(s.price for s in a.services)
+                # Chama a função que descobre qual a taxa EXATA para este número de serviço
+                taxa_dinamica = calcular_taxa_comissao(prof.id, a.appointment_date)
+                a.commission_value = valor_real_servicos * (taxa_dinamica / 100.0)
+                
+    # 2. Muda o status para concluído
     a.status = 'concluido'
+    
+    # Lógica de fidelidade
     msg_fidelidade = ""
     if est.loyalty_points_goal and est.loyalty_points_goal > 0:
-        cliente = Client.query.filter_by(establishment_id=est.id, phone=a.client_phone).first()
+        cliente = Client.query.filter_by(establishment_id=est.id, cpf=a.client_cpf).first()
         if not cliente:
             cliente = Client(phone=a.client_phone, name=a.client_name, establishment_id=est.id, points=0)
             db.session.add(cliente)
         cliente.points += 1; pontos_restantes = est.loyalty_points_goal - cliente.points
         if pontos_restantes > 0: msg_fidelidade = f"\n\n🎁 Fidelidade: Você ganhou 1 ponto! Faltam apenas {pontos_restantes} ponto(s) para resgatar o seu prêmio: {est.loyalty_reward}."
         else: msg_fidelidade = f"\n\n🎉 PARABÉNS! Você atingiu {cliente.points} pontos e GANHOU O SEU PRÊMIO: {est.loyalty_reward}! Mostre este e-mail na sua próxima visita."
+    
+    # 3. Salva tudo de uma vez
     db.session.commit()
+    
     link_av = request.host_url.replace('http://', 'https://') + f'avaliar/{a.id}'
     subj = f"Como foi o atendimento no(a) {est.name}?"
     body = f"Olá {a.client_name}!\n\nO seu atendimento foi concluído. Queremos saber a sua opinião!\n\nÉ super rápido: você só precisa clicar no link abaixo e dar uma nota de 1 a 5 estrelas.\n\n{link_av}{msg_fidelidade}\n\nObrigado!"
     send_email(subj, a.client_email, body)
+    
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest': return jsonify({'success': True})
     return redirect(url_for('admin_dashboard'))
 
@@ -1200,8 +1467,8 @@ def mark_no_show(id):
     if not current_user.establishment.has_access: return redirect(url_for('planos'))
     a = Appointment.query.get_or_404(id)
     if a.establishment_id != current_user.establishment_id: return jsonify({'success': False, 'error': 'Erro de acesso'}), 403
-    if not Blacklist.query.filter_by(establishment_id=a.establishment_id, client_phone=a.client_phone).first():
-        bl = Blacklist(establishment_id=a.establishment_id, client_phone=a.client_phone)
+    if not Blacklist.query.filter_by(establishment_id=a.establishment_id, client_cpf=a.client_cpf).first():
+        bl = Blacklist(establishment_id=a.establishment_id, client_phone=a.client_phone, client_cpf=a.client_cpf)
         db.session.add(bl)
     a.status = 'falta'; db.session.commit()
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest': return jsonify({'success': True})
@@ -1211,14 +1478,15 @@ def mark_no_show(id):
 @login_required
 def add_blacklist():
     if not current_user.establishment.has_access: return redirect(url_for('planos'))
-    phone = request.form.get('phone', '').strip()
-    if phone:
-        exists = Blacklist.query.filter_by(establishment_id=current_user.establishment_id, client_phone=phone).first()
+    cpf = request.form.get('cpf', '').strip() # Mudou de phone para CPF
+    phone = request.form.get('phone', '').strip() # Mantemos o phone visual
+    if cpf:
+        exists = Blacklist.query.filter_by(establishment_id=current_user.establishment_id, client_cpf=cpf).first()
         if not exists:
-            db.session.add(Blacklist(client_phone=phone, establishment_id=current_user.establishment_id)); db.session.commit()
+            db.session.add(Blacklist(client_phone=phone, client_cpf=cpf, establishment_id=current_user.establishment_id)); db.session.commit()
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest': return jsonify({'success': True})
         else:
-            if request.headers.get('X-Requested-With') == 'XMLHttpRequest': return jsonify({'success': False, 'error': 'Número já bloqueado.'})
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest': return jsonify({'success': False, 'error': 'CPF já bloqueado.'})
     return redirect(url_for('admin_dashboard'))
 
 @app.route('/admin/blacklist/remove/<int:id>', methods=['POST'])
@@ -1233,27 +1501,119 @@ def remove_blacklist(id):
 @login_required
 def add_professional():
     if current_user.establishment.plan_type != 'gestao': return redirect(url_for('admin_dashboard'))
-    name = request.form.get('name'); commission = request.form.get('commission_rate')
-    if name and commission:
-        p = Professional(name=name, commission_rate=float(str(commission).replace(',', '.')), establishment_id=current_user.establishment_id)
-        db.session.add(p); db.session.commit()
-        est = current_user.establishment; est.capacity = max(1, Professional.query.filter_by(establishment_id=est.id).count()); db.session.commit()
+    
+    name = request.form.get('name')
+    cpf_prof = request.form.get('cpf', '').strip()
+    nasc_prof = request.form.get('birth_date')
+    
+    # 1. Validação do CPF
+    if not validar_cpf(cpf_prof):
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest': 
+            return jsonify({'success': False, 'error': 'CPF do profissional inválido.'})
+        flash('CPF do profissional inválido.', 'danger')
+        return redirect(url_for('admin_dashboard'))
+        
+    try:
+        bdate = datetime.strptime(nasc_prof, '%Y-%m-%d').date() if nasc_prof else None
+    except:
+        bdate = None
+
+    if name:
+        # 2. Cria o profissional primeiro com comissão zero (para gerar o ID no banco)
+        p = Professional(
+            name=name, 
+            cpf=cpf_prof,
+            birth_date=bdate,
+            commission_rate=0.0, 
+            establishment_id=current_user.establishment_id
+        )
+        db.session.add(p)
+        db.session.commit()
+        
+        # 3. Lógica das Comissões (Fixa ou Escalável)
+        tier_mins = request.form.getlist('tier_min[]')
+        tier_rates = request.form.getlist('tier_rate[]')
+        
+        # Se vieram faixas escaláveis preenchidas
+        if tier_mins and tier_rates and any(str(m).strip() for m in tier_mins):
+            for t_min, t_rate in zip(tier_mins, tier_rates):
+                if str(t_min).strip() and str(t_rate).strip():
+                    nova_faixa = CommissionTier(
+                        professional_id=p.id,
+                        min_services=int(t_min),
+                        commission_rate=float(str(t_rate).replace(',', '.'))
+                    )
+                    db.session.add(nova_faixa)
+        else:
+            # Se for apenas a comissão fixa padrão
+            commission = request.form.get('commission_rate')
+            if commission:
+                p.commission_rate = float(str(commission).replace(',', '.'))
+                
+        db.session.commit()
+        
+        # 4. Atualiza capacidade do salão
+        est = current_user.establishment
+        est.capacity = max(1, Professional.query.filter_by(establishment_id=est.id).count())
+        db.session.commit()
+        
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest': 
             return jsonify({'success': True, 'id': p.id, 'name': p.name})
+            
     return redirect(url_for('admin_dashboard'))
 
 @app.route('/admin/profissional/editar/<int:id>', methods=['POST'])
 @login_required
 def edit_professional(id):
     p = Professional.query.get_or_404(id)
-    if p.establishment_id != current_user.establishment_id: return jsonify({'success': False, 'error': 'Acesso negado'}), 403
+    if p.establishment_id != current_user.establishment_id: 
+        return jsonify({'success': False, 'error': 'Acesso negado'}), 403
+        
+    cpf_prof = request.form.get('cpf', '').strip()
+    nasc_prof = request.form.get('birth_date')
+    
+    # 1. Validação do CPF
+    if cpf_prof and not validar_cpf(cpf_prof):
+        return jsonify({'success': False, 'error': 'CPF do profissional inválido.'})
+        
+    # 2. Atualiza dados pessoais
     p.name = request.form.get('name', p.name)
-    commission = request.form.get('commission_rate')
-    if commission: p.commission_rate = float(str(commission).replace(',', '.'))
+    if cpf_prof: 
+        p.cpf = cpf_prof
+    if nasc_prof:
+        try: 
+            p.birth_date = datetime.strptime(nasc_prof, '%Y-%m-%d').date()
+        except: 
+            pass
+            
+    # 3. Limpa todas as faixas escaláveis antigas deste profissional
+    CommissionTier.query.filter_by(professional_id=p.id).delete()
+    
+    # 4. Registra as novas faixas escaláveis (se existirem)
+    tier_mins = request.form.getlist('tier_min[]')
+    tier_rates = request.form.getlist('tier_rate[]')
+    
+    if tier_mins and tier_rates and any(str(m).strip() for m in tier_mins):
+        p.commission_rate = 0.0 # Zera a fixa, pois ele usará a escalável
+        for t_min, t_rate in zip(tier_mins, tier_rates):
+            if str(t_min).strip() and str(t_rate).strip():
+                nova_faixa = CommissionTier(
+                    professional_id=p.id,
+                    min_services=int(t_min),
+                    commission_rate=float(str(t_rate).replace(',', '.'))
+                )
+                db.session.add(nova_faixa)
+    else:
+        # Volta para a comissão fixa se ele desligou o escalável
+        commission = request.form.get('commission_rate')
+        if commission: 
+            p.commission_rate = float(str(commission).replace(',', '.'))
+            
     db.session.commit()
+    
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest': 
-
         return jsonify({'success': True, 'id': p.id, 'name': p.name})
+        
     return redirect(url_for('admin_dashboard'))
 
 @app.route('/admin/profissional/excluir/<int:id>', methods=['POST'])
@@ -1857,23 +2217,39 @@ def master_revert():
 @super_admin_required
 def master_excluir_estabelecimento(id):
     try:
-        est = Establishment.query.get_or_404(id)
+        # Injeções da Etapa 5 (Vinculando CPF a tudo)
+        db.session.execute(db.text('ALTER TABLE appointments ADD COLUMN IF NOT EXISTS client_cpf VARCHAR(14);'))
+        db.session.execute(db.text('ALTER TABLE blacklists ADD COLUMN IF NOT EXISTS client_cpf VARCHAR(14);'))
+        db.session.execute(db.text('ALTER TABLE client_subscriptions ADD COLUMN IF NOT EXISTS client_cpf VARCHAR(14);'))
         
-        # 1. Remove os administradores vinculados a este estabelecimento primeiro
-        Admin.query.filter_by(establishment_id=est.id).delete()
+        # Injeção para o Admin (Dono)
+        db.session.execute(db.text('ALTER TABLE admins ADD COLUMN IF NOT EXISTS cpf VARCHAR(14);'))
+        db.session.execute(db.text('ALTER TABLE admins ADD COLUMN IF NOT EXISTS birth_date DATE;'))
         
-        # Nota: Se você tiver outras tabelas vinculadas (como Professional, Appointment, Service)
-        # e não configurou o 'cascade' no relacionamento, limpe-as aqui antes de deletar o estabelecimento:
-        # Exemplo: Professional.query.filter_by(establishment_id=est.id).delete()
+        # Injeção para o Cliente
+        db.session.execute(db.text('ALTER TABLE clients ADD COLUMN IF NOT EXISTS cpf VARCHAR(14);'))
+        db.session.execute(db.text('ALTER TABLE clients ADD COLUMN IF NOT EXISTS birth_date DATE;'))
         
-        # 2. Deleta o estabelecimento
-        db.session.delete(est)
+        # Injeção para o Profissional
+        db.session.execute(db.text('ALTER TABLE professionals ADD COLUMN IF NOT EXISTS cpf VARCHAR(14);'))
+        db.session.execute(db.text('ALTER TABLE professionals ADD COLUMN IF NOT EXISTS birth_date DATE;'))
+        
+        db.session.execute(db.text('ALTER TABLE admins ADD COLUMN IF NOT EXISTS is_super_admin BOOLEAN DEFAULT FALSE;'))
+        
         db.session.commit()
         
-        flash(f"O estabelecimento '{est.name}' e seus acessos foram excluídos permanentemente!", "success")
+        meu_admin = Admin.query.filter_by(username='admin_demo').first()
+        if meu_admin:
+            meu_admin.is_super_admin = True
+            db.session.commit()
+            print("Sucesso: O usuário agora é Super Admin!")
+            
+        if not inspector.has_table("commission_tiers"):
+                    CommissionTier.__table__.create(db.engine)
+            
     except Exception as e:
         db.session.rollback()
-        flash(f"Erro ao excluir estabelecimento: {e}", "danger")
+        print(f"Aviso na atualização do banco: {e}")
         
     return redirect(url_for('master_dashboard'))
 
@@ -1888,3 +2264,4 @@ with app.app_context():
 
 if __name__ == '__main__':
     app.run(debug=True)
+    

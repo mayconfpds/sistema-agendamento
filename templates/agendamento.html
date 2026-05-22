@@ -66,14 +66,35 @@
                     </div>
                     {% endif %}
 
-                    <div class="mb-3"><label class="fw-bold small">Seu Nome</label><input type="text" name="client_name" class="form-control" required></div>
+                    <input type="hidden" id="estIdAgendamento" value="{{ establishment.id }}">
+
+                    <div class="mb-3">
+                        <label class="fw-bold small text-primary"><i class="bi bi-person-vcard"></i> Seu CPF</label>
+                        <input type="text" name="client_cpf" id="clienteCpf" class="form-control form-control-lg border-primary" placeholder="000.000.000-00" required maxlength="14" oninput="mascaraEBuscaCpf(this)">
+                        <small class="text-success fw-bold mt-1" id="cpfFeedback" style="display: none; font-size: 0.85rem;">
+                            <i class="bi bi-check-circle-fill"></i> Bem-vindo de volta! Seus dados foram preenchidos.
+                        </small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="fw-bold small">Seu Nome</label>
+                        <input type="text" name="client_name" id="clienteNome" class="form-control" required>
+                    </div>
+
                     <div class="row g-2 mb-3">
-                        <div class="col-6">
+                        <div class="col-md-4">
                             <label class="fw-bold small">WhatsApp</label>
                             <input type="tel" id="client_phone_mask" class="form-control" placeholder="(00) 00000-0000" maxlength="15" required oninput="aplicarMascara(this)">
                             <input type="hidden" name="client_phone" id="client_phone_hidden">
                         </div>
-                        <div class="col-6"><label class="fw-bold small">Seu E-mail</label><input type="email" name="client_email" class="form-control" required></div>
+                        <div class="col-md-4">
+                            <label class="fw-bold small">Data de Nascimento</label>
+                            <input type="date" name="client_birth_date" id="clienteNascimento" class="form-control" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="fw-bold small">Seu E-mail</label>
+                            <input type="email" name="client_email" id="clienteEmail" class="form-control" required>
+                        </div>
                     </div>
                     
                     <div class="mb-3"><label class="fw-bold small">Escolha a Data</label><input type="date" id="date" name="appointment_date" class="form-control" required></div>
@@ -126,6 +147,55 @@ function updateTotals() {
     document.getElementById('display-dur').innerText = d;
     totalDur = d;
     if(document.getElementById('date').value) { fetchSlots(); }
+}
+
+function mascaraEBuscaCpf(campo) {
+    // 1. Aplica a Máscara em tempo real
+    let valor = campo.value.replace(/\D/g, ''); 
+    if (valor.length > 11) valor = valor.slice(0, 11);
+    
+    valor = valor.replace(/(\d{3})(\d)/, '$1.$2');
+    valor = valor.replace(/(\d{3})(\d)/, '$1.$2');
+    valor = valor.replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+    campo.value = valor;
+
+    // 2. Se o CPF estiver completo, ativa o Resgate Automático
+    if (campo.value.length === 14) {
+        const estId = document.getElementById('estIdAgendamento').value;
+        const feedback = document.getElementById('cpfFeedback');
+        
+        fetch(`/api/cliente/buscar_cpf/${campo.value}?est_id=${estId}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.encontrado) {
+                    // Preenche o nome e nascimento
+                    document.getElementById('clienteNome').value = data.nome;
+                    document.getElementById('clienteNascimento').value = data.birth_date;
+                    
+                    // Preenche o telefone e FORÇA a máscara a rodar para checar o clube de assinaturas!
+                    const phoneInput = document.getElementById('client_phone_mask');
+                    phoneInput.value = data.phone;
+                    aplicarMascara(phoneInput);
+                    
+                    // Mostra o aviso visual
+                    campo.classList.add('is-valid', 'border-success');
+                    feedback.style.display = 'block';
+                } else {
+                    // Limpa os campos se for CPF novo
+                    document.getElementById('clienteNome').value = '';
+                    document.getElementById('clienteNascimento').value = '';
+                    document.getElementById('client_phone_mask').value = '';
+                    document.getElementById('client_phone_hidden').value = '';
+                    
+                    campo.classList.remove('is-valid', 'border-success');
+                    feedback.style.display = 'none';
+                }
+            })
+            .catch(error => console.error('Erro na busca:', error));
+    } else {
+        document.getElementById('cpfFeedback').style.display = 'none';
+        campo.classList.remove('is-valid', 'border-success');
+    }
 }
 
 function aplicarMascara(input) {

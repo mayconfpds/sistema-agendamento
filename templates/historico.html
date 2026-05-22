@@ -7,12 +7,19 @@
         <h2 class="h4 mb-0 fw-bold"><i class="bi bi-journal-text text-primary"></i> Histórico de Atendimentos</h2>
         <div class="d-flex gap-2">
             {% if establishment.plan_type == 'gestao' %}
+                <button class="btn btn-danger btn-sm fw-bold shadow-sm" onclick="abrirModalAniversariantes()">
+                    <i class="bi bi-gift-fill"></i> Aniversariantes
+                </button>
+                
                 <button class="btn btn-warning btn-sm fw-bold shadow-sm" onclick="abrirModalInativos()">
                     <i class="bi bi-person-exclamation"></i> Recuperar Clientes
                 </button>
             {% else %}
                 <form method="POST" action="{{ url_for('upgrade_plano') }}" class="m-0" onsubmit="return confirm('Ferramenta exclusiva. Deseja evoluir para o plano Gestão agora?');">
                     <input type="hidden" name="plano_destino" value="gestao">
+                    <button type="submit" class="btn btn-secondary btn-sm fw-bold shadow-sm" title="Exclusivo Plano Gestão">
+                        <i class="bi bi-lock-fill text-danger"></i> Aniversariantes
+                    </button>
                     <button type="submit" class="btn btn-secondary btn-sm fw-bold shadow-sm" title="Exclusivo Plano Gestão">
                         <i class="bi bi-lock-fill text-warning"></i> Recuperar Clientes
                     </button>
@@ -69,13 +76,15 @@
     <div class="card shadow-sm border-0">
         <div class="card-body p-0 table-responsive">
             <table class="table table-hover align-middle mb-0" id="tabelaHistorico">
-                <thead class="table-secondary">
+                <thead class="table-light">
                     <tr>
-                        <th>Data</th>
-                        <th>Cliente</th>
-                        <th>Serviços</th>
-                        <th>Profissional & Comissão</th>
-                        <th>Status</th>
+                        <th style="cursor: pointer;" onclick="ordenarTabela(0, this)">Data <i class="bi bi-arrow-down-up text-muted ms-1" style="font-size: 0.75rem;"></i></th>
+                        <th style="cursor: pointer;" onclick="ordenarTabela(1, this)">Cliente <i class="bi bi-arrow-down-up text-muted ms-1" style="font-size: 0.75rem;"></i></th>
+                        <th style="cursor: pointer;" onclick="ordenarTabela(2, this)">Serviços e Valor <i class="bi bi-arrow-down-up text-muted ms-1" style="font-size: 0.75rem;"></i></th>
+                        <th>CPF</th>
+                        <th style="cursor: pointer;" onclick="ordenarTabela(0, this)">Aniversário <i class="bi bi-arrow-down-up text-muted ms-1" style="font-size: 0.75rem;"></i></th>
+                        <th style="cursor: pointer;" onclick="ordenarTabela(5, this)">Profissional & Comissão <i class="bi bi-arrow-down-up text-muted ms-1" style="font-size: 0.75rem;"></i></th>
+                        <th style="cursor: pointer;" onclick="ordenarTabela(6, this)">Status <i class="bi bi-arrow-down-up text-muted ms-1" style="font-size: 0.75rem;"></i></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -85,10 +94,12 @@
                             <div class="fw-bold text-body-emphasis">{{ a.appointment_date.strftime('%d/%m/%Y') }}</div>
                             <div class="small text-muted">{{ a.appointment_time.strftime('%H:%M') }}</div>
                         </td>
+
                         <td>
                             <div class="fw-bold">{{ a.client_name }}</div>
                             <div class="small text-muted"><i class="bi bi-whatsapp"></i> {{ a.client_phone }}</div>
                         </td>
+
                         <td>
                             <div class="small fw-bold mb-1">{{ a.service_names }}</div>
                             {% set valor_real = a.services | sum(attribute='price') %}
@@ -105,6 +116,17 @@
                                 {% endif %}
                             </div>
                         </td>
+
+                        <td class="small text-body-secondary">
+                            <i class="bi bi-person-vcard text-secondary"></i> 
+                            {{ a.client_cpf or 'Não informado' }}
+                        </td>
+
+                        <td class="small text-body-secondary">
+                            <i class="bi bi-cake2 text-danger"></i>
+                            {{ a.client_profile.birth_date.strftime('%d/%m/%Y') if a.client_profile and a.client_profile.birth_date else 'Não informado' }}
+                        </td>
+
                         <td>
                             {% if establishment.plan_type == 'gestao' and a.professional %}
                                 <div class="badge bg-light border text-dark mb-1"><i class="bi bi-person-badge"></i> {{ a.professional.name }}</div>
@@ -115,6 +137,7 @@
                                 <span class="text-muted small">-</span>
                             {% endif %}
                         </td>
+
                         <td>
                             {% if a.status in ['concluido', 'arquivado'] %}
                                 <span class="badge bg-success">Concluído</span>
@@ -167,6 +190,32 @@
                             </tr>
                         </thead>
                         <tbody id="corpoTabelaInativos">
+                            </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalAniversariantes" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <div class="modal-header bg-danger text-white border-0">
+                <h5 class="modal-title fw-bold"><i class="bi bi-gift-fill"></i> Aniversariantes do Mês</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0" id="tabelaAniversariantes">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Cliente</th>
+                                <th>Data</th>
+                                <th class="text-end">Ação</th>
+                            </tr>
+                        </thead>
+                        <tbody>
                             </tbody>
                     </table>
                 </div>
@@ -240,6 +289,119 @@
             loading.classList.add('d-none');
             tabela.classList.remove('d-none');
             corpoTabela.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-danger">Erro de conexão. Tente novamente.</td></tr>';
+        }
+    }
+
+    async function abrirModalAniversariantes() {
+    const modal = new bootstrap.Modal(document.getElementById('modalAniversariantes'));
+    modal.show();
+
+    const corpoTabela = document.querySelector('#tabelaAniversariantes tbody');
+    corpoTabela.innerHTML = '<tr><td colspan="3" class="text-center py-4 text-muted"><div class="spinner-border text-danger spinner-border-sm"></div> Buscando aniversariantes...</td></tr>';
+
+    try {
+        const res = await fetch('/api/clientes/aniversariantes');
+        const data = await res.json();
+
+        if (data.success && data.clientes.length > 0) {
+            let html = '';
+            // Pega o nome do estabelecimento para colocar na mensagem
+            const nomeBarbearia = "{{ establishment.name|e }}";
+
+            data.clientes.forEach(c => {
+                // Remove traços e parênteses para o link do WhatsApp funcionar
+                const zapLimpo = c.telefone.replace(/\D/g, '');
+                
+                // A mensagem estratégica de marketing formatada
+                const msg = encodeURIComponent(`Olá ${c.nome}! 🎉 A equipe da ${nomeBarbearia} viu que este é o mês do seu aniversário (dia ${c.data_formatada}). Parabéns! 🎂 Temos um presente especial esperando por você. Vamos agendar seu horário?`);
+                const urlZap = `https://wa.me/55${zapLimpo}?text=${msg}`;
+
+                html += `
+                <tr>
+                    <td>
+                        <div class="fw-bold text-body-emphasis">${c.nome}</div>
+                        <div class="small text-muted"><i class="bi bi-whatsapp text-success"></i> ${c.telefone}</div>
+                    </td>
+                    <td>
+                        <span class="badge bg-danger-subtle text-danger border border-danger-subtle fs-6"><i class="bi bi-calendar-event"></i> ${c.data_formatada}</span>
+                    </td>
+                    <td class="text-end">
+                        <a href="${urlZap}" target="_blank" class="btn btn-success btn-sm fw-bold shadow-sm">
+                            <i class="bi bi-whatsapp"></i> Dar Parabéns
+                        </a>
+                    </td>
+                </tr>`;
+            });
+            corpoTabela.innerHTML = html;
+        } else if (data.success) {
+            corpoTabela.innerHTML = '<tr><td colspan="3" class="text-center py-4 text-muted">Nenhum cliente faz aniversário este mês.</td></tr>';
+        } else {
+            corpoTabela.innerHTML = `<tr><td colspan="3" class="text-center py-4 text-danger">${data.error}</td></tr>`;
+        }
+    } catch (e) {
+        corpoTabela.innerHTML = '<tr><td colspan="3" class="text-center py-4 text-danger">Erro de conexão. Tente novamente.</td></tr>';
+    }
+}
+    function ordenarTabela(n, thElement) {
+        const table = thElement.closest("table");
+        let rows, switching, i, x, y, shouldSwitch, dir, switchcount = 0;
+        switching = true;
+        dir = "asc"; // A ordem padrão ao clicar a primeira vez é Crescente
+        
+        // Reseta todos os ícones da tabela para o padrão (setas duplas cinzas)
+        const allThs = thElement.parentElement.querySelectorAll('th i');
+        allThs.forEach(icon => icon.className = 'bi bi-arrow-down-up text-muted ms-1');
+
+        while (switching) {
+            switching = false;
+            rows = table.querySelectorAll("tbody tr");
+            
+            for (i = 0; i < (rows.length - 1); i++) {
+                shouldSwitch = false;
+                
+                // Pega o conteúdo da célula atual e da próxima
+                x = rows[i].getElementsByTagName("TD")[n];
+                y = rows[i + 1].getElementsByTagName("TD")[n];
+                
+                let cmpX = x.innerText.toLowerCase().trim();
+                let cmpY = y.innerText.toLowerCase().trim();
+
+                // Inteligência para Datas (Coluna 0): Converte DD/MM/YYYY para YYYYMMDD para comparar matematicamente
+                if (n === 0) {
+                    cmpX = cmpX.substring(6,10) + cmpX.substring(3,5) + cmpX.substring(0,2) + cmpX.substring(11);
+                    cmpY = cmpY.substring(6,10) + cmpY.substring(3,5) + cmpY.substring(0,2) + cmpY.substring(11);
+                } 
+                // Inteligência para Valores e Comissões: Remove o 'R$', espaços e converte para número decimal
+                else if (cmpX.includes('r$') || n === 2 || n === 5) {
+                    cmpX = parseFloat(cmpX.replace(/[^0-9,-]+/g,"").replace(",", ".")) || 0;
+                    cmpY = parseFloat(cmpY.replace(/[^0-9,-]+/g,"").replace(",", ".")) || 0;
+                }
+
+                if (dir === "asc") {
+                    if (cmpX > cmpY) { shouldSwitch = true; break; }
+                } else if (dir === "desc") {
+                    if (cmpX < cmpY) { shouldSwitch = true; break; }
+                }
+            }
+            
+            if (shouldSwitch) {
+                // Se encontrou algo fora de ordem, inverte a posição das linhas e marca para continuar verificando
+                rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
+                switching = true;
+                switchcount++;
+            } else {
+                // Se terminou de verificar e não moveu nada, e estava Crescente, inverte para Decrescente e roda de novo
+                if (switchcount === 0 && dir === "asc") {
+                    dir = "desc";
+                    switching = true;
+                }
+            }
+        }
+        
+        // Atualiza o ícone da coluna clicada para mostrar a direção certa e com destaque azul
+        const icon = thElement.querySelector('i');
+        if(icon) {
+            icon.className = dir === 'asc' ? 'bi bi-arrow-up text-primary fw-bold ms-1' : 'bi bi-arrow-down text-primary fw-bold ms-1';
         }
     }
 </script>

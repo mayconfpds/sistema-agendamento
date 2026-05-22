@@ -32,7 +32,7 @@
                     </ul>
                     
                     {% if not current_user.is_authenticated %}
-                        <a href="{{ url_for('register_business', plan='solo') }}" class="btn btn-outline-dark py-3 fw-bold rounded-pill w-100 shadow-sm">Começar Teste Grátis</a>
+                        <a href="{{ url_for('register_business', plan='solo') }}" class="btn btn-secundary py-3 fw-bold rounded-pill w-100 shadow-sm">Começar Teste Grátis</a>
                     {% elif not current_user.establishment.has_access %}
                         <a href="{{ url_for('payment', plan='solo') }}" class="btn btn-outline-dark py-3 fw-bold rounded-pill w-100 shadow-sm">Assinar Plano Solo</a>
                     {% else %}

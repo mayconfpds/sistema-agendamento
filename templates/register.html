@@ -18,10 +18,22 @@
                     <h5 class="mb-3 text-primary fw-bold small text-uppercase ls-1">Dados do Negócio</h5>
                     <div class="mb-3"><label class="form-label small fw-bold">Nome do Estabelecimento</label><input type="text" class="form-control" name="business_name" required></div>
                     <div class="mb-3"><label class="form-label small fw-bold">Link Personalizado</label><div class="input-group"><span class="input-group-text bg-body-tertiary border-end-0">agendafacil.com/b/</span><input type="text" class="form-control border-start-0 ps-0" name="url_prefix" pattern="[a-z0-9-]+" required></div></div>
+                    
                     <div class="row g-2 mb-4">
                         <div class="col-md-6"><label class="form-label small fw-bold">WhatsApp</label><input type="text" class="form-control" name="contact_phone"></div>
                         <div class="col-md-6"><label class="form-label small fw-bold">E-mail para Notificações</label><input type="email" class="form-control" name="contact_email" required></div>
+                        
+                        <div class="col-md-6 mt-3">
+                            <label class="form-label small fw-bold">CPF do Responsável</label>
+                            <input type="text" name="cpf" id="cpfInput" class="form-control" placeholder="000.000.000-00" required maxlength="14" oninput="mascaraCPF(this)">
+                            <small class="text-muted" style="font-size: 0.75rem;">Apenas números.</small>
+                        </div>
+                        <div class="col-md-6 mt-3">
+                            <label class="form-label small fw-bold">Data de Nascimento</label>
+                            <input type="date" name="birth_date" class="form-control" required>
+                        </div>
                     </div>
+                    
                     <h5 class="mb-3 text-primary fw-bold small text-uppercase ls-1 border-top pt-4">Acesso ao Painel</h5>
                     <div class="row g-2">
                         <div class="col-md-6 mb-3"><label class="form-label small fw-bold">Usuário</label><input type="text" class="form-control" name="username" required></div>
@@ -34,4 +46,22 @@
         </div>
     </div>
 </div>
+
+<script>
+function mascaraCPF(campo) {
+    // Remove tudo o que não for número
+    let valor = campo.value.replace(/\D/g, ''); 
+    
+    // Limita a 11 números no máximo
+    if (valor.length > 11) valor = valor.slice(0, 11);
+    
+    // Aplica a máscara: 000.000.000-00
+    valor = valor.replace(/(\d{3})(\d)/, '$1.$2');
+    valor = valor.replace(/(\d{3})(\d)/, '$1.$2');
+    valor = valor.replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+    
+    // Atualiza o campo instantaneamente
+    campo.value = valor;
+}
+</script>
 {% endblock %}

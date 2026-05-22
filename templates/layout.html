@@ -111,7 +111,18 @@
             <ul class="nav flex-column fs-5 gap-2">
                 <li class="nav-item"><a class="nav-link text-body-emphasis" href="{{ url_for('admin_dashboard') }}"><i class="bi bi-speedometer2 me-2"></i> Painel</a></li>
                 <li class="nav-item"><a class="nav-link text-body-emphasis" href="{{ url_for('admin_dashboard') }}#loja"><i class="bi bi-shop me-2"></i> Loja & Estoque</a></li>
-                <li class="nav-item"><a class="nav-link text-body-emphasis" href="{{ url_for('admin_dashboard') }}#assinaturas"><i class="bi bi-person-vcard me-2"></i> Assinaturas</a></li>
+                {% if current_user.establishment.plan_type == 'gestao' %}
+    		    <li class="nav-item"><a class="nav-link text-body-emphasis" href="{{ url_for('admin_dashboard') }}#assinaturas"><i class="bi bi-person-vcard me-2"></i> Assinaturas</a></li>
+		{% else %}
+    		    <li class="nav-item">
+        		<form method="POST" action="{{ url_for('upgrade_plano') }}" class="m-0" onsubmit="return confirm('O Clube de Assinaturas é uma ferramenta exclusiva do Plano Gestão. Deseja evoluir seu plano agora para liberar essa funcionalidade?');">
+            		    <input type="hidden" name="plano_destino" value="gestao">
+            		    <button type="submit" class="nav-link text-body-emphasis border-0 bg-transparent text-start w-100">
+                		<i class="bi bi-person-vcard me-2 text-muted"></i> <span class="text-muted">Assinaturas <i class="bi bi-lock-fill text-warning small ms-1"></i></span>
+            		    </button>
+        		</form>
+    		    </li>
+		{% endif %}
                 <li class="nav-item"><a class="nav-link text-body-emphasis" href="{{ url_for('historico_atendimentos') }}"><i class="bi bi-journal-text me-2"></i> Histórico</a></li>
                 
                 <li class="nav-item"><a class="nav-link text-body-emphasis" href="{{ url_for('relatorio_bi') }}"><i class="bi bi-pie-chart me-2"></i> Painel de BI</a></li>
