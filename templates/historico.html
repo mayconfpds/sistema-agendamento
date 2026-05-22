@@ -7,11 +7,11 @@
         <h2 class="h4 mb-0 fw-bold"><i class="bi bi-journal-text text-primary"></i> Histórico de Atendimentos</h2>
         <div class="d-flex gap-2">
             {% if establishment.plan_type == 'gestao' %}
-                <button class="btn btn-danger btn-sm fw-bold shadow-sm" onclick="abrirModalAniversariantes()">
+                <button class="btn btn-danger btn-sm fw-bold shadow-sm flex-grow-1" onclick="abrirModalAniversariantes()">
                     <i class="bi bi-gift-fill"></i> Aniversariantes
                 </button>
                 
-                <button class="btn btn-warning btn-sm fw-bold shadow-sm" onclick="abrirModalInativos()">
+                <button class="btn btn-warning btn-sm fw-bold shadow-sm flex-grow-1" onclick="abrirModalInativos()">
                     <i class="bi bi-person-exclamation"></i> Recuperar Clientes
                 </button>
             {% else %}

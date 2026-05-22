@@ -4,6 +4,12 @@
 <div class="container py-5">
     <div class="text-center mb-5">
         <h1 class="fw-bold text-body-emphasis">Escolha o plano ideal para o seu negócio</h1>
+
+        <div class="mb-3">
+            <a href="{{ url_for('admin_dashboard') }}" class="btn btn-outline-secondary btn-sm shadow-sm">
+                <i class="bi bi-arrow-left"></i> Voltar para o Painel
+            </a>
+        </div>
         
         {% if current_user.is_authenticated and not current_user.establishment.has_access %}
             <p class="text-danger fs-5 mt-2"><i class="bi bi-exclamation-triangle-fill"></i> <strong>Seu período de teste grátis terminou.</strong><br>Escolha o plano abaixo para assinar e reativar o seu painel instantaneamente.</p>
