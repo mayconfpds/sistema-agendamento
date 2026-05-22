@@ -2,17 +2,17 @@
 {% block title %}Criar Conta{% endblock %}
 {% block content %}
 <div class="row justify-content-center mt-5 mb-5">
+
+    <a href="javascript:history.back()" class="text-decoration-none text-muted small">
+        <i class="bi bi-chevron-left"></i> Voltar à página anterior
+    </a>
+
+    
     <div class="col-md-8 col-lg-6">
         <div class="card shadow-lg border-0 rounded-4 overflow-hidden">
             <div class="card-header bg-blue-600 text-white text-center py-4 position-relative" style="background-color: #2563eb;">
                 <h3 class="fw-bold mb-0">Crie sua conta e teste grátis</h3>
                 <p class="text-blue-100 text-sm mb-0 mt-1"><i class="bi bi-check-circle-fill"></i> 7 dias de acesso total. Sem cartão de crédito.</p>
-
-                <div class="mb-3">
-                    <a href="{{ url_for('admin_dashboard') }}" class="btn btn-outline-secondary btn-sm shadow-sm">
-                        <i class="bi bi-arrow-left"></i> Voltar para o Painel
-                    </a>
-                </div>
                 
                 {% set plan_name = 'Plano Gestão' if request.args.get('plan') == 'gestao' else 'Plano Solo' %}
                 <span class="position-absolute top-0 end-0 bg-warning text-body-emphasis px-3 py-1 rounded-bl-3 fw-bold small shadow-sm">{{ plan_name }}</span>
