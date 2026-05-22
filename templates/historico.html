@@ -3,15 +3,15 @@
 {% block content %}
 <div class="container py-4">
     
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="d-flex flex-column gap-3 mb-4">
         <h2 class="h4 mb-0 fw-bold"><i class="bi bi-journal-text text-primary"></i> Histórico de Atendimentos</h2><br>
         <div class="d-flex gap-2">
             {% if establishment.plan_type == 'gestao' %}
-                <button class="btn btn-danger btn-sm fw-bold shadow-sm flex-grow-1" onclick="abrirModalAniversariantes()">
+                <button class="btn btn-danger btn-sm fw-bold shadow-sm" onclick="abrirModalAniversariantes()">
                     <i class="bi bi-gift-fill"></i> Aniversariantes
                 </button>
                 
-                <button class="btn btn-warning btn-sm fw-bold shadow-sm flex-grow-1" onclick="abrirModalInativos()">
+                <button class="btn btn-warning btn-sm fw-bold shadow-sm" onclick="abrirModalInativos()">
                     <i class="bi bi-person-exclamation"></i> Recuperar Clientes
                 </button>
             {% else %}
