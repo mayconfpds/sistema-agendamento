@@ -194,9 +194,25 @@
                                                     <button class="btn btn-sm btn-success w-100 fw-bold"><i class="bi bi-check-circle"></i> Concluir</button>
                                                 </form></div>
                                                 <div class="d-flex gap-1 flex-column flex-md-row"><form method="POST" action="{{ url_for('delete_appointment', id=a.id) }}" class="w-100" onsubmit="return excluirItemAJAX(event, this, 'container-agendamentos', 'Apenas cancelar o horário?');"><button class="btn btn-sm btn-outline-danger w-100"><i class="bi bi-trash"></i> Cancelar</button></form><form method="POST" action="{{ url_for('mark_no_show', id=a.id) }}" class="w-100" onsubmit="return excluirItemAJAX(event, this, 'container-agendamentos', 'Bloquear este cliente permanentemente?');"><button class="btn btn-sm btn-warning w-100 text-dark fw-bold"><i class="bi bi-person-x-fill"></i> Falta</button></form></div>
-                                            {% else %}<span class="badge bg-success mb-1"><i class="bi bi-check-all"></i> Concluído</span><br>
-                                                {% if a.rating %}<span class="text-warning fs-5">{% for i in range(a.rating) %}★{% endfor %}</span>{% else %}<span class="small text-muted fst-italic">Aguardando nota...</span>{% endif %}
-                                                <form method="POST" action="{{ url_for('archive_appointment', id=a.id) }}" class="mt-2" onsubmit="return submeterFormAJAX(event, this, 'container-agendamentos')"><button class="btn btn-sm btn-outline-secondary py-0 w-100" style="font-size: 0.75rem;"><i class="bi bi-eye-slash"></i> Limpar da Tela</button></form>
+                                            {% else %}
+                                                <span class="badge bg-success mb-1"><i class="bi bi-check-all"></i> Concluído</span><br>
+                                                
+                                                {% if a.rating %}
+                                                    <span class="text-warning fs-5">{% for i in range(a.rating) %}★{% endfor %}</span>
+                                                {% else %}
+                                                    <div class="small text-muted fst-italic mb-2">Aguardando nota...</div>
+                                                    
+                                                    <a href="https://wa.me/55{{ a.client_phone }}?text=Olá, {{ a.client_name }}! Passando para agradecer pela preferência. Pode nos dar uma nota sobre o atendimento de hoje? É super rápido: {{ request.host_url.rstrip('/') }}/avaliar/{{ a.id }}" 
+                                                       target="_blank" 
+                                                       class="btn btn-sm btn-outline-success w-100 mb-2 py-0 shadow-sm" 
+                                                       style="font-size: 0.75rem;">
+                                                       <i class="bi bi-whatsapp"></i> Pedir nota no Zap
+                                                    </a>
+                                                {% endif %}
+
+                                                <form method="POST" action="{{ url_for('archive_appointment', id=a.id) }}" onsubmit="return submeterFormAJAX(event, this, 'container-agendamentos')">
+                                                    <button class="btn btn-sm btn-outline-secondary py-0 w-100" style="font-size: 0.75rem;"><i class="bi bi-eye-slash"></i> Limpar da Tela</button>
+                                                </form>
                                             {% endif %}
                                         </td></tr>
                                     {% else %}<tr><td colspan="3" class="text-center py-4 text-muted">Agenda livre.</td></tr>{% endfor %}
