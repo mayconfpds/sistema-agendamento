@@ -3,7 +3,7 @@
 {% block content %}
 <div class="container py-4">
 
-    {% if current_user.id == 1 or current_user.email == 'mayconfpds@gmail.com' %}
+    {% if current_user.id == 1 or current_user.is_super_admin or current_user.username == 'admin_demo' %}
     <div class="alert alert-dark border-dark shadow-sm d-flex justify-content-between align-items-center mb-4 py-2 rounded-3">
         <span class="text-light small"><i class="bi bi-terminal text-warning"></i> <strong>Modo Admin:</strong> Controle de Planos</span>
         <div class="d-flex gap-2">

@@ -53,10 +53,16 @@ def validar_cpf(cpf):
 def super_admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        # Verifica se está logado e se possui a flag de super administrador
-        if not current_user.is_authenticated or not getattr(current_user, 'is_super_admin', False):
+        # Permite o acesso se tiver a flag no banco, se for o ID 1, ou se for o usuário dono (admin_demo)
+        if not current_user.is_authenticated:
+            return redirect(url_for('login'))
+            
+        is_master = getattr(current_user, 'is_super_admin', False) or current_user.id == 1 or current_user.username == 'admin_demo'
+        
+        if not is_master:
             flash('Acesso restrito à administração do sistema.', 'danger')
             return redirect(url_for('admin_dashboard'))
+            
         return f(*args, **kwargs)
     return decorated_function
 
@@ -1677,13 +1683,19 @@ def delete_professional(id):
 @app.route('/admin/ativar-gestao')
 @login_required
 def ativar_gestao():
-    if current_user.id == 1: current_user.establishment.plan_type = 'gestao'; db.session.commit()
+    is_master = getattr(current_user, 'is_super_admin', False) or current_user.id == 1 or current_user.username == 'admin_demo'
+    if is_master:
+        current_user.establishment.plan_type = 'gestao'
+        db.session.commit()
     return redirect(url_for('admin_dashboard'))
 
 @app.route('/admin/desativar-gestao')
 @login_required
 def desativar_gestao():
-    if current_user.id == 1: current_user.establishment.plan_type = 'solo'; db.session.commit()
+    is_master = getattr(current_user, 'is_super_admin', False) or current_user.id == 1 or current_user.username == 'admin_demo'
+    if is_master:
+        current_user.establishment.plan_type = 'solo'
+        db.session.commit()
     return redirect(url_for('admin_dashboard'))
 
 @app.route('/api/horarios_disponiveis')
