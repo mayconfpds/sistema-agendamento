@@ -50,16 +50,16 @@
 
     {% if not current_user.establishment.is_active and current_user.establishment.trial_ends %}
     <div class="alert alert-warning border-warning shadow-sm d-flex flex-column flex-md-row justify-content-between align-items-center mb-4 rounded-3 p-3">
-	<div class="d-flex align-items-center mb-3 mb-md-0">
-  	    <i class="bi bi-clock-history fs-3 me-3 text-warning-emphasis"></i>
+    <div class="d-flex align-items-center mb-3 mb-md-0">
+        <i class="bi bi-clock-history fs-3 me-3 text-warning-emphasis"></i>
             <div>
-            	<h6 class="fw-bold mb-0 text-body-emphasis">Período de Teste Gratuito</h6>
-            	<span class="small text-body-emphasis">Aproveite! Faltam <strong>{{ current_user.establishment.trial_days_left }} dias</strong> para o fim do seu teste.</span>
+                <h6 class="fw-bold mb-0 text-body-emphasis">Período de Teste Gratuito</h6>
+                <span class="small text-body-emphasis">Aproveite! Faltam <strong>{{ current_user.establishment.trial_days_left }} dias</strong> para o fim do seu teste.</span>
             </div>
-    	</div>
-    	<a href="{{ url_for('planos') }}" class="btn btn-sm btn-dark fw-bold py-2 px-3 rounded-pill shadow-sm text-nowrap">
+        </div>
+        <a href="{{ url_for('planos') }}" class="btn btn-sm btn-dark fw-bold py-2 px-3 rounded-pill shadow-sm text-nowrap">
             <i class="bi bi-credit-card-2-back-fill me-1"></i> Cadastrar Cartão
-    	</a>
+        </a>
     </div>
     {% endif %}
 
@@ -179,10 +179,10 @@
                                                 {% endif %}
                                             </div>
                                             <div class="mt-1 text-body-emphasis">
-    						{{ a.client_name }} 
-    						<br><small class="text-muted"><i class="bi bi-person-vcard"></i> {{ a.client_cpf or 'Sem CPF' }}</small>
-    						<br> <i class="bi bi-whatsapp text-success"></i> {{ a.client_phone }}
-					    </div>
+                            {{ a.client_name }} 
+                            <br><small class="text-muted"><i class="bi bi-person-vcard"></i> {{ a.client_cpf or 'Sem CPF' }}</small>
+                            <br> <i class="bi bi-whatsapp text-success"></i> {{ a.client_phone }}
+                        </div>
                                             {% if establishment.plan_type == 'gestao' %}<div class="mt-2">{% if a.professional %}<span class="badge bg-primary text-white shadow-sm"><i class="bi bi-scissors"></i> {{ a.professional.name }}</span>{% else %}<span class="badge bg-secondary text-white shadow-sm"><i class="bi bi-question-circle"></i> Qualquer um</span>{% endif %}</div>{% endif %}
                                             {% if establishment.loyalty_points_goal and establishment.loyalty_points_goal > 0 and a.client_loyalty %}
                                                 <div class="mt-2 small">{% if a.client_loyalty.points >= establishment.loyalty_points_goal %}<span class="badge bg-warning text-dark fs-6 shadow-sm d-block mb-1"><i class="bi bi-gift-fill"></i> PRÊMIO LIBERADO!</span><form method="POST" action="{{ url_for('reset_loyalty', id=a.client_loyalty.id) }}" onsubmit="return excluirItemAJAX(event, this, 'container-agendamentos', 'Zerar os pontos deste cliente?');"><button class="btn btn-sm btn-outline-secondary w-100 py-0" style="font-size: 0.75rem;">Zerar Pontos</button></form>{% else %}<span class="badge bg-body-tertiary text-body-emphasis border"><i class="bi bi-star-fill text-warning"></i> Pontos: {{ a.client_loyalty.points }}/{{ establishment.loyalty_points_goal }}</span>{% endif %}</div>
@@ -237,37 +237,37 @@
                         <div class="card-body" id="container-lista-servicos">
                             <ul class="list-group list-group-flush small" style="max-height: 400px; overflow-y: auto;">
                                 {% for s in services %}
-				<li class="list-group-item bg-transparent d-flex justify-content-between align-items-center px-0 py-2 border-bottom" 
-    				    data-id="{{ s.id }}" data-nome="{{ s.name|e }}" data-preco="{{ s.price }}" 					    data-duracao="{{ s.duration }}" 
-    				    data-categoria="{{ s.category_id }}" data-iscombo="{{ 'true' if s.is_combo else 'false' }}" 
-    				    data-precooriginal="{{ s.original_price or '' }}" data-isclub="{{ 'true' if s.is_club_included else 'false' }}"
-    				    data-ishidden="{{ 'true' if s.is_hidden else 'false' }}">
+                <li class="list-group-item bg-transparent d-flex justify-content-between align-items-center px-0 py-2 border-bottom" 
+                        data-id="{{ s.id }}" data-nome="{{ s.name|e }}" data-preco="{{ s.price }}" data-duracao="{{ s.duration }}" 
+                        data-categoria="{{ s.category_id }}" data-iscombo="{{ 'true' if s.is_combo else 'false' }}" 
+                        data-precooriginal="{{ s.original_price or '' }}" data-isclub="{{ 'true' if s.is_club_included else 'false' }}"
+                        data-ishidden="{{ 'true' if s.is_hidden else 'false' }}"
                         data-image="{{ s.image_url or '' }}">
     
-    				    <div>
-        				<span class="badge bg-secondary mb-1" style="font-size: 0.65rem;">{{ s.category.name if s.category else 'Geral' }}</span>
-       				 	{% if s.is_combo %}<span class="badge bg-warning text-dark mb-1 ms-1 shadow-sm" style="font-size: 0.65rem;"><i class="bi bi-stars"></i> Promoção</span>{% endif %}
-        				{% if s.is_club_included %}<span class="badge bg-success-subtle text-success mb-1 ms-1" style="font-size: 0.65rem;"><i class="bi bi-star-fill"></i> Clube</span>{% endif %}
-        				{% if s.is_hidden %}<span class="badge bg-dark text-warning mb-1 ms-1 shadow-sm" style="font-size: 0.65rem;"><i class="bi bi-eye-slash"></i> Oculto</span>{% endif %}
-        				<br>
-        				<strong class="text-body-emphasis">{{ s.name }}</strong> <span class="text-muted">({{ s.duration }}m)</span><br>
-        				{% if s.is_combo and s.original_price %}<span class="text-muted text-decoration-line-through small me-1">R$ {{ "%.2f"|format(s.original_price) }}</span>{% endif %}
-        				<span class="text-success fw-bold fs-6">R$ {{ "%.2f"|format(s.price) }}</span>
-    				    </div>
+                        <div>
+                        <span class="badge bg-secondary mb-1" style="font-size: 0.65rem;">{{ s.category.name if s.category else 'Geral' }}</span>
+                        {% if s.is_combo %}<span class="badge bg-warning text-dark mb-1 ms-1 shadow-sm" style="font-size: 0.65rem;"><i class="bi bi-stars"></i> Promoção</span>{% endif %}
+                        {% if s.is_club_included %}<span class="badge bg-success-subtle text-success mb-1 ms-1" style="font-size: 0.65rem;"><i class="bi bi-star-fill"></i> Clube</span>{% endif %}
+                        {% if s.is_hidden %}<span class="badge bg-dark text-warning mb-1 ms-1 shadow-sm" style="font-size: 0.65rem;"><i class="bi bi-eye-slash"></i> Oculto</span>{% endif %}
+                        <br>
+                        <strong class="text-body-emphasis">{{ s.name }}</strong> <span class="text-muted">({{ s.duration }}m)</span><br>
+                        {% if s.is_combo and s.original_price %}<span class="text-muted text-decoration-line-through small me-1">R$ {{ "%.2f"|format(s.original_price) }}</span>{% endif %}
+                        <span class="text-success fw-bold fs-6">R$ {{ "%.2f"|format(s.price) }}</span>
+                        </div>
     
-    				    <div class="d-flex gap-2">
-        				{% if s.is_hidden %}
-        				<button type="button" class="btn btn-outline-primary btn-sm border shadow-sm" onclick="copiarLink('{{ request.host_url }}b/{{ current_user.establishment.url_prefix }}/agendar/{{ s.id }}', this)" title="Copiar Link Exclusivo">
-            				    <i class="bi bi-link-45deg"></i>
-       	 				</button>
-        				{% endif %}
-        				<button class="btn btn-secondary btn-sm shadow-sm" onclick="editarServico(this)"><i class="bi bi-pencil-fill"></i></button>
-        				<button class="btn btn-outline-danger btn-sm shadow-sm" onclick="excluirServico({{ s.id }}, this)"><i class="bi bi-trash-fill"></i></button>
-    				    </div>
-				</li>
-				{% else %}
-				<li class="list-group-item bg-transparent px-0 text-muted text-center border-0 py-4">Nenhum serviço.</li>
-				{% endfor %}
+                        <div class="d-flex gap-2">
+                        {% if s.is_hidden %}
+                        <button type="button" class="btn btn-outline-primary btn-sm border shadow-sm" onclick="copiarLink('{{ request.host_url }}b/{{ current_user.establishment.url_prefix }}/agendar/{{ s.id }}', this)" title="Copiar Link Exclusivo">
+                                <i class="bi bi-link-45deg"></i>
+                        </button>
+                        {% endif %}
+                        <button class="btn btn-secondary btn-sm shadow-sm" onclick="editarServico(this)"><i class="bi bi-pencil-fill"></i></button>
+                        <button class="btn btn-outline-danger btn-sm shadow-sm" onclick="excluirServico({{ s.id }}, this)"><i class="bi bi-trash-fill"></i></button>
+                        </div>
+                </li>
+                {% else %}
+                <li class="list-group-item bg-transparent px-0 text-muted text-center border-0 py-4">Nenhum serviço.</li>
+                {% endfor %}
                             </ul>
                         </div>
                     </div>
@@ -319,30 +319,31 @@
                         <div class="card-header bg-body py-3 border-bottom"><h6 class="mb-0 fw-bold text-danger"><i class="bi bi-person-x"></i> Clientes Bloqueados (No-Show)</h6></div>
                         <div class="card-body" id="container-blacklist">
                             <form action="{{ url_for('add_blacklist') }}" method="POST" class="mb-3" onsubmit="return submeterFormAJAX(event, this, 'container-blacklist')">
-    				<div class="input-group input-group-sm">
-       			 	    <input type="text" name="cpf" class="form-control" placeholder="CPF do Cliente" required>
-        			    <input type="text" name="phone" class="form-control" placeholder="WhatsApp (Opcional)">
-        			    <button class="btn btn-danger fw-bold">Bloquear</button>
-    				</div>
-			    </form>
-			    <ul class="list-group list-group-flush small" style="max-height: 200px; overflow-y: auto;">
-    				{% for b in blacklists %}
-    				<li class="list-group-item bg-transparent d-flex justify-content-between align-items-center px-0">
-        			    <span class="text-muted fw-bold"><i class="bi bi-person-vcard"></i> {{ b.client_cpf }}</span>
-        			    <form method="POST" action="{{ url_for('remove_blacklist', id=b.id) }}" onsubmit="return excluirItemAJAX(event, this, 'container-blacklist', 'Desbloquear este cliente?');">
-            				<button class="btn btn-link text-success p-0 text-decoration-none"><i class="bi bi-unlock-fill"></i> Liberar</button>
-        			    </form>
-    				</li>
-   		 		{% else %}
-    				<li class="list-group-item bg-transparent px-0 text-muted text-center border-0">Nenhum bloqueado.</li>
-    				{% endfor %}
+                    <div class="input-group input-group-sm">
+                        <input type="text" name="cpf" class="form-control" placeholder="CPF do Cliente" required>
+                        <input type="text" name="phone" class="form-control" placeholder="WhatsApp (Opcional)">
+                        <button class="btn btn-danger fw-bold">Bloquear</button>
+                    </div>
+                </form>
+                <ul class="list-group list-group-flush small" style="max-height: 200px; overflow-y: auto;">
+                    {% for b in blacklists %}
+                    <li class="list-group-item bg-transparent d-flex justify-content-between align-items-center px-0">
+                        <span class="text-muted fw-bold"><i class="bi bi-person-vcard"></i> {{ b.client_cpf }}</span>
+                        <form method="POST" action="{{ url_for('remove_blacklist', id=b.id) }}" onsubmit="return excluirItemAJAX(event, this, 'container-blacklist', 'Desbloquear este cliente?');">
+                            <button class="btn btn-link text-success p-0 text-decoration-none"><i class="bi bi-unlock-fill"></i> Liberar</button>
+                        </form>
+                    </li>
+                {% else %}
+                    <li class="list-group-item bg-transparent px-0 text-muted text-center border-0">Nenhum bloqueado.</li>
+                    {% endfor %}
                             </ul>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-<div class="tab-pane fade" id="tab-loja">
+
+        <div class="tab-pane fade" id="tab-loja">
             <div class="row">
                 <div class="col-lg-8 mb-4">
                     <div class="card shadow-sm border">
@@ -430,9 +431,9 @@
                                                 <span class="badge bg-body-tertiary text-body-emphasis border mt-1">Limite: {{ p.services_limit if p.services_limit > 0 else 'Ilimitado' }}</span>
                                             </div>
                                             <div class="d-flex gap-2">
-    <button class="btn btn-secondary btn-sm border shadow-sm" onclick="editarPlano({{ p.id }}, '{{ p.name|e }}', {{ p.price }}, {{ p.services_limit }}, '{{ p.description|e }}')"><i class="bi bi-pencil"></i></button>
-    <button class="btn btn-outline-danger btn-sm border shadow-sm" onclick="excluirPlano({{ p.id }})"><i class="bi bi-trash"></i></button>
-</div>
+                                                <button class="btn btn-secondary btn-sm border shadow-sm" onclick="editarPlano({{ p.id }}, '{{ p.name|e }}', {{ p.price }}, {{ p.services_limit }}, '{{ p.description|e }}')"><i class="bi bi-pencil"></i></button>
+                                                <button class="btn btn-outline-danger btn-sm border shadow-sm" onclick="excluirPlano({{ p.id }})"><i class="bi bi-trash"></i></button>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -451,16 +452,16 @@
                             <button class="btn btn-success btn-sm fw-bold shadow-sm" onclick="abrirModalAssinante()"><i class="bi bi-person-plus-fill"></i> Registrar</button>
                         </div>
                         <div class="card-body p-0" id="container-lista-assinantes">
-			
-			    <div class="p-3 bg-body-tertiary border-bottom">
-        			<div class="input-group input-group-sm" style="max-width: 300px;">
-            			    <span class="input-group-text bg-transparent border-end-0 border-secondary-subtle"><i class="bi bi-search text-muted"></i></span>
-            			    <input type="text" id="buscaAssinante" class="form-control border-start-0 border-secondary-subtle" placeholder="Buscar por nome ou plano..." onkeyup="filtrarAssinantes()">
-        			</div>
-    			    </div>
+            
+                <div class="p-3 bg-body-tertiary border-bottom">
+                    <div class="input-group input-group-sm" style="max-width: 300px;">
+                            <span class="input-group-text bg-transparent border-end-0 border-secondary-subtle"><i class="bi bi-search text-muted"></i></span>
+                            <input type="text" id="buscaAssinante" class="form-control border-start-0 border-secondary-subtle" placeholder="Buscar por nome ou plano..." onkeyup="filtrarAssinantes()">
+                    </div>
+                    </div>
 
                             <div class="table-responsive">
-                                <table class="table table-hover mb-0 align-middle" style="min-width: 600px;">
+                                <table class="table table-hover mb-0 align-middle" style="min-width: 600px;" id="tabelaAssinantes">
                                     <thead class="table-tertiary text-body-emphasis">
                                         <tr>
                                             <th>Data</th>
@@ -492,6 +493,7 @@
                                 </table>
                             </div>
                         </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -501,8 +503,9 @@
 <div class="modal fade" id="modalServico" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered"><div class="modal-content bg-body border-0 shadow-lg rounded-4"><div class="modal-header border-bottom-0 pb-0"><h5 class="modal-title fw-bold text-body-emphasis" id="modalServicoTitle">Novo Serviço</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
       <div class="modal-body p-4">
-        <form id="formServico" enctype="multipart/form-data">
-            <input type="hidden" id="servicoId" name="id">
+       <form id="formServico" enctype="multipart/form-data"><input type="hidden" id="servicoId" name="id">
+            <div class="mb-3"><label class="form-label small fw-bold text-body-emphasis">Categoria</label><select id="servicoCategoria" name="category_id" class="form-select shadow-sm" required><option value="" disabled selected>Escolha...</option>{% for c in categories %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}</select></div>
+            <div class="mb-3"><label class="form-label small fw-bold text-body-emphasis">Nome do Serviço</label><input type="text" id="servicoNome" name="name" class="form-control shadow-sm" required></div>
             <div class="mb-3">
                 <label class="form-label small fw-bold text-body-emphasis">Foto do Serviço (Opcional)</label>
                 <div class="d-flex align-items-center gap-3">
@@ -510,14 +513,15 @@
                     <input type="file" id="servicoImagem" name="image" class="form-control shadow-sm" accept="image/*" onchange="const [file] = this.files; if(file) { const p = document.getElementById('servicoFotoPreview'); p.src = URL.createObjectURL(file); p.classList.remove('d-none'); }">
                 </div>
             </div>
+            <div class="row g-3 mb-2"><div class="col-6"><label class="form-label small fw-bold text-body-emphasis">Preço (R$)</label><input type="number" step="0.01" id="servicoPreco" name="price" class="form-control shadow-sm" required></div><div class="col-6"><label class="form-label small fw-bold text-body-emphasis">Duração (Min)</label><input type="number" id="servicoDuracao" name="duration" class="form-control shadow-sm" required></div></div>
             <div class="form-check form-switch fw-bold text-success mb-3"><input class="form-check-input" type="checkbox" id="servicoIsClub" name="is_club_included"><label class="form-check-label ms-1" for="servicoIsClub"><i class="bi bi-star-fill"></i> Incluso no Clube?</label></div>
-	    <div class="form-check form-switch mb-3">
-    		<input class="form-check-input" type="checkbox" id="servicoIsHidden" name="is_hidden" value="true">
-    		<label class="form-check-label fw-bold" for="servicoIsHidden">
-        	    <i class="bi bi-eye-slash-fill text-secondary"></i> Oculto (Link Exclusivo)
-    		</label>
-    		<div class="form-text small">Se marcado, o serviço desaparece da vitrine e só pode ser agendado por quem tiver o link direto.</div>
-	    </div>
+        <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" id="servicoIsHidden" name="is_hidden" value="true">
+            <label class="form-check-label fw-bold" for="servicoIsHidden">
+                <i class="bi bi-eye-slash-fill text-secondary"></i> Oculto (Link Exclusivo)
+            </label>
+            <div class="form-text small">Se marcado, o serviço desaparece da vitrine e só pode ser agendado por quem tiver o link direto.</div>
+        </div>
             <div class="bg-body-tertiary p-3 rounded-3 border shadow-sm"><div class="form-check form-switch fw-bold text-primary mb-0"><input class="form-check-input" type="checkbox" id="servicoIsCombo" name="is_combo" onchange="document.getElementById('divOriginalPrice').classList.toggle('d-none', !this.checked)"><label class="form-check-label ms-1" for="servicoIsCombo"> É Promoção / Pacote?</label></div>
                 <div class="input-group input-group-sm mt-3 d-none" id="divOriginalPrice"><span class="input-group-text bg-body text-muted border-end-0">Preço Antigo: R$</span><input type="number" step="0.01" id="servicoOriginalPrice" name="original_price" class="form-control border-start-0"></div></div>
         </form></div>
@@ -585,14 +589,14 @@
           <form id="formAssinante">
               <div class="mb-3"><label class="form-label small fw-bold text-body-emphasis">Nome do Cliente</label><input type="text" name="client_name" class="form-control" required></div>
               <div class="mb-3">
-    		 <label class="form-label small fw-bold">WhatsApp do Cliente</label>
-    		 <input type="text" name="client_phone" class="form-control" placeholder="(00) 00000-0000" required>
-	      </div>
+             <label class="form-label small fw-bold">WhatsApp do Cliente</label>
+             <input type="text" name="client_phone" class="form-control" placeholder="(00) 00000-0000" required>
+          </div>
 
-	      <div class="mb-3">
-    		  <label class="form-label small fw-bold">CPF do Cliente</label>
-    		  <input type="text" name="client_cpf" class="form-control" placeholder="000.000.000-00" required maxlength="14" oninput="this.value = this.value.replace(/\D/g, '').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2')">
-	      </div>
+          <div class="mb-3">
+              <label class="form-label small fw-bold">CPF do Cliente</label>
+              <input type="text" name="client_cpf" class="form-control" placeholder="000.000.000-00" required maxlength="14" oninput="this.value = this.value.replace(/\D/g, '').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2')">
+          </div>
               <div class="row g-2">
                   <div class="col-8"><label class="form-label small fw-bold text-body-emphasis">Plano Escolhido</label><select name="plan_id" class="form-select" required><option value="" disabled selected>Escolha...</option>{% for p in establishment.subscription_plans %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}</select></div>
                   <div class="col-4"><label class="form-label small fw-bold text-body-emphasis">Meses</label><input type="number" name="months" class="form-control" value="1"></div>
@@ -807,24 +811,29 @@
         document.getElementById('modalServicoTitle').innerText = 'Novo Serviço'; 
         document.getElementById('divOriginalPrice').classList.add('d-none');
         document.getElementById('servicoIsHidden').checked = false; // NOVO: Limpa o oculto
+        
+        // Limpa a foto do preview ao abrir um novo cadastro
         document.getElementById('servicoImagem').value = ''; 
         document.getElementById('servicoFotoPreview').classList.add('d-none');
         document.getElementById('servicoFotoPreview').src = '';
+        
         new bootstrap.Modal(document.getElementById('modalServico')).show();
     }
 
     function editarServico(btn) {
-        const li = btn.closest('li');
+        const li = btn.closest('li'); // ATENÇÃO AQUI: Precisamos definir o 'li' primeiro!
+        
         const imgUrl = li.dataset.image;
         const preview = document.getElementById('servicoFotoPreview');
-        if (imgUrl && imgUrl !== 'None') {
+        if (imgUrl && imgUrl !== 'None' && imgUrl.trim() !== '') {
             preview.src = imgUrl;
             preview.classList.remove('d-none');
         } else {
             preview.src = '';
             preview.classList.add('d-none');
         }
-        document.getElementById('servicoImagem').value = ''; 
+        document.getElementById('servicoImagem').value = '';
+        
         document.getElementById('servicoId').value = li.dataset.id; 
         document.getElementById('servicoNome').value = li.dataset.nome;
         document.getElementById('servicoPreco').value = li.dataset.preco; 
@@ -832,7 +841,6 @@
         document.getElementById('servicoCategoria').value = li.dataset.categoria;
         document.getElementById('servicoIsClub').checked = li.dataset.isclub === 'true';
         
-        // NOVO: Puxa o status oculto do banco
         document.getElementById('servicoIsHidden').checked = li.dataset.ishidden === 'true'; 
         
         const isCombo = li.dataset.iscombo === 'true'; 
@@ -1015,7 +1023,7 @@
         if (data.success) { 
             bootstrap.Modal.getInstance(document.getElementById('modalPlano')).hide(); 
             await atualizarContainerSilenciosamente('container-lista-planos'); 
-            atualizarSelects('plan_id', 'adicionar', data.id, data.name); // Dispara motor
+            atualizarSelects('plan_id', 'adicionar', data.id, data.name);
         } else {
             alert(data.error || 'Erro ao salvar plano.');
         }
@@ -1028,7 +1036,7 @@
         if(data.success) { 
             bootstrap.Modal.getInstance(document.getElementById('modalEditarPlano')).hide(); 
             await atualizarContainerSilenciosamente('container-lista-planos'); 
-            atualizarSelects('plan_id', 'editar', data.id, data.name); // Dispara motor
+            atualizarSelects('plan_id', 'editar', data.id, data.name);
         }
     }
 
@@ -1038,7 +1046,7 @@
         const data = await res.json();
         if(data.success) { 
             await atualizarContainerSilenciosamente('container-lista-planos'); 
-            atualizarSelects('plan_id', 'excluir', id); // Dispara motor
+            atualizarSelects('plan_id', 'excluir', id);
         } else {
             alert(data.error || 'Erro ao excluir o plano.');
         }
@@ -1064,7 +1072,6 @@
             bootstrap.Modal.getInstance(document.getElementById('modalAssinante')).hide(); 
             await atualizarContainerSilenciosamente('container-lista-assinantes'); 
         } else {
-            // A MÁGICA AQUI: Exibe o erro do Python (CPF inválido) num alerta na tela
             alert(data.error || "Ocorreu um erro ao registrar a assinatura.");
         }
     }
@@ -1078,15 +1085,13 @@
         const res = await fetch(`/admin/assinaturas/cliente/excluir/${id}`, { method: 'POST', headers: {'X-Requested-With': 'XMLHttpRequest'} });
         if((await res.json()).success) await atualizarContainerSilenciosamente('container-lista-assinantes');
     }
-    // Filtro para o Histórico de Assinantes
+    
     function filtrarAssinantes() {
         let input = document.getElementById('buscaAssinante').value.toLowerCase();
         let linhas = document.querySelectorAll('#tabelaAssinantes tbody tr');
     
         linhas.forEach(linha => {
-            // Ignora a linha de "Nenhum assinante registrado" caso ela exista
             if (linha.querySelector('td') && linha.querySelector('td').colSpan == 4) return;
-        
             let texto = linha.innerText.toLowerCase();
             linha.style.display = texto.includes(input) ? '' : 'none';
         });
