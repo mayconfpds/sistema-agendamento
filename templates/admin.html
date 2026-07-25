@@ -267,6 +267,21 @@
 				{% else %}
 				<li class="list-group-item bg-transparent px-0 text-muted text-center border-0 py-4">Nenhum serviço.</li>
 				{% endfor %}
+                <li class="list-group-item bg-transparent d-flex justify-content-between align-items-center px-0 py-2 border-bottom" 
+                data-id="{{ s.id }}" data-nome="{{ s.name|e }}" data-preco="{{ s.price }}" data-duracao="{{ s.duration }}" 
+                data-categoria="{{ s.category_id }}" data-iscombo="{{ 'true' if s.is_combo else 'false' }}" 
+                data-precooriginal="{{ s.original_price or '' }}" data-isclub="{{ 'true' if s.is_club_included else 'false' }}"
+                data-ishidden="{{ 'true' if s.is_hidden else 'false' }}"
+                data-image="{{ s.image_url or '' }}"> ```
+
+                **3.3. O JavaScript**
+                No bloco `<script>`, atualize as funções `abrirModalServico` e `editarServico` para limparem e preencherem a imagem:
+
+                No `abrirModalServico()` adicione:
+                ```javascript
+                        document.getElementById('servicoImagem').value = ''; 
+                        document.getElementById('servicoFotoPreview').classList.add('d-none');
+                        document.getElementById('servicoFotoPreview').src = '';
                             </ul>
                         </div>
                     </div>
@@ -500,9 +515,16 @@
 <div class="modal fade" id="modalServico" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered"><div class="modal-content bg-body border-0 shadow-lg rounded-4"><div class="modal-header border-bottom-0 pb-0"><h5 class="modal-title fw-bold text-body-emphasis" id="modalServicoTitle">Novo Serviço</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
       <div class="modal-body p-4">
-        <form id="formServico"><input type="hidden" id="servicoId" name="id">
+       <form id="formServico" enctype="multipart/form-data"><input type="hidden" id="servicoId" name="id">
             <div class="mb-3"><label class="form-label small fw-bold text-body-emphasis">Categoria</label><select id="servicoCategoria" name="category_id" class="form-select shadow-sm" required><option value="" disabled selected>Escolha...</option>{% for c in categories %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}</select></div>
             <div class="mb-3"><label class="form-label small fw-bold text-body-emphasis">Nome do Serviço</label><input type="text" id="servicoNome" name="name" class="form-control shadow-sm" required></div>
+            <div class="mb-3">
+                <label class="form-label small fw-bold text-body-emphasis">Foto do Serviço (Opcional)</label>
+                <div class="d-flex align-items-center gap-3">
+                    <img id="servicoFotoPreview" src="" class="rounded-circle shadow-sm d-none" style="width: 50px; height: 50px; object-fit: cover;">
+                    <input type="file" id="servicoImagem" name="image" class="form-control shadow-sm" accept="image/*" onchange="const [file] = this.files; if(file) { const p = document.getElementById('servicoFotoPreview'); p.src = URL.createObjectURL(file); p.classList.remove('d-none'); }">
+                </div>
+            </div>
             <div class="row g-3 mb-2"><div class="col-6"><label class="form-label small fw-bold text-body-emphasis">Preço (R$)</label><input type="number" step="0.01" id="servicoPreco" name="price" class="form-control shadow-sm" required></div><div class="col-6"><label class="form-label small fw-bold text-body-emphasis">Duração (Min)</label><input type="number" id="servicoDuracao" name="duration" class="form-control shadow-sm" required></div></div>
             <div class="form-check form-switch fw-bold text-success mb-3"><input class="form-check-input" type="checkbox" id="servicoIsClub" name="is_club_included"><label class="form-check-label ms-1" for="servicoIsClub"><i class="bi bi-star-fill"></i> Incluso no Clube?</label></div>
 	    <div class="form-check form-switch mb-3">
@@ -805,7 +827,19 @@
     }
 
     function editarServico(btn) {
-        const li = btn.closest('li'); 
+        const li = btn.closest('li'); // ATENÇÃO AQUI: Precisamos definir o 'li' primeiro!
+        
+        const imgUrl = li.dataset.image;
+        const preview = document.getElementById('servicoFotoPreview');
+        if (imgUrl && imgUrl !== 'None') {
+            preview.src = imgUrl;
+            preview.classList.remove('d-none');
+        } else {
+            preview.src = '';
+            preview.classList.add('d-none');
+        }
+        document.getElementById('servicoImagem').value = '';
+        
         document.getElementById('servicoId').value = li.dataset.id; 
         document.getElementById('servicoNome').value = li.dataset.nome;
         document.getElementById('servicoPreco').value = li.dataset.preco; 
@@ -813,7 +847,6 @@
         document.getElementById('servicoCategoria').value = li.dataset.categoria;
         document.getElementById('servicoIsClub').checked = li.dataset.isclub === 'true';
         
-        // NOVO: Puxa o status oculto do banco
         document.getElementById('servicoIsHidden').checked = li.dataset.ishidden === 'true'; 
         
         const isCombo = li.dataset.iscombo === 'true'; 

@@ -59,25 +59,36 @@
                                     {% for s in c.services %}
                                         {% if not s.is_hidden %}
                                         <div class="card shadow-sm w-100 rounded-3 overflow-hidden {% if s.is_combo %}border-warning border-2{% else %}border-0{% endif %}">
-                                            <div class="card-body d-flex flex-column flex-md-row justify-content-between align-items-center gap-3 p-4">
-                                                <div class="text-center text-md-start">
-                                                    <h5 class="fw-bold text-body-emphasis mb-1">
-                                                        {{ s.name }}
-                                                        {% if s.is_combo %}
-                                                            <span class="badge bg-warning text-body-emphasis ms-2 align-middle shadow-sm" style="font-size: 0.7rem;"><i class="bi bi-stars"></i> PROMO</span>
-                                                        {% endif %}
-                                                    </h5>
-                                                    <div class="text-body-secondary small"><i class="bi bi-clock"></i> {{ s.duration }} min</div>
+                                           <div class="card-body d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 p-4">
+                                                
+                                                <div class="d-flex align-items-center gap-3 w-100">
+                                                    {% if s.image_url %}
+                                                        <img src="{{ s.image_url }}" class="rounded-circle shadow-sm border border-2 border-body-tertiary" style="width: 75px; height: 75px; object-fit: cover; cursor: pointer; min-width: 75px;" onclick="abrirZoom('{{ s.image_url }}', '{{ s.name|e }}')" alt="Foto de {{ s.name }}">
+                                                    {% else %}
+                                                        <div class="rounded-circle bg-body-secondary text-secondary d-flex align-items-center justify-content-center shadow-sm border border-2 border-body-tertiary" style="width: 75px; height: 75px; min-width: 75px;">
+                                                            <i class="bi bi-scissors fs-3"></i>
+                                                        </div>
+                                                    {% endif %}
+                                                    
+                                                    <div class="text-start">
+                                                        <h5 class="fw-bold text-body-emphasis mb-1">
+                                                            {{ s.name }}
+                                                            {% if s.is_combo %}
+                                                                <span class="badge bg-warning text-body-emphasis ms-2 align-middle shadow-sm" style="font-size: 0.7rem;"><i class="bi bi-stars"></i> PROMO</span>
+                                                            {% endif %}
+                                                        </h5>
+                                                        <div class="text-body-secondary small"><i class="bi bi-clock"></i> {{ s.duration }} min</div>
+                                                    </div>
                                                 </div>
                                                 
-                                                <div class="d-flex align-items-center gap-4">
+                                                <div class="d-flex align-items-center justify-content-between justify-content-md-end gap-4 w-100 mt-3 mt-md-0">
                                                     <div class="text-end">
                                                         {% if s.is_combo and s.original_price %}
                                                             <div class="text-body-secondary text-decoration-line-through" style="font-size: 0.85rem; margin-bottom: -2px;">R$ {{ "%.2f"|format(s.original_price) }}</div>
                                                         {% endif %}
                                                         <span class="text-success fw-black fs-4 mb-0">R$ {{ "%.2f"|format(s.price) }}</span>
                                                     </div>
-                                                    <a href="{{ url_for('schedule_service', url_prefix=establishment.url_prefix, service_id=s.id) }}" class="btn btn-primary fw-bold rounded-pill px-4 py-2">Agendar</a>
+                                                    <a href="{{ url_for('schedule_service', url_prefix=establishment.url_prefix, service_id=s.id) }}" class="btn btn-primary fw-bold rounded-pill px-4 py-2 shadow-sm text-nowrap">Agendar</a>
                                                 </div>
                                             </div>
                                             
@@ -226,6 +237,20 @@
             <i class="bi bi-whatsapp align-middle me-2"></i> Fechar no WhatsApp
         </button>
         <p class="text-center text-body-secondary small mt-3 mb-0">Você combinará o pagamento direto com o estabelecimento.</p>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="modalZoom" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content bg-transparent border-0 shadow-none">
+      <div class="modal-header border-0 pb-0 justify-content-end">
+        <button type="button" class="btn-close btn-close-white bg-dark p-2 rounded-circle border border-2 border-white shadow" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body text-center p-0">
+        <img id="zoomImage" src="" class="img-fluid rounded-4 shadow-lg border border-4 border-white" style="max-height: 75vh; object-fit: contain;">
+        <h4 id="zoomTitle" class="text-white mt-3 fw-bold" style="text-shadow: 2px 2px 4px rgba(0,0,0,0.8);"></h4>
+      </div>
     </div>
   </div>
 </div>
@@ -412,5 +437,11 @@
     }
 
     document.addEventListener('DOMContentLoaded', loadCart);
+
+    function abrirZoom(url, name) {
+        document.getElementById('zoomImage').src = url;
+        document.getElementById('zoomTitle').innerText = name;
+        new bootstrap.Modal(document.getElementById('modalZoom')).show();
+    }
 </script>
 {% endblock %}

@@ -29,6 +29,7 @@ import zipfile
 from functools import wraps
 from sqlalchemy import extract
 import re
+import base64
 
 def validar_cpf(cpf):
     # Remove qualquer pontuação, deixando apenas os números
@@ -143,6 +144,38 @@ def send_email(subject, recipient, body):
         try: requests.post(url, json=payload, headers=headers)
         except Exception as e: print(f"\n❌ [ERRO BREVO] {e}")
     threading.Thread(target=_send_thread).start()
+    
+# ==========================================
+# CONFIGURAÇÃO DO IMGBB (FOTOS DE SERVIÇOS)
+# ==========================================
+IMGBB_API_KEY = '90d1e47ba624c4b1c1420db97105ac3b' 
+
+def upload_to_imgbb(file_stream):
+    """
+    Recebe um arquivo de imagem do Flask, converte para Base64 
+    e envia para o ImgBB. Retorna a URL pública da imagem.
+    """
+    try:
+        url = "https://api.imgbb.com/1/upload"
+        
+        # Converte a imagem lida para base64 para enviar via POST
+        payload = {
+            "key": IMGBB_API_KEY,
+            "image": base64.b64encode(file_stream.read()).decode('utf-8')
+        }
+        
+        response = requests.post(url, data=payload)
+        
+        if response.status_code == 200:
+            result = response.json()
+            # Retorna a URL direta da imagem salva na nuvem
+            return result['data']['url']
+        else:
+            print(f"Erro na API do ImgBB: {response.text}")
+            return None
+    except Exception as e:
+        print(f"Erro fatal ao processar imagem: {e}")
+        return None
 
 class Establishment(db.Model):
     __tablename__ = 'establishments'
@@ -361,6 +394,7 @@ class Service(db.Model):
     original_price = db.Column(db.Float, nullable=True)
     is_club_included = db.Column(db.Boolean, default=False)
     is_hidden = db.Column(db.Boolean, default=False)
+    image_url = db.Column(db.String(500), nullable=True)
 
 class Client(db.Model):
     __tablename__ = 'clients'
@@ -1340,6 +1374,13 @@ def add_service():
         s.is_combo = is_combo
         s.is_club_included = str(request.form.get('is_club_included')).lower() in ['true', 'on', '1']
         if is_combo and original_price and str(original_price).strip() != '': s.original_price = float(str(original_price).replace(',', '.'))
+      
+        image_file = request.files.get('image')
+        if image_file and image_file.filename != '':
+            link_imagem = upload_to_imgbb(image_file)
+            if link_imagem:
+                s.image_url = link_imagem
+            
         db.session.add(s); db.session.commit()
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest': return jsonify({'success': True})
     return redirect(url_for('admin_dashboard'))
@@ -1362,6 +1403,13 @@ def edit_service(id):
     original_price = request.form.get('original_price')
     if s.is_combo and original_price and str(original_price).strip() != '': s.original_price = float(str(original_price).replace(',', '.'))
     else: s.original_price = None
+    
+    image_file = request.files.get('image')
+    if image_file and image_file.filename != '':
+        link_imagem = upload_to_imgbb(image_file)
+        if link_imagem:
+            s.image_url = link_imagem
+            
     db.session.commit()
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest': return jsonify({'success': True})
     return redirect(url_for('admin_dashboard'))
@@ -2264,6 +2312,7 @@ with app.app_context():
         garantir_coluna('blacklists', 'client_cpf', 'VARCHAR(14)')
         garantir_coluna('client_subscriptions', 'client_cpf', 'VARCHAR(14)')
         garantir_coluna('admins', 'is_super_admin', 'BOOLEAN DEFAULT FALSE')
+        garantir_coluna('services', 'image_url', 'VARCHAR(500)')
     except Exception as e:
         print(f"Erro na verificação de colunas: {e}")
 
