@@ -822,16 +822,23 @@
         document.getElementById('servicoId').value = '';
         document.getElementById('modalServicoTitle').innerText = 'Novo Serviço'; 
         document.getElementById('divOriginalPrice').classList.add('d-none');
-        document.getElementById('servicoIsHidden').checked = false; // NOVO: Limpa o oculto
+        document.getElementById('servicoIsHidden').checked = false;
+        
+        // Limpa a foto ao abrir o modal para um novo serviço
+        document.getElementById('servicoImagem').value = ''; 
+        document.getElementById('servicoFotoPreview').classList.add('d-none');
+        document.getElementById('servicoFotoPreview').src = '';
+
         new bootstrap.Modal(document.getElementById('modalServico')).show();
     }
 
     function editarServico(btn) {
-        const li = btn.closest('li'); // ATENÇÃO AQUI: Precisamos definir o 'li' primeiro!
+        const li = btn.closest('li'); 
         
+        // Trata a exibição da foto existente
         const imgUrl = li.dataset.image;
         const preview = document.getElementById('servicoFotoPreview');
-        if (imgUrl && imgUrl !== 'None') {
+        if (imgUrl && imgUrl !== 'None' && imgUrl.trim() !== '') {
             preview.src = imgUrl;
             preview.classList.remove('d-none');
         } else {
@@ -840,13 +847,13 @@
         }
         document.getElementById('servicoImagem').value = '';
         
+        // Preenche os outros dados
         document.getElementById('servicoId').value = li.dataset.id; 
         document.getElementById('servicoNome').value = li.dataset.nome;
         document.getElementById('servicoPreco').value = li.dataset.preco; 
         document.getElementById('servicoDuracao').value = li.dataset.duracao;
         document.getElementById('servicoCategoria').value = li.dataset.categoria;
         document.getElementById('servicoIsClub').checked = li.dataset.isclub === 'true';
-        
         document.getElementById('servicoIsHidden').checked = li.dataset.ishidden === 'true'; 
         
         const isCombo = li.dataset.iscombo === 'true'; 
