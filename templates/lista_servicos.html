@@ -245,8 +245,10 @@
   <div class="modal-dialog modal-dialog-centered modal-lg">
     <div class="modal-content bg-transparent border-0 shadow-none">
       <div class="modal-header border-0 pb-0 justify-content-end">
-        <button type="button" class="btn-close btn-close-white bg-dark p-2 rounded-circle border border-2 border-white shadow" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
+            <button type="button" class="btn btn-light rounded-circle shadow p-0 d-flex align-items-center justify-content-center" data-bs-dismiss="modal" aria-label="Close" style="width: 40px; height: 40px; position: absolute; top: -15px; right: -15px; z-index: 10;">
+                <i class="bi bi-x-lg text-dark fw-bold fs-5"></i>
+            </button>
+        </div>
       <div class="modal-body text-center p-0">
         <img id="zoomImage" src="" class="img-fluid rounded-4 shadow-lg border border-4 border-white" style="max-height: 75vh; object-fit: contain;">
         <h4 id="zoomTitle" class="text-white mt-3 fw-bold" style="text-shadow: 2px 2px 4px rgba(0,0,0,0.8);"></h4>
@@ -268,6 +270,15 @@
     #container-vitrine.modo-leitura .small, #container-vitrine.modo-leitura small { font-size: 1rem !important; }
     #btn-acessibilidade:hover { transform: scale(1.1); }
     .fw-black { font-weight: 900; }
+
+    /* Inside the <style> block in lista_servicos.html */
+    #modalZoom .btn-light {
+        transition: transform 0.2s ease-in-out, background-color 0.2s ease-in-out;
+    }
+    #modalZoom .btn-light:hover {
+        transform: scale(1.1); /* Minor zoom on hover/tap */
+        background-color: #f8f9fa; /* Slightly lighter gray */
+    }
 </style>
 {% endblock %}
 
