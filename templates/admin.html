@@ -263,28 +263,28 @@
         				<button class="btn btn-secondary btn-sm shadow-sm" onclick="editarServico(this)"><i class="bi bi-pencil-fill"></i></button>
         				<button class="btn btn-outline-danger btn-sm shadow-sm" onclick="excluirServico({{ s.id }}, this)"><i class="bi bi-trash-fill"></i></button>
     				    </div>
+                <li class="list-group-item bg-transparent d-flex justify-content-between align-items-center px-0 py-2 border-bottom" 
+                    data-id="{{ s.id }}" data-nome="{{ s.name|e }}" data-preco="{{ s.price }}" data-duracao="{{ s.duration }}" 
+                    data-categoria="{{ s.category_id }}" data-iscombo="{{ 'true' if s.is_combo else 'false' }}" 
+                    data-precooriginal="{{ s.original_price or '' }}" data-isclub="{{ 'true' if s.is_club_included else 'false' }}"
+                    data-ishidden="{{ 'true' if s.is_hidden else 'false' }}"
+                    data-image="{{ s.image_url or '' }}"> ```
+
+                    **3.3. O JavaScript**
+                    No bloco `<script>`, atualize as funções `abrirModalServico` e `editarServico` para limparem e preencherem a imagem:
+
+                    No `abrirModalServico()` adicione:
+                    ```javascript
+                            document.getElementById('servicoImagem').value = ''; 
+                            document.getElementById('servicoFotoPreview').classList.add('d-none');
+                            document.getElementById('servicoFotoPreview').src = '';
+                                </ul>
+                            </div>
+                        </div>
 				</li>
 				{% else %}
 				<li class="list-group-item bg-transparent px-0 text-muted text-center border-0 py-4">Nenhum serviço.</li>
 				{% endfor %}
-                <li class="list-group-item bg-transparent d-flex justify-content-between align-items-center px-0 py-2 border-bottom" 
-                data-id="{{ s.id }}" data-nome="{{ s.name|e }}" data-preco="{{ s.price }}" data-duracao="{{ s.duration }}" 
-                data-categoria="{{ s.category_id }}" data-iscombo="{{ 'true' if s.is_combo else 'false' }}" 
-                data-precooriginal="{{ s.original_price or '' }}" data-isclub="{{ 'true' if s.is_club_included else 'false' }}"
-                data-ishidden="{{ 'true' if s.is_hidden else 'false' }}"
-                data-image="{{ s.image_url or '' }}"> ```
-
-                **3.3. O JavaScript**
-                No bloco `<script>`, atualize as funções `abrirModalServico` e `editarServico` para limparem e preencherem a imagem:
-
-                No `abrirModalServico()` adicione:
-                ```javascript
-                        document.getElementById('servicoImagem').value = ''; 
-                        document.getElementById('servicoFotoPreview').classList.add('d-none');
-                        document.getElementById('servicoFotoPreview').src = '';
-                            </ul>
-                        </div>
-                    </div>
 
                     {% if establishment.plan_type == 'gestao' %}
                     <div class="card shadow-sm border mb-4">
