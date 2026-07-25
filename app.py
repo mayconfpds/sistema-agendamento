@@ -736,7 +736,7 @@ def register_business():
             is_active=is_master, 
             capacity=1, 
             plan_type=plan_chosen, 
-            trial_ends=get_now_brazil() + timedelta(days=7)
+            trial_ends=get_now_brazil() + timedelta(days=30)
         )
         db.session.add(est)
         db.session.commit()
