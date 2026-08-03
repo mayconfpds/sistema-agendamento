@@ -506,32 +506,91 @@
 </div>
 
 <div class="modal fade" id="modalServico" tabindex="-1">
-  <div class="modal-dialog modal-dialog-centered"><div class="modal-content bg-body border-0 shadow-lg rounded-4"><div class="modal-header border-bottom-0 pb-0"><h5 class="modal-title fw-bold text-body-emphasis" id="modalServicoTitle">Novo Serviço</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content bg-body border-0 shadow-lg rounded-4">
+      <div class="modal-header border-bottom-0 pb-0">
+        <h5 class="modal-title fw-bold text-body-emphasis" id="modalServicoTitle">Novo Serviço</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
       <div class="modal-body p-4">
-       <form id="formServico" enctype="multipart/form-data"><input type="hidden" id="servicoId" name="id">
-            <div class="mb-3"><label class="form-label small fw-bold text-body-emphasis">Categoria</label><select id="servicoCategoria" name="category_id" class="form-select shadow-sm" required><option value="" disabled selected>Escolha...</option>{% for c in categories %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}</select></div>
-            <div class="mb-3"><label class="form-label small fw-bold text-body-emphasis">Nome do Serviço</label><input type="text" id="servicoNome" name="name" class="form-control shadow-sm" required></div>
-            <div class="mb-3">
-                <label class="form-label small fw-bold text-body-emphasis">Foto do Serviço (Opcional)</label>
-                <div class="d-flex align-items-center gap-3">
-                    <img id="servicoFotoPreview" src="" class="rounded-circle shadow-sm d-none" style="width: 50px; height: 50px; object-fit: cover;">
-                    <input type="file" id="servicoImagem" name="image" class="form-control shadow-sm" accept="image/*" onchange="const [file] = this.files; if(file) { const p = document.getElementById('servicoFotoPreview'); p.src = URL.createObjectURL(file); p.classList.remove('d-none'); }">
-                </div>
+        <form id="formServico" enctype="multipart/form-data">
+          <input type="hidden" id="servicoId" name="id">
+          <div class="mb-3">
+            <label class="form-label small fw-bold text-body-emphasis">Categoria</label>
+            <select id="servicoCategoria" name="category_id" class="form-select shadow-sm" required>
+              <option value="" disabled selected>Escolha...</option>
+              {% for c in categories %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-bold text-body-emphasis">Nome do Serviço</label>
+            <input type="text" id="servicoNome" name="name" class="form-control shadow-sm" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-bold text-body-emphasis">Foto do Serviço (Opcional)</label>
+            <div class="d-flex align-items-center gap-3">
+              <img id="servicoFotoPreview" src="" class="rounded-circle shadow-sm d-none" style="width: 50px; height: 50px; object-fit: cover;">
+              <input type="file" id="servicoImagem" name="image" class="form-control shadow-sm" accept="image/*" onchange="const [file] = this.files; if(file) { const p = document.getElementById('servicoFotoPreview'); p.src = URL.createObjectURL(file); p.classList.remove('d-none'); }">
             </div>
-            <div class="row g-3 mb-2"><div class="col-6"><label class="form-label small fw-bold text-body-emphasis">Preço (R$)</label><input type="number" step="0.01" id="servicoPreco" name="price" class="form-control shadow-sm" required></div><div class="col-6"><label class="form-label small fw-bold text-body-emphasis">Duração (Min)</label><input type="number" id="servicoDuracao" name="duration" class="form-control shadow-sm" required></div></div>
-            <div class="form-check form-switch fw-bold text-success mb-3"><input class="form-check-input" type="checkbox" id="servicoIsClub" name="is_club_included"><label class="form-check-label ms-1" for="servicoIsClub"><i class="bi bi-star-fill"></i> Incluso no Clube?</label></div>
-        <div class="form-check form-switch mb-3">
+          </div>
+          <div class="row g-3 mb-2">
+            <div class="col-6"><label class="form-label small fw-bold text-body-emphasis">Preço (R$)</label><input type="number" step="0.01" id="servicoPreco" name="price" class="form-control shadow-sm" required></div>
+            <div class="col-6"><label class="form-label small fw-bold text-body-emphasis">Duração (Min)</label><input type="number" id="servicoDuracao" name="duration" class="form-control shadow-sm" required></div>
+          </div>
+
+          <div class="mb-3 border rounded-3 p-3 bg-body-tertiary shadow-sm">
+            <div class="form-check form-switch mb-2">
+              <input class="form-check-input" type="checkbox" id="servicoIsClub" onchange="alternarListaClubesServico(this.checked)">
+              <label class="form-check-label small fw-bold text-success" for="servicoIsClub">
+                <i class="bi bi-star-fill"></i> Serviço incluso em Clube de Assinatura?
+              </label>
+            </div>
+
+            <div id="areaSelecaoClubesServico" style="display: none;" class="mt-3 pt-2 border-top">
+              <div class="text-muted mb-2" style="font-size: 0.75rem;">
+                Selecione em quais clubes o assinante terá isenção (R$ 0,00) ao realizar este serviço:
+              </div>
+              <div class="bg-body p-2 rounded border small" style="max-height: 150px; overflow-y: auto;">
+                {% for plan in establishment.subscription_plans %}
+                <div class="form-check">
+                  <input class="form-check-input check-club-plan-item" type="checkbox" name="allowed_club_plans[]" value="{{ plan.id }}" id="check_club_plan_{{ plan.id }}">
+                  <label class="form-check-label text-body-emphasis" for="check_club_plan_{{ plan.id }}">
+                    {{ plan.name }} <span class="text-muted">(R$ {{ "%.2f"|format(plan.price) }}/mês)</span>
+                  </label>
+                </div>
+                {% else %}
+                <div class="text-muted text-center py-2">Nenhum clube de assinatura cadastrado ainda.</div>
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+
+          <div class="form-check form-switch mb-3">
             <input class="form-check-input" type="checkbox" id="servicoIsHidden" name="is_hidden" value="true">
             <label class="form-check-label fw-bold" for="servicoIsHidden">
-                <i class="bi bi-eye-slash-fill text-secondary"></i> Oculto (Link Exclusivo)
+              <i class="bi bi-eye-slash-fill text-secondary"></i> Oculto (Link Exclusivo)
             </label>
             <div class="form-text small">Se marcado, o serviço desaparece da vitrine e só pode ser agendado por quem tiver o link direto.</div>
-        </div>
-            <div class="bg-body-tertiary p-3 rounded-3 border shadow-sm"><div class="form-check form-switch fw-bold text-primary mb-0"><input class="form-check-input" type="checkbox" id="servicoIsCombo" name="is_combo" onchange="document.getElementById('divOriginalPrice').classList.toggle('d-none', !this.checked)"><label class="form-check-label ms-1" for="servicoIsCombo"> É Promoção / Pacote?</label></div>
-                <div class="input-group input-group-sm mt-3 d-none" id="divOriginalPrice"><span class="input-group-text bg-body text-muted border-end-0">Preço Antigo: R$</span><input type="number" step="0.01" id="servicoOriginalPrice" name="original_price" class="form-control border-start-0"></div></div>
-        </form></div>
-      <div class="modal-footer border-top-0 pt-0 px-4 pb-4"><button type="button" class="btn btn-secondary fw-bold" data-bs-dismiss="modal">Cancelar</button><button type="button" class="btn btn-primary fw-bold shadow-sm px-4" id="btnSalvarServico" onclick="salvarServico()">Salvar</button></div>
-    </div></div>
+          </div>
+
+          <div class="bg-body-tertiary p-3 rounded-3 border shadow-sm">
+            <div class="form-check form-switch fw-bold text-primary mb-0">
+              <input class="form-check-input" type="checkbox" id="servicoIsCombo" name="is_combo" onchange="document.getElementById('divOriginalPrice').classList.toggle('d-none', !this.checked)">
+              <label class="form-check-label ms-1" for="servicoIsCombo"> É Promoção / Pacote?</label>
+            </div>
+            <div class="input-group input-group-sm mt-3 d-none" id="divOriginalPrice">
+              <span class="input-group-text bg-body text-muted border-end-0">Preço Antigo: R$</span>
+              <input type="number" step="0.01" id="servicoOriginalPrice" name="original_price" class="form-control border-start-0">
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer border-top-0 pt-0 px-4 pb-4">
+        <button type="button" class="btn btn-secondary fw-bold" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary fw-bold shadow-sm px-4" id="btnSalvarServico" onclick="salvarServico()">Salvar</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <div class="modal fade" id="modalProduto" tabindex="-1">
@@ -687,33 +746,39 @@
                     <div class="mb-3 border rounded-3 p-3 bg-body-tertiary shadow-sm">
                         <label class="form-label small fw-bold text-success"><i class="bi bi-shop"></i> Comissão em Produtos</label>
                         
-                        <div class="mb-3 border rounded-3 p-3 bg-body-tertiary shadow-sm">
-                            <div class="form-check form-switch mb-2">
-                                <input class="form-check-input" type="checkbox" id="servicoIsClub" onchange="alternarListaClubesServico(this.checked)">
-                                <label class="form-check-label small fw-bold" for="servicoIsClub">
-                                    Serviço incluso em Clube de Assinatura?
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" id="toggleComissaoProduto" onchange="alternarComissaoProduto(this.checked)">
+                            <label class="form-check-label small fw-bold" for="toggleComissaoProduto">Tem participação na venda de produtos?</label>
+                        </div>
+
+                        <div id="areaComissaoProduto" style="display: none;" class="mt-3 pt-3 border-top">
+                            <div class="mb-3">
+                                <label class="form-label small fw-bold">Comissão Fixa (%) nos Produtos</label>
+                                <input type="number" step="0.1" name="product_commission_rate" id="profComissaoProduto" class="form-control form-control-sm shadow-sm" value="0">
+                            </div>
+
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" id="profTodosProdutos" checked onchange="alternarTodosProdutos(this.checked)">
+                                <label class="form-check-label small fw-bold" for="profTodosProdutos">
+                                    Aplicar a TODOS os produtos da loja
                                 </label>
                             </div>
 
-                            <div id="areaSelecaoClubesServico" style="display: none;" class="mt-3 pt-2 border-top">
-                                <div class="text-muted mb-2" style="font-size: 0.75rem;">
-                                    Selecione os clubes em que os assinantes terão isenção (R$ 0,00) ao realizar este serviço:
+                            <div id="listaProdutosPermitidos" style="display: none;" class="bg-body p-2 rounded border small mt-2" style="max-height: 150px; overflow-y: auto;">
+                                <div class="text-muted mb-2" style="font-size: 0.75rem;">Selecione quais produtos geram comissão:</div>
+                                {% for prod in establishment.products %}
+                                <div class="form-check">
+                                    <input class="form-check-input check-prod-item" type="checkbox" name="allowed_products[]" value="{{ prod.id }}" id="check_prod_{{ prod.id }}">
+                                    <label class="form-check-label text-body-emphasis" for="check_prod_{{ prod.id }}">
+                                        {{ prod.name }} <span class="text-muted">(R$ {{ "%.2f"|format(prod.price) }})</span>
+                                    </label>
                                 </div>
-                                
-                                <div class="bg-body p-2 rounded border small" style="max-height: 150px; overflow-y: auto;">
-                                    {% for plan in establishment.subscription_plans %}
-                                    <div class="form-check">
-                                        <input class="form-check-input check-club-plan-item" type="checkbox" name="allowed_club_plans[]" value="{{ plan.id }}" id="check_club_plan_{{ plan.id }}">
-                                        <label class="form-check-label text-body-emphasis" for="check_club_plan_{{ plan.id }}">
-                                            {{ plan.name }} <span class="text-muted">(R$ {{ "%.2f"|format(plan.price) }}/mês)</span>
-                                        </label>
-                                    </div>
-                                    {% else %}
-                                    <div class="text-muted text-center py-2">Nenhum clube de assinatura cadastrado ainda.</div>
-                                    {% endfor %}
-                                </div>
+                                {% else %}
+                                <div class="text-muted text-center py-2">Nenhum produto cadastrado na loja.</div>
+                                {% endfor %}
                             </div>
                         </div>
+                    </div>
                 </form>
             </div>
             <div class="modal-footer border-0 pt-0 pb-4 px-4">
