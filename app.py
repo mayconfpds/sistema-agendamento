@@ -266,6 +266,9 @@ class ProductSale(db.Model):
     total_price = db.Column(db.Float, nullable=False)
     sale_date = db.Column(db.DateTime, default=get_now_brazil)
     establishment_id = db.Column(db.Integer, db.ForeignKey('establishments.id'), nullable=False)
+    professional_id = db.Column(db.Integer, db.ForeignKey('professionals.id'), nullable=True)
+    commission_amount = db.Column(db.Float, default=0.0)
+    professional = db.relationship('Professional', backref='product_sales')
     
 class SubscriptionPlan(db.Model):
     __tablename__ = 'subscription_plans'
@@ -339,6 +342,10 @@ class Professional(db.Model):
     cpf = db.Column(db.String(14), nullable=True)
     birth_date = db.Column(db.Date, nullable=True)
     appointments = db.relationship('Appointment', backref='professional', lazy=True)
+    has_product_commission = db.Column(db.Boolean, default=False)
+    product_commission_rate = db.Column(db.Float, default=0.0)
+    all_products_commission = db.Column(db.Boolean, default=True)
+    allowed_product_ids = db.Column(db.Text, default="")
     
 class CommissionTier(db.Model):
     __tablename__ = 'commission_tiers'
@@ -401,6 +408,7 @@ class Service(db.Model):
     is_club_included = db.Column(db.Boolean, default=False)
     is_hidden = db.Column(db.Boolean, default=False)
     image_url = db.Column(db.String(500), nullable=True)
+    allowed_plan_ids = db.Column(db.Text, default="")
 
 class Client(db.Model):
     __tablename__ = 'clients'
@@ -527,6 +535,12 @@ try:
                 with db.engine.connect() as conn:
                     conn.execute(db.text("ALTER TABLE services ADD COLUMN is_club_included BOOLEAN DEFAULT FALSE;"))
                     conn.commit()
+            
+            # NOVO: Migração automática para os IDs dos planos de clube permitidos
+            if 'allowed_plan_ids' not in columns_srv:
+                with db.engine.connect() as conn:
+                    conn.execute(db.text("ALTER TABLE services ADD COLUMN allowed_plan_ids TEXT DEFAULT '';"))
+                    conn.commit()
                     
             columns_sub = [c['name'] for c in inspector.get_columns('client_subscriptions')]
             if 'created_at' not in columns_sub:
@@ -570,7 +584,7 @@ try:
                     Service.query.filter_by(establishment_id=est.id, category_id=None).update({'category_id': geral.id})
                 db.session.commit()
 except Exception as e:
-    print(f"Erro na verificação do banco: {e}") 
+    print(f"Erro na verificação do banco: {e}")
 
 def notification_worker():
     while True:
@@ -1032,10 +1046,33 @@ def reduce_stock(id):
     if p.establishment_id != current_user.establishment_id: return jsonify({'success': False}), 403
     try:
         quantidade = int(request.form.get('quantidade', 1))
+        prof_id = request.form.get('professional_id')  # ID do barbeiro/cabeleireiro que vendeu (opcional)
+        
         if p.stock_quantity >= quantidade:
             p.stock_quantity -= quantidade
+            total_sale = p.price * quantidade
             
-            sale = ProductSale(product_name=p.name, quantity=quantidade, unit_price=p.price, total_price=p.price * quantidade, establishment_id=p.establishment_id)
+            # Cálculo de comissão individual por produto (Cenário A)
+            commission_amount = 0.0
+            selected_prof_id = None
+
+            if prof_id and str(prof_id).isdigit():
+                prof = Professional.query.get(int(prof_id))
+                if prof and prof.has_product_commission:
+                    allowed_list = [x.strip() for x in str(prof.allowed_product_ids).split(',') if x.strip()]
+                    if prof.all_products_commission or str(p.id) in allowed_list:
+                        commission_amount = (total_sale * prof.product_commission_rate) / 100.0
+                        selected_prof_id = prof.id
+            
+            sale = ProductSale(
+                product_name=p.name, 
+                quantity=quantidade, 
+                unit_price=p.price, 
+                total_price=total_sale, 
+                establishment_id=p.establishment_id,
+                professional_id=selected_prof_id,
+                commission_amount=commission_amount
+            )
             db.session.add(sale)
             db.session.commit()
             
@@ -1380,6 +1417,10 @@ def add_service():
         s.is_combo = is_combo
         s.is_club_included = str(request.form.get('is_club_included')).lower() in ['true', 'on', '1']
         if is_combo and original_price and str(original_price).strip() != '': s.original_price = float(str(original_price).replace(',', '.'))
+        
+        # NOVO: Captura os IDs dos clubes selecionados se for incluso no clube
+        allowed_plans = request.form.getlist('allowed_club_plans[]') if s.is_club_included else []
+        s.allowed_plan_ids = ",".join(allowed_plans)
       
         image_file = request.files.get('image')
         if image_file and image_file.filename != '':
@@ -1409,6 +1450,10 @@ def edit_service(id):
     original_price = request.form.get('original_price')
     if s.is_combo and original_price and str(original_price).strip() != '': s.original_price = float(str(original_price).replace(',', '.'))
     else: s.original_price = None
+    
+    # NOVO: Atualiza lista de planos/clubes permitidos
+    allowed_plans = request.form.getlist('allowed_club_plans[]') if s.is_club_included else []
+    s.allowed_plan_ids = ",".join(allowed_plans)
     
     image_file = request.files.get('image')
     if image_file and image_file.filename != '':
@@ -1573,13 +1618,25 @@ def add_professional():
         bdate = None
 
     if name:
+        # NOVOS CAMPOS DE COMISSÃO DE PRODUTO
+        has_prod = request.form.get('has_product_commission') == 'true'
+        prod_rate = float(request.form.get('product_commission_rate', 0.0)) if has_prod else 0.0
+        all_prods = request.form.get('all_products_commission') == 'true'
+        
+        allowed_ids = request.form.getlist('allowed_products[]')
+        allowed_ids_str = ",".join(allowed_ids) if not all_prods else ""
+
         # 2. Cria o profissional primeiro com comissão zero (para gerar o ID no banco)
         p = Professional(
             name=name, 
             cpf=cpf_prof,
             birth_date=bdate,
             commission_rate=0.0, 
-            establishment_id=current_user.establishment_id
+            establishment_id=current_user.establishment_id,
+            has_product_commission=has_prod,
+            product_commission_rate=prod_rate,
+            all_products_commission=all_prods,
+            allowed_product_ids=allowed_ids_str
         )
         db.session.add(p)
         db.session.commit()
@@ -1630,7 +1687,7 @@ def edit_professional(id):
     if cpf_prof and not validar_cpf(cpf_prof):
         return jsonify({'success': False, 'error': 'CPF do profissional inválido.'})
         
-    # 2. Atualiza dados pessoais
+    # 2. Atualiza dados pessoais e comissões de produtos
     p.name = request.form.get('name', p.name)
     if cpf_prof: 
         p.cpf = cpf_prof
@@ -1639,6 +1696,13 @@ def edit_professional(id):
             p.birth_date = datetime.strptime(nasc_prof, '%Y-%m-%d').date()
         except: 
             pass
+            
+    p.has_product_commission = request.form.get('has_product_commission') == 'true'
+    p.product_commission_rate = float(request.form.get('product_commission_rate', 0.0)) if p.has_product_commission else 0.0
+    p.all_products_commission = request.form.get('all_products_commission') == 'true'
+    
+    allowed_ids = request.form.getlist('allowed_products[]')
+    p.allowed_product_ids = ",".join(allowed_ids) if not p.all_products_commission else ""
             
     # 3. Limpa todas as faixas escaláveis antigas deste profissional
     CommissionTier.query.filter_by(professional_id=p.id).delete()
@@ -1951,7 +2015,7 @@ def relatorio_bi():
     qtd_avaliacoes = len(avaliacoes)
 
     comissoes = {}
-    desempenho_profissionais = {} # NOVO: Dados detalhados da equipe
+    desempenho_profissionais = {} # Dados detalhados da equipe
     ranking_servicos = {}
     
     grafico_datas = []
@@ -1967,7 +2031,7 @@ def relatorio_bi():
         grafico_loja[d_str] = 0.0
 
     for a in concluidos:
-        # NOVO: Agrupamento de Desempenho e Comissões da Equipe
+        # Agrupamento de Desempenho e Comissões de Serviços da Equipe
         if a.professional:
             prof_name = a.professional.name
             if prof_name not in desempenho_profissionais:
@@ -1977,7 +2041,7 @@ def relatorio_bi():
             desempenho_profissionais[prof_name]['atendimentos'] += 1
             
             if a.commission_value:
-                comissoes[prof_name] = comissoes.get(prof_name, 0) + a.commission_value
+                comissoes[prof_name] = comissoes.get(prof_name, 0.0) + a.commission_value
                 desempenho_profissionais[prof_name]['comissao'] += a.commission_value
                 
             if a.rating:
@@ -2016,13 +2080,25 @@ def relatorio_bi():
         d_str = v.sale_date.strftime('%d/%m')
         if d_str in grafico_loja:
             grafico_loja[d_str] += v.total_price
+
+        # NOVO: Agrupa a comissão de PRODUTOS no desempenho da equipe
+        prof_obj = getattr(v, 'professional', None) or (Professional.query.get(v.professional_id) if getattr(v, 'professional_id', None) else None)
+        if prof_obj:
+            prof_name = prof_obj.name
+            if prof_name not in desempenho_profissionais:
+                desempenho_profissionais[prof_name] = {'faturamento': 0.0, 'atendimentos': 0, 'comissao': 0.0, 'soma_notas': 0, 'qtd_notas': 0, 'nota_media': 0}
+            
+            val_comissao_prod = getattr(v, 'commission_amount', 0.0) or 0.0
+            if val_comissao_prod > 0:
+                comissoes[prof_name] = comissoes.get(prof_name, 0.0) + val_comissao_prod
+                desempenho_profissionais[prof_name]['comissao'] += val_comissao_prod
             
     top_produtos = sorted(ranking_produtos.items(), key=lambda x: x[1]['receita'], reverse=True)[:5]
     
     estoque = Product.query.filter_by(establishment_id=est.id).all()
     capital_parado = sum(p.price * p.stock_quantity for p in estoque)
 
-    # --- ASSINATURAS E INDICADORES DE FIDELIZAÇÃO (NOVO) ---
+    # --- ASSINATURAS E INDICADORES DE FIDELIZAÇÃO ---
     now = get_now_brazil()
     subs_ativos = ClientSubscription.query.filter_by(establishment_id=est.id, status='ativo').filter(ClientSubscription.expiry_date >= now).all()
     mrr = sum(s.plan.price for s in subs_ativos)
@@ -2325,6 +2401,13 @@ with app.app_context():
         garantir_coluna('client_subscriptions', 'client_cpf', 'VARCHAR(14)')
         garantir_coluna('admins', 'is_super_admin', 'BOOLEAN DEFAULT FALSE')
         garantir_coluna('services', 'image_url', 'VARCHAR(500)')
+        garantir_coluna('professionals', 'has_product_commission', 'BOOLEAN DEFAULT FALSE')
+        garantir_coluna('professionals', 'product_commission_rate', 'FLOAT DEFAULT 0.0')
+        garantir_coluna('professionals', 'all_products_commission', 'BOOLEAN DEFAULT TRUE')
+        garantir_coluna('professionals', 'allowed_product_ids', 'TEXT DEFAULT \'\'')
+        garantir_coluna('product_sales', 'professional_id', 'INTEGER')
+        garantir_coluna('product_sales', 'commission_amount', 'FLOAT DEFAULT 0.0')
+        garantir_coluna('services', 'allowed_plan_ids', 'TEXT DEFAULT \'\'')
     except Exception as e:
         print(f"Erro na verificação de colunas: {e}")
 

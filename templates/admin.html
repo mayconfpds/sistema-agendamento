@@ -67,7 +67,7 @@
         <div class="d-flex align-items-center gap-3">
             {% if establishment.logo_filename %}<img src="{{ url_for('static', filename='uploads/' + establishment.logo_filename) }}" class="rounded-circle shadow-sm border border-2 border-body" style="width: 50px; height: 50px; object-fit: cover;">
             {% else %}<div class="rounded-circle bg-secondary d-flex align-items-center justify-content-center text-white fw-bold" style="width: 60px; height: 60px;">Logo</div>{% endif %}
-            <div><h1 class="h3 mb-0 text-body-emphasis">Painel: {{ establishment.name }}</h1><a href="{{ url_for('establishment_services', url_prefix=establishment.url_prefix) }}" target="_blank" class="text-decoration-none small text-primary">Ver a Minha Página <i class="bi bi-box-arrow-up-right"></i></a></div>
+            <div><h1 class="h3 mb-0 text-body-emphasis">Painel: {{ establishment.name }}</h1><a href="{{ url_for('establishment_services', url_prefix=establishment.url_prefix) }}" target="_self" class="text-decoration-none small text-primary">Ver a Minha Página <i class="bi bi-box-arrow-up-right"></i></a></div>
         </div>
     </div>
 
@@ -242,7 +242,8 @@
                         data-categoria="{{ s.category_id }}" data-iscombo="{{ 'true' if s.is_combo else 'false' }}" 
                         data-precooriginal="{{ s.original_price or '' }}" data-isclub="{{ 'true' if s.is_club_included else 'false' }}"
                         data-ishidden="{{ 'true' if s.is_hidden else 'false' }}"
-                        data-image="{{ s.image_url or '' }}">
+                        data-image="{{ s.image_url or '' }}"
+                        data-allowedplans="{{ s.allowed_plan_ids or '' }}">
     
                         <div>
                         <span class="badge bg-secondary mb-1" style="font-size: 0.65rem;">{{ s.category.name if s.category else 'Geral' }}</span>
@@ -287,7 +288,11 @@
                                     data-cpf="{{ p.cpf or '' }}"
                                     data-nasc="{{ p.birth_date.strftime('%Y-%m-%d') if p.birth_date else '' }}"
                                     data-comissao="{{ p.commission_rate }}"
-                                    data-tiers='[{% for t in p.tiers %}{"min":{{t.min_services}}, "rate":{{t.commission_rate}}}{% if not loop.last %},{% endif %}{% endfor %}]'>
+                                    data-tiers='[{% for t in p.tiers %}{"min":{{t.min_services}}, "rate":{{t.commission_rate}}}{% if not loop.last %},{% endif %}{% endfor %}]'
+                                    data-hasprod="{{ 'true' if p.has_product_commission else 'false' }}"
+                                    data-prodrate="{{ p.product_commission_rate or 0 }}"
+                                    data-allprods="{{ 'true' if p.all_products_commission else 'false' }}"
+                                    data-allowedprods="{{ p.allowed_product_ids or '' }}">
                                     
                                     <div>
                                         <span class="fw-bold text-body-emphasis"><i class="bi bi-person-badge text-muted"></i> {{ p.name }}</span>
@@ -657,7 +662,7 @@
                     </div>
                     
                     <div class="mb-3 border rounded-3 p-3 bg-body-tertiary shadow-sm">
-                        <label class="form-label small fw-bold text-primary"><i class="bi bi-graph-up-arrow"></i> Modelo de Comissão</label>
+                        <label class="form-label small fw-bold text-primary"><i class="bi bi-graph-up-arrow"></i> Modelo de Comissão (Serviços)</label>
                         
                         <div class="form-check form-switch mb-3">
                             <input class="form-check-input" type="checkbox" id="toggleEscalavel" onchange="alternarTipoComissao(this.checked)">
@@ -678,6 +683,37 @@
                             </button>
                         </div>
                     </div>
+
+                    <div class="mb-3 border rounded-3 p-3 bg-body-tertiary shadow-sm">
+                        <label class="form-label small fw-bold text-success"><i class="bi bi-shop"></i> Comissão em Produtos</label>
+                        
+                        <div class="mb-3 border rounded-3 p-3 bg-body-tertiary shadow-sm">
+                            <div class="form-check form-switch mb-2">
+                                <input class="form-check-input" type="checkbox" id="servicoIsClub" onchange="alternarListaClubesServico(this.checked)">
+                                <label class="form-check-label small fw-bold" for="servicoIsClub">
+                                    Serviço incluso em Clube de Assinatura?
+                                </label>
+                            </div>
+
+                            <div id="areaSelecaoClubesServico" style="display: none;" class="mt-3 pt-2 border-top">
+                                <div class="text-muted mb-2" style="font-size: 0.75rem;">
+                                    Selecione os clubes em que os assinantes terão isenção (R$ 0,00) ao realizar este serviço:
+                                </div>
+                                
+                                <div class="bg-body p-2 rounded border small" style="max-height: 150px; overflow-y: auto;">
+                                    {% for plan in establishment.subscription_plans %}
+                                    <div class="form-check">
+                                        <input class="form-check-input check-club-plan-item" type="checkbox" name="allowed_club_plans[]" value="{{ plan.id }}" id="check_club_plan_{{ plan.id }}">
+                                        <label class="form-check-label text-body-emphasis" for="check_club_plan_{{ plan.id }}">
+                                            {{ plan.name }} <span class="text-muted">(R$ {{ "%.2f"|format(plan.price) }}/mês)</span>
+                                        </label>
+                                    </div>
+                                    {% else %}
+                                    <div class="text-muted text-center py-2">Nenhum clube de assinatura cadastrado ainda.</div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
                 </form>
             </div>
             <div class="modal-footer border-0 pt-0 pb-4 px-4">
@@ -805,6 +841,14 @@
         }
     }
 
+    // NOVA FUNÇÃO: Mostra/esconde a lista de clubes quando ativa o switch
+    function alternarListaClubesServico(ativo) {
+        const area = document.getElementById('areaSelecaoClubesServico');
+        if (area) {
+            area.style.display = ativo ? 'block' : 'none';
+        }
+    }
+
     function abrirModalServico() {
         document.getElementById('formServico').reset(); 
         document.getElementById('servicoId').value = '';
@@ -816,6 +860,11 @@
         document.getElementById('servicoImagem').value = ''; 
         document.getElementById('servicoFotoPreview').classList.add('d-none');
         document.getElementById('servicoFotoPreview').src = '';
+        
+        // Reseta as opções do Clube de Assinatura
+        document.getElementById('servicoIsClub').checked = false;
+        alternarListaClubesServico(false);
+        document.querySelectorAll('.check-club-plan-item').forEach(chk => chk.checked = false);
         
         new bootstrap.Modal(document.getElementById('modalServico')).show();
     }
@@ -839,7 +888,19 @@
         document.getElementById('servicoPreco').value = li.dataset.preco; 
         document.getElementById('servicoDuracao').value = li.dataset.duracao;
         document.getElementById('servicoCategoria').value = li.dataset.categoria;
-        document.getElementById('servicoIsClub').checked = li.dataset.isclub === 'true';
+        
+        // Lê as configurações de Clube e os IDs permitidos
+        const isClub = li.dataset.isclub === 'true';
+        const allowedPlansStr = li.dataset.allowedplans || '';
+        const allowedList = allowedPlansStr.split(',').map(id => id.trim());
+
+        document.getElementById('servicoIsClub').checked = isClub;
+        alternarListaClubesServico(isClub);
+
+        // Marca automaticamente na lista apenas os clubes a que esse serviço pertence
+        document.querySelectorAll('.check-club-plan-item').forEach(chk => {
+            chk.checked = allowedList.includes(chk.value);
+        });
         
         document.getElementById('servicoIsHidden').checked = li.dataset.ishidden === 'true'; 
         
@@ -856,8 +917,9 @@
         const form = document.getElementById('formServico');
         const formData = new FormData(form); 
         
-        formData.append('is_club_included', document.getElementById('servicoIsClub').checked);
-        formData.append('is_hidden', document.getElementById('servicoIsHidden').checked); // NOVO: Envia para o Python
+        // Garante o envio correto dos checkboxes principais para o Python
+        formData.set('is_club_included', document.getElementById('servicoIsClub').checked ? 'true' : 'false');
+        formData.set('is_hidden', document.getElementById('servicoIsHidden').checked ? 'true' : 'false');
         
         const url = id ? `/admin/servico/editar/${id}` : '/admin/servico/adicionar';
         const res = await fetch(url, { method: 'POST', body: formData, headers: { 'X-Requested-With': 'XMLHttpRequest' } });
@@ -923,6 +985,14 @@
         document.getElementById('containerFaixas').innerHTML = '';
         document.getElementById('toggleEscalavel').checked = false;
         alternarTipoComissao(false);
+        
+        // Reset da comissão de produtos
+        document.getElementById('toggleComissaoProduto').checked = false;
+        document.getElementById('profTodosProdutos').checked = true;
+        alternarComissaoProduto(false);
+        alternarTodosProdutos(true);
+        document.querySelectorAll('.check-prod-item').forEach(chk => chk.checked = false);
+        
         new bootstrap.Modal(document.getElementById('modalProfissional')).show();
     }
 
@@ -947,8 +1017,36 @@
             alternarTipoComissao(false);
         }
         
+        // Lê e preenche os dados de comissão de PRODUTOS
+        const hasProd = li.dataset.hasprod === 'true';
+        const prodRate = li.dataset.prodrate || 0;
+        const allProds = li.dataset.allprods === 'true';
+        const allowedProdsStr = li.dataset.allowedprods || '';
+        const allowedList = allowedProdsStr.split(',').map(id => id.trim());
+
+        document.getElementById('toggleComissaoProduto').checked = hasProd;
+        document.getElementById('profComissaoProduto').value = prodRate;
+        document.getElementById('profTodosProdutos').checked = allProds;
+        
+        alternarComissaoProduto(hasProd);
+        alternarTodosProdutos(allProds);
+
+        // Marca/desmarca checkboxes individuais de produtos
+        document.querySelectorAll('.check-prod-item').forEach(chk => {
+            chk.checked = allProds || allowedList.includes(chk.value);
+        });
+        
         document.getElementById('modalProfTitle').innerText = 'Editar Profissional';
         new bootstrap.Modal(document.getElementById('modalProfissional')).show();
+    }
+
+    // NOVAS FUNÇÕES PARA CONTROLAR O VISUAL DA COMISSÃO DE PRODUTOS
+    function alternarComissaoProduto(ativo) {
+        document.getElementById('areaComissaoProduto').style.display = ativo ? 'block' : 'none';
+    }
+
+    function alternarTodosProdutos(todos) {
+        document.getElementById('listaProdutosPermitidos').style.display = todos ? 'none' : 'block';
     }
 
     async function salvarProfissional() {
@@ -961,10 +1059,15 @@
         btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Salvando...';
         btn.disabled = true;
 
+        const formData = new FormData(form);
+        // Garante envio claro dos booleans de produto para o backend
+        formData.set('has_product_commission', document.getElementById('toggleComissaoProduto').checked ? 'true' : 'false');
+        formData.set('all_products_commission', document.getElementById('profTodosProdutos').checked ? 'true' : 'false');
+
         try {
             const res = await fetch(url, { 
                 method: 'POST', 
-                body: new FormData(form), 
+                body: formData, 
                 headers: {'X-Requested-With': 'XMLHttpRequest'} 
             });
             const data = await res.json();

@@ -3,7 +3,8 @@
 <div class="container py-5" id="container-vitrine" style="max-width: 1000px;">
     <div class="text-center mb-5">
         {% if establishment.logo_filename %}
-            <img src="{{ url_for('static', filename='uploads/' + establishment.logo_filename) }}" class="rounded-circle shadow mb-3 border border-3 border-white" style="width: 120px; height: 120px; object-fit: cover;">
+            <img src="{{ url_for('static', filename='uploads/' + establishment.logo_filename) }}" class="rounded-circle shadow mb-3 border border-3 border-white" style="width: 120px; height: 120px; object-fit: cover; cursor: pointer;"
+            onclick="abrirModalLogo(this.src)">
         {% else %}
             <div class="rounded-circle bg-secondary d-inline-flex align-items-center justify-content-center text-white fw-bold mb-3 shadow border border-3 border-white" style="width: 120px; height: 120px; font-size: 3rem;">{{ establishment.name[0] }}</div>
         {% endif %}
@@ -257,6 +258,17 @@
   </div>
 </div>
 
+<div class="modal fade" id="modalVisualizarLogo" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content bg-transparent border-0 text-center">
+            <div class="position-relative d-inline-block">
+                <img id="imgLogoAmpliada" src="" class="img-fluid rounded-4 shadow-lg border border-2 border-white" alt="Logo">
+                <button type="button" class="btn-close btn-close-white position-absolute top-0 end-0 m-2" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <style>
     /* Estilos do Modo Leitura */
     #container-vitrine, #container-vitrine * { transition: font-size 0.2s ease, padding 0.2s ease; }
@@ -454,5 +466,11 @@
         document.getElementById('zoomTitle').innerText = name;
         new bootstrap.Modal(document.getElementById('modalZoom')).show();
     }
+    
+    function abrirModalLogo(src) {
+    if (!src || src.trim() === '' || src === 'None') return;
+    document.getElementById('imgLogoAmpliada').src = src;
+    new bootstrap.Modal(document.getElementById('modalVisualizarLogo')).show();
+}
 </script>
 {% endblock %}
