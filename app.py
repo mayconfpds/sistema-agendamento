@@ -1352,11 +1352,15 @@ def update_settings():
         est.loyalty_reward = request.form.get('loyalty_reward')
         if 'logo' in request.files:
             file = request.files['logo']
-            if file and allowed_file(file.filename):
-                fname = secure_filename(file.filename)
-                uid = f"{est.id}_{int(time_module.time())}_{fname}"
-                file.save(os.path.join(app.config['UPLOAD_FOLDER'], uid))
-                est.logo_filename = uid
+            if file and file.filename != '':
+                link_logo = upload_to_imgbb(file)
+                if link_logo:
+                    est.logo_filename = link_logo
+                elif allowed_file(file.filename):
+                    fname = secure_filename(file.filename)
+                    uid = f"{est.id}_{int(time_module.time())}_{fname}"
+                    file.save(os.path.join(app.config['UPLOAD_FOLDER'], uid))
+                    est.logo_filename = uid
     elif ft == 'schedule':
         for sid in request.form.getlist('schedule_id'):
             ds = DaySchedule.query.get(sid)

@@ -468,9 +468,12 @@
     }
     
     function abrirModalLogo(src) {
-    if (!src || src.trim() === '' || src === 'None') return;
-    document.getElementById('imgLogoAmpliada').src = src;
-    new bootstrap.Modal(document.getElementById('modalVisualizarLogo')).show();
-}
+        // Ignora se não houver src válido, se for None, vazio ou se for a própria URL da página
+        if (!src || src.trim() === '' || src.includes('None') || src === window.location.href) {
+            return;
+        }
+        document.getElementById('imgLogoAmpliada').src = src;
+        new bootstrap.Modal(document.getElementById('modalVisualizarLogo')).show();
+    }
 </script>
 {% endblock %}

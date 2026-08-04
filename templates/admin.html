@@ -65,8 +65,13 @@
 
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div class="d-flex align-items-center gap-3">
-            {% if establishment.logo_filename %}<img src="{{ url_for('static', filename='uploads/' + establishment.logo_filename) }}" class="rounded-circle shadow-sm border border-2 border-body" style="width: 50px; height: 50px; object-fit: cover;">
-            {% else %}<div class="rounded-circle bg-secondary d-flex align-items-center justify-content-center text-white fw-bold" style="width: 60px; height: 60px;">Logo</div>{% endif %}
+           {% if establishment.logo_filename %}
+                <img src="{{ establishment.logo_filename if 'http' in establishment.logo_filename else url_for('static', filename='uploads/' + establishment.logo_filename) }}" 
+                     class="rounded-circle shadow-sm border border-2 border-body" 
+                     style="width: 50px; height: 50px; object-fit: cover;">
+            {% else %}
+                <div class="rounded-circle bg-secondary d-flex align-items-center justify-content-center text-white fw-bold" style="width: 60px; height: 60px;">Logo</div>
+            {% endif %}
             <div><h1 class="h3 mb-0 text-body-emphasis">Painel: {{ establishment.name }}</h1><a href="{{ url_for('establishment_services', url_prefix=establishment.url_prefix) }}" target="_self" class="text-decoration-none small text-primary">Ver a Minha Página <i class="bi bi-box-arrow-up-right"></i></a></div>
         </div>
     </div>
@@ -787,6 +792,40 @@
         </div>
     </div>
 </div>
+
+<div class="modal fade" id="modalBaixaProduto" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content bg-body border-0 shadow-lg rounded-4">
+            <div class="modal-header border-bottom-0 pb-0">
+                <h6 class="modal-title fw-bold text-body-emphasis"><i class="bi bi-cart-check text-success"></i> Registrar Venda</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-3">
+                <form id="formBaixaProduto">
+                    <input type="hidden" id="baixaProdId">
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-body-emphasis">Quantidade Vendida</label>
+                        <input type="number" id="baixaQtd" class="form-control text-center fw-bold shadow-sm" value="1" min="1" required>
+                    </div>
+                    {% if establishment.plan_type == 'gestao' %}
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold text-success"><i class="bi bi-person-badge"></i> Quem realizou a venda?</label>
+                        <select id="baixaProfId" class="form-select form-select-sm shadow-sm">
+                            <option value="">Sem comissão (Venda do salão)</option>
+                            {% for p in professionals %}
+                            <option value="{{ p.id }}">{{ p.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    {% endif %}
+                </form>
+            </div>
+            <div class="modal-footer border-top-0 pt-0 px-3 pb-3">
+                <button type="button" class="btn btn-success w-100 fw-bold py-2 shadow-sm" onclick="confirmarBaixaProduto()">Confirmar Baixa</button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -1028,13 +1067,41 @@
         const res = await fetch(url, { method: 'POST', body: new FormData(form), headers: {'X-Requested-With': 'XMLHttpRequest'} });
         if((await res.json()).success) { bootstrap.Modal.getInstance(document.getElementById('modalProduto')).hide(); await atualizarContainerSilenciosamente('container-lista-produtos'); }
     }
-    async function darBaixaProduto(id) {
-        const qtd = prompt("Quantidade vendida hoje?"); if (!qtd || isNaN(qtd) || qtd <= 0) return;
-        const formData = new FormData(); formData.append('quantidade', qtd);
-        const res = await fetch(`/admin/produto/dar_baixa/${id}`, { method: 'POST', body: formData, headers: {'X-Requested-With': 'XMLHttpRequest'} });
-        if ((await res.json()).success) { 
-            await atualizarContainerSilenciosamente('container-lista-produtos'); 
-            await atualizarContainerSilenciosamente('container-ultimas-vendas'); 
+    function darBaixaProduto(id) {
+        document.getElementById('baixaProdId').value = id;
+        document.getElementById('baixaQtd').value = '1';
+        const selectProf = document.getElementById('baixaProfId');
+        if (selectProf) selectProf.value = '';
+        new bootstrap.Modal(document.getElementById('modalBaixaProduto')).show();
+    }
+
+    async function confirmarBaixaProduto() {
+        const id = document.getElementById('baixaProdId').value;
+        const qtd = document.getElementById('baixaQtd').value;
+        const profId = document.getElementById('baixaProfId') ? document.getElementById('baixaProfId').value : '';
+
+        if (!qtd || isNaN(qtd) || qtd <= 0) {
+            alert("Informe uma quantidade válida.");
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('quantidade', qtd);
+        if (profId) formData.append('professional_id', profId);
+
+        const res = await fetch(`/admin/produto/dar_baixa/${id}`, { 
+            method: 'POST', 
+            body: formData, 
+            headers: {'X-Requested-With': 'XMLHttpRequest'} 
+        });
+
+        const data = await res.json();
+        if (data.success) {
+            bootstrap.Modal.getInstance(document.getElementById('modalBaixaProduto')).hide();
+            await atualizarContainerSilenciosamente('container-lista-produtos');
+            await atualizarContainerSilenciosamente('container-ultimas-vendas');
+        } else {
+            alert(data.error || 'Erro ao dar baixa no produto.');
         }
     }
     async function excluirProduto(id) {

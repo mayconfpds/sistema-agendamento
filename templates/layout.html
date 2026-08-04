@@ -127,7 +127,7 @@
                 
                 <li class="nav-item"><a class="nav-link text-body-emphasis" href="{{ url_for('relatorio_bi') }}"><i class="bi bi-pie-chart me-2"></i> Painel de BI</a></li>
                 
-                <li class="nav-item"><a class="nav-link text-body-emphasis" href="{{ url_for('establishment_services', url_prefix=current_user.establishment.url_prefix) }}" target="_blank"><i class="bi bi-box-arrow-up-right me-2"></i> Ver Minha Página</a></li>
+                <li class="nav-item"><a class="nav-link text-body-emphasis" href="{{ url_for('establishment_services', url_prefix=current_user.establishment.url_prefix) }}" target="_self"><i class="bi bi-box-arrow-up-right me-2"></i> Ver Minha Página</a></li>
                 <li class="nav-item"><a class="nav-link text-body-emphasis" href="{{ url_for('ajuda') }}"><i class="bi bi-question-circle me-2"></i> Ajuda e Suporte</a></li>
                 <li class="nav-item mt-2 pt-2 border-top">
                     <a class="nav-link text-body-emphasis" href="{{ url_for('alterar_senha') }}">
