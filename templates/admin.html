@@ -1072,16 +1072,32 @@
         document.getElementById('baixaQtd').value = '1';
         const selectProf = document.getElementById('baixaProfId');
         if (selectProf) selectProf.value = '';
+        
+        // Garante que o botão de salvar esteja liberado ao abrir
+        const btn = document.getElementById('btnConfirmarBaixa');
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = 'Confirmar Baixa';
+        }
+        
         new bootstrap.Modal(document.getElementById('modalBaixaProduto')).show();
     }
 
-    async function confirmarBaixaProduto() {
+    async function confirmarBaixaProduto(btn) {
+        // TRAVA ANTI-DUPLO CLIQUE (Impede enviar 4 vezes seguidas)
+        if (btn && btn.disabled) return;
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Baixando...';
+        }
+
         const id = document.getElementById('baixaProdId').value;
-        const qtd = document.getElementById('baixaQtd').value;
+        const qtd = parseInt(document.getElementById('baixaQtd').value || 1, 10);
         const profId = document.getElementById('baixaProfId') ? document.getElementById('baixaProfId').value : '';
 
         if (!qtd || isNaN(qtd) || qtd <= 0) {
             alert("Informe uma quantidade válida.");
+            if (btn) { btn.disabled = false; btn.innerHTML = 'Confirmar Baixa'; }
             return;
         }
 
@@ -1089,19 +1105,25 @@
         formData.append('quantidade', qtd);
         if (profId) formData.append('professional_id', profId);
 
-        const res = await fetch(`/admin/produto/dar_baixa/${id}`, { 
-            method: 'POST', 
-            body: formData, 
-            headers: {'X-Requested-With': 'XMLHttpRequest'} 
-        });
+        try {
+            const res = await fetch(`/admin/produto/dar_baixa/${id}`, { 
+                method: 'POST', 
+                body: formData, 
+                headers: {'X-Requested-With': 'XMLHttpRequest'} 
+            });
 
-        const data = await res.json();
-        if (data.success) {
-            bootstrap.Modal.getInstance(document.getElementById('modalBaixaProduto')).hide();
-            await atualizarContainerSilenciosamente('container-lista-produtos');
-            await atualizarContainerSilenciosamente('container-ultimas-vendas');
-        } else {
-            alert(data.error || 'Erro ao dar baixa no produto.');
+            const data = await res.json();
+            if (data.success) {
+                bootstrap.Modal.getInstance(document.getElementById('modalBaixaProduto')).hide();
+                await atualizarContainerSilenciosamente('container-lista-produtos');
+                await atualizarContainerSilenciosamente('container-ultimas-vendas');
+            } else {
+                alert(data.error || 'Erro ao dar baixa no produto.');
+                if (btn) { btn.disabled = false; btn.innerHTML = 'Confirmar Baixa'; }
+            }
+        } catch (e) {
+            alert("Erro de conexão ao baixar estoque.");
+            if (btn) { btn.disabled = false; btn.innerHTML = 'Confirmar Baixa'; }
         }
     }
     async function excluirProduto(id) {

@@ -184,17 +184,19 @@
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0" style="min-width: 700px;">
+                <table class="table table-hover align-middle mb-0" style="min-width: 800px;">
                     <thead class="table-light">
                         <tr>
-        		    <th class="ps-4 cursor-pointer" onclick="ordenarEquipe(0)">Profissional <i class="bi bi-arrow-down-up small ms-1"></i></th>
-        		    <th class="text-center cursor-pointer" onclick="ordenarEquipe(1)">Atendimentos <i class="bi bi-arrow-down-up small ms-1"></i></th>
-        		    <th class="text-end cursor-pointer" onclick="ordenarEquipe(2)">Faturamento <i class="bi bi-arrow-down-up small ms-1"></i></th>
-        		    <th class="text-end cursor-pointer" onclick="ordenarEquipe(3)">Comissão <i class="bi bi-arrow-down-up small ms-1"></i></th>
-        		    <th class="text-center pe-4 cursor-pointer" onclick="ordenarEquipe(4)">Nota <i class="bi bi-arrow-down-up small ms-1"></i></th>
-    			</tr>
-		    </thead>
-		    <tbody class="text-body-emphasis" id="corpoEquipe">
+                            <th class="ps-4 cursor-pointer" onclick="ordenarEquipe(0)">Profissional <i class="bi bi-arrow-down-up small ms-1"></i></th>
+                            <th class="text-center cursor-pointer" onclick="ordenarEquipe(1)">Atendimentos <i class="bi bi-arrow-down-up small ms-1"></i></th>
+                            <th class="text-end cursor-pointer" onclick="ordenarEquipe(2)">Faturamento <i class="bi bi-arrow-down-up small ms-1"></i></th>
+                            <th class="text-end cursor-pointer" onclick="ordenarEquipe(3)">Comissão Serviços <i class="bi bi-arrow-down-up small ms-1"></i></th>
+                            <th class="text-end cursor-pointer" onclick="ordenarEquipe(4)">Comissão Produtos <i class="bi bi-arrow-down-up small ms-1"></i></th>
+                            <th class="text-end cursor-pointer" onclick="ordenarEquipe(5)">Total a Pagar <i class="bi bi-arrow-down-up small ms-1"></i></th>
+                            <th class="text-center pe-4 cursor-pointer" onclick="ordenarEquipe(6)">Nota <i class="bi bi-arrow-down-up small ms-1"></i></th>
+                        </tr>
+                    </thead>
+                    <tbody class="text-body-emphasis" id="corpoEquipe">
                         {% for prof, dados in desempenho_profissionais.items() %}
                         <tr class="linha-prof">
                             <td class="ps-4">
@@ -202,7 +204,9 @@
                             </td>
                             <td class="text-center fw-bold">{{ dados.atendimentos }}</td>
                             <td class="text-end fw-bold text-success">R$ {{ "%.2f"|format(dados.faturamento) }}</td>
-                            <td class="text-end fw-bold text-danger">R$ {{ "%.2f"|format(dados.comissao) }}</td>
+                            <td class="text-end fw-bold text-body-secondary">R$ {{ "%.2f"|format(dados.comissao_servicos) }}</td>
+                            <td class="text-end fw-bold text-primary">R$ {{ "%.2f"|format(dados.comissao_produtos) }}</td>
+                            <td class="text-end fw-black text-danger">R$ {{ "%.2f"|format(dados.comissao_total) }}</td>
                             <td class="text-center pe-4">
                                 <span class="badge bg-warning-subtle text-warning border border-warning-subtle px-2 py-1">
                                     <i class="bi bi-star-fill"></i> {{ "%.1f"|format(dados.nota_media) }}
@@ -392,7 +396,7 @@ document.addEventListener("DOMContentLoaded", function() {
     }
 
 // Ordenação dinâmica para o Raio-X
-    let ordens = [true, true, true, true, true]; 
+    let ordens = [true, true, true, true, true, true, true]; 
     function ordenarEquipe(n) {
         let table = document.getElementById("corpoEquipe");
         let rows = Array.from(table.rows);

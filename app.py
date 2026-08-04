@@ -2039,14 +2039,24 @@ def relatorio_bi():
         if a.professional:
             prof_name = a.professional.name
             if prof_name not in desempenho_profissionais:
-                desempenho_profissionais[prof_name] = {'faturamento': 0.0, 'atendimentos': 0, 'comissao': 0.0, 'soma_notas': 0, 'qtd_notas': 0}
+                desempenho_profissionais[prof_name] = {
+                    'faturamento': 0.0, 
+                    'atendimentos': 0, 
+                    'comissao_servicos': 0.0, 
+                    'comissao_produtos': 0.0, 
+                    'comissao_total': 0.0, 
+                    'soma_notas': 0, 
+                    'qtd_notas': 0,
+                    'nota_media': 0
+                }
             
             desempenho_profissionais[prof_name]['faturamento'] += a.total_price
             desempenho_profissionais[prof_name]['atendimentos'] += 1
             
             if a.commission_value:
                 comissoes[prof_name] = comissoes.get(prof_name, 0.0) + a.commission_value
-                desempenho_profissionais[prof_name]['comissao'] += a.commission_value
+                desempenho_profissionais[prof_name]['comissao_servicos'] += a.commission_value
+                desempenho_profissionais[prof_name]['comissao_total'] += a.commission_value
                 
             if a.rating:
                 desempenho_profissionais[prof_name]['soma_notas'] += a.rating
@@ -2063,12 +2073,6 @@ def relatorio_bi():
         if d_str in grafico_agenda:
             grafico_agenda[d_str] += a.total_price
             
-    # Finaliza os cálculos de notas por profissional
-    for prof_name, dados in desempenho_profissionais.items():
-        dados['nota_media'] = (dados['soma_notas'] / dados['qtd_notas']) if dados['qtd_notas'] > 0 else 0
-            
-    top_servicos = sorted(ranking_servicos.items(), key=lambda x: x[1]['receita'], reverse=True)[:5]
-
     # --- CÁLCULOS DA LOJA ---
     vendas = ProductSale.query.filter(ProductSale.establishment_id == est.id).all()
     vendas_periodo = [v for v in vendas if start_date <= v.sale_date.date() <= end_date]
@@ -2085,18 +2089,33 @@ def relatorio_bi():
         if d_str in grafico_loja:
             grafico_loja[d_str] += v.total_price
 
-        # NOVO: Agrupa a comissão de PRODUTOS no desempenho da equipe
+        # SEPARAÇÃO CLARA DA COMISSÃO DE PRODUTOS
         prof_obj = getattr(v, 'professional', None) or (Professional.query.get(v.professional_id) if getattr(v, 'professional_id', None) else None)
         if prof_obj:
             prof_name = prof_obj.name
             if prof_name not in desempenho_profissionais:
-                desempenho_profissionais[prof_name] = {'faturamento': 0.0, 'atendimentos': 0, 'comissao': 0.0, 'soma_notas': 0, 'qtd_notas': 0, 'nota_media': 0}
+                desempenho_profissionais[prof_name] = {
+                    'faturamento': 0.0, 
+                    'atendimentos': 0, 
+                    'comissao_servicos': 0.0, 
+                    'comissao_produtos': 0.0, 
+                    'comissao_total': 0.0, 
+                    'soma_notas': 0, 
+                    'qtd_notas': 0, 
+                    'nota_media': 0
+                }
             
             val_comissao_prod = getattr(v, 'commission_amount', 0.0) or 0.0
             if val_comissao_prod > 0:
                 comissoes[prof_name] = comissoes.get(prof_name, 0.0) + val_comissao_prod
-                desempenho_profissionais[prof_name]['comissao'] += val_comissao_prod
+                desempenho_profissionais[prof_name]['comissao_produtos'] += val_comissao_prod
+                desempenho_profissionais[prof_name]['comissao_total'] += val_comissao_prod
             
+    # Finaliza os cálculos de notas por profissional
+    for prof_name, dados in desempenho_profissionais.items():
+        dados['nota_media'] = (dados['soma_notas'] / dados['qtd_notas']) if dados['qtd_notas'] > 0 else 0
+            
+    top_servicos = sorted(ranking_servicos.items(), key=lambda x: x[1]['receita'], reverse=True)[:5]
     top_produtos = sorted(ranking_produtos.items(), key=lambda x: x[1]['receita'], reverse=True)[:5]
     
     estoque = Product.query.filter_by(establishment_id=est.id).all()
@@ -2115,7 +2134,6 @@ def relatorio_bi():
     soma_dias_retorno = 0
     qtd_retornos = 0
 
-    # Total histórico de clientes para taxa de adesão VIP
     total_clientes_base = db.session.query(Appointment.client_phone).filter_by(establishment_id=est.id).filter(Appointment.status.in_(['concluido', 'arquivado'])).distinct().count()
     taxa_adesao_vip = (total_assinantes / total_clientes_base * 100) if total_clientes_base > 0 else 0
 
