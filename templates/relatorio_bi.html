@@ -290,9 +290,16 @@
                                 {% endfor %}
                                 {% for v in vendas_periodo %}
                                 <tr>
-                                    <td>{{ v.sale_date.strftime('%d/%m/%Y') }}</td>
+                                    <td>{{ v.sale_date.strftime('%d/%m/%Y') if v.sale_date else '-' }}</td>
                                     <td><span class="badge bg-success-subtle text-success border border-success-subtle">Loja</span></td>
-                                    <td>{{ v.quantity }}x {{ v.product_name }}</td>
+                                    <td>
+                                        {{ v.quantity }}x {{ v.product_name }}
+                                        {% if v.professional %}
+                                        <span class="badge bg-body-secondary text-body-emphasis border ms-1" style="font-size: 0.75rem;">
+                                            <i class="bi bi-scissors"></i> {{ v.professional.name }}
+                                        </span>
+                                        {% endif %}
+                                    </td>
                                     <td class="text-end pe-4 fw-bold">R$ {{ "%.2f"|format(v.total_price) }}</td>
                                 </tr>
                                 {% endfor %}

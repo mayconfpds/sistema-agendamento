@@ -407,8 +407,17 @@
                                 {% for sale in recent_sales %}
                                 <li class="list-group-item bg-transparent d-flex justify-content-between align-items-center px-3 py-3 border-bottom">
                                     <div>
-                                        <div class="fw-bold text-body-emphasis mb-1">{{ sale.product_name }}</div>
-                                        <div class="text-muted" style="font-size: 0.75rem;"><i class="bi bi-clock"></i> {{ sale.sale_date.strftime('%d/%m às %H:%M') }} • {{ sale.quantity }} un</div>
+                                        <div class="fw-bold text-body-emphasis mb-1">
+                                            {{ sale.product_name }}
+                                            {% if sale.professional %}
+                                            <span class="badge bg-success-subtle text-success border border-success-subtle ms-1" style="font-size: 0.7rem;">
+                                                <i class="bi bi-person-badge"></i> {{ sale.professional.name }}
+                                            </span>
+                                            {% endif %}
+                                        </div>
+                                        <div class="text-muted" style="font-size: 0.75rem;">
+                                            <i class="bi bi-clock"></i> {{ sale.sale_date.strftime('%d/%m às %H:%M') if sale.sale_date else 'Hoje' }} • {{ sale.quantity }} un
+                                        </div>
                                     </div>
                                     <div class="text-success fw-bold fs-6">+ R$ {{ "%.2f"|format(sale.total_price) }}</div>
                                 </li>
