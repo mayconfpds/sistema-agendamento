@@ -66,7 +66,7 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div class="d-flex align-items-center gap-3">
            {% if establishment.logo_filename %}
-                <img src="{{ establishment.logo_filename if 'http' in establishment.logo_filename else url_for('static', filename='uploads/' + establishment.logo_filename) }}" 
+                <img src="{{ establishment.logo_filename if ('data:image' in establishment.logo_filename or 'http' in establishment.logo_filename) else url_for('static', filename='uploads/' + establishment.logo_filename) }}" 
                      class="rounded-circle shadow-sm border border-2 border-body" 
                      style="width: 50px; height: 50px; object-fit: cover;">
             {% else %}
@@ -367,7 +367,8 @@
                                 <div class="col-md-6">
                                     <div class="card h-100 border shadow-sm rounded-4 overflow-hidden bg-body">
                                         {% if p.image_filename %}
-                                            <img src="{{ url_for('static', filename='uploads/' + p.image_filename) }}" class="card-img-top" style="height: 160px; object-fit: cover;">
+                                            <img src="{{ p.image_filename if ('data:image' in p.image_filename or 'http' in p.image_filename) else url_for('static', filename='uploads/' + p.image_filename) }}" 
+                                                class="card-img-top" style="height: 160px; object-fit: cover;">
                                         {% else %}
                                             <div class="bg-body-tertiary text-muted d-flex align-items-center justify-content-center" style="height: 160px;"><i class="bi bi-image fs-1"></i></div>
                                         {% endif %}

@@ -152,35 +152,28 @@ def send_email(subject, recipient, body):
     threading.Thread(target=_send_thread).start()
     
 # ==========================================
-# CONFIGURAÇÃO DO IMGBB (FOTOS DE SERVIÇOS)
+# CONVERSÃO DE IMAGENS PARA BASE64 (DATA URI)
 # ==========================================
-IMGBB_API_KEY = '90d1e47ba624c4b1c1420db97105ac3b' 
-
-def upload_to_imgbb(file_stream):
+def converter_para_base64(file_stream):
     """
-    Recebe um arquivo de imagem do Flask, converte para Base64 
-    e envia para o ImgBB. Retorna a URL pública da imagem.
+    Converte um arquivo de imagem recebido do formulário para Base64 Data URI.
+    Salva diretamente no banco de dados sem depender de APIs externas.
     """
     try:
-        url = "https://api.imgbb.com/1/upload"
-        
-        # Converte a imagem lida para base64 para enviar via POST
-        payload = {
-            "key": IMGBB_API_KEY,
-            "image": base64.b64encode(file_stream.read()).decode('utf-8')
-        }
-        
-        response = requests.post(url, data=payload)
-        
-        if response.status_code == 200:
-            result = response.json()
-            # Retorna a URL direta da imagem salva na nuvem
-            return result['data']['url']
-        else:
-            print(f"Erro na API do ImgBB: {response.text}")
+        file_bytes = file_stream.read()
+        if not file_bytes:
             return None
+            
+        # Identifica a extensão da imagem (png, jpeg, webp, etc.)
+        ext = 'png'
+        if hasattr(file_stream, 'filename') and '.' in file_stream.filename:
+            ext = file_stream.filename.rsplit('.', 1)[1].lower()
+            if ext == 'jpg': ext = 'jpeg'
+            
+        b64_str = base64.b64encode(file_bytes).decode('utf-8')
+        return f"data:image/{ext};base64,{b64_str}"
     except Exception as e:
-        print(f"Erro fatal ao processar imagem: {e}")
+        print(f"Erro ao converter imagem para base64: {e}")
         return None
 
 class Establishment(db.Model):
@@ -977,7 +970,7 @@ def add_product():
         price_str = request.form.get('price', '0')
         stock_str = request.form.get('stock_quantity', '0')
         desc = request.form.get('description', '')
-        
+
         if not name or not price_str:
             return jsonify({'success': False, 'error': 'Nome e preço são obrigatórios.'})
 
@@ -986,14 +979,14 @@ def add_product():
 
         p = Product(name=name, price=price, stock_quantity=stock, description=desc, establishment_id=current_user.establishment_id)
 
+        # NOVO: Converte imagem do produto para Base64 direto no banco
         if 'image' in request.files:
             file = request.files['image']
-            if file and allowed_file(file.filename):
-                fname = secure_filename(file.filename)
-                uid = f"prod_{current_user.establishment_id}_{int(time_module.time())}_{fname}"
-                file.save(os.path.join(app.config['UPLOAD_FOLDER'], uid))
-                p.image_filename = uid
-        
+            if file and file.filename != '':
+                link_img = converter_para_base64(file)
+                if link_img:
+                    p.image_filename = link_img
+
         db.session.add(p); db.session.commit()
         return jsonify({'success': True})
     except Exception as e:
@@ -1006,24 +999,24 @@ def edit_product(id):
     try:
         p = Product.query.get_or_404(id)
         if p.establishment_id != current_user.establishment_id: return jsonify({'success': False, 'error':'Acesso negado'}), 403
-        
+
         p.name = request.form.get('name', p.name)
         p.description = request.form.get('description', p.description)
-        
+
         stock_str = request.form.get('stock_quantity')
         if stock_str and str(stock_str).strip(): p.stock_quantity = int(stock_str)
-        
+
         price_str = request.form.get('price')
         if price_str and str(price_str).strip(): p.price = float(str(price_str).replace(',', '.'))
-        
+
+        # NOVO: Converte imagem do produto para Base64 direto no banco
         if 'image' in request.files:
             file = request.files['image']
-            if file and allowed_file(file.filename):
-                fname = secure_filename(file.filename)
-                uid = f"prod_{p.id}_{int(time_module.time())}_{fname}"
-                file.save(os.path.join(app.config['UPLOAD_FOLDER'], uid))
-                p.image_filename = uid
-                
+            if file and file.filename != '':
+                link_img = converter_para_base64(file)
+                if link_img:
+                    p.image_filename = link_img
+
         db.session.commit()
         return jsonify({'success': True})
     except Exception as e:
@@ -1046,13 +1039,12 @@ def reduce_stock(id):
     if p.establishment_id != current_user.establishment_id: return jsonify({'success': False}), 403
     try:
         quantidade = int(request.form.get('quantidade', 1))
-        prof_id = request.form.get('professional_id')  # ID do barbeiro/cabeleireiro que vendeu (opcional)
-        
+        prof_id = request.form.get('professional_id')
+
         if p.stock_quantity >= quantidade:
             p.stock_quantity -= quantidade
             total_sale = p.price * quantidade
-            
-            # Cálculo de comissão individual por produto (Cenário A)
+
             commission_amount = 0.0
             selected_prof_id = None
 
@@ -1063,7 +1055,8 @@ def reduce_stock(id):
                     if prof.all_products_commission or str(p.id) in allowed_list:
                         commission_amount = (total_sale * prof.product_commission_rate) / 100.0
                         selected_prof_id = prof.id
-            
+
+            # NOVO: Grava a data explícita (sale_date) para garantir exibição nas Últimas Vendas
             sale = ProductSale(
                 product_name=p.name, 
                 quantity=quantidade, 
@@ -1071,11 +1064,12 @@ def reduce_stock(id):
                 total_price=total_sale, 
                 establishment_id=p.establishment_id,
                 professional_id=selected_prof_id,
-                commission_amount=commission_amount
+                commission_amount=commission_amount,
+                sale_date=get_now_brazil()
             )
             db.session.add(sale)
             db.session.commit()
-            
+
             return jsonify({'success': True, 'new_stock': p.stock_quantity})
         return jsonify({'success': False, 'error': 'Estoque insuficiente para esta baixa.'})
     except Exception as e:
@@ -1353,7 +1347,7 @@ def update_settings():
         if 'logo' in request.files:
             file = request.files['logo']
             if file and file.filename != '':
-                link_logo = upload_to_imgbb(file)
+                link_logo = converter_para_base64(file)
                 if link_logo:
                     est.logo_filename = link_logo
                 elif allowed_file(file.filename):
@@ -1428,7 +1422,7 @@ def add_service():
       
         image_file = request.files.get('image')
         if image_file and image_file.filename != '':
-            link_imagem = upload_to_imgbb(image_file)
+            link_imagem = converter_para_base64(image_file)
             if link_imagem:
                 s.image_url = link_imagem
             
@@ -1461,7 +1455,7 @@ def edit_service(id):
     
     image_file = request.files.get('image')
     if image_file and image_file.filename != '':
-        link_imagem = upload_to_imgbb(image_file)
+        link_imagem = converter_para_base64(image_file)
         if link_imagem:
             s.image_url = link_imagem
             
@@ -2411,6 +2405,15 @@ with app.app_context():
                 conn.execute(text(f"ALTER TABLE {tabela} ADD COLUMN {coluna} {tipo}"))
                 conn.commit()
 
+    with db.engine.connect() as conn:
+             try:
+                 conn.execute(text("ALTER TABLE establishments ALTER COLUMN logo_filename TYPE TEXT;"))
+                 conn.execute(text("ALTER TABLE services ALTER COLUMN image_url TYPE TEXT;"))
+                 conn.execute(text("ALTER TABLE products ALTER COLUMN image_filename TYPE TEXT;"))
+                 conn.execute(text("ALTER TABLE products ALTER COLUMN image_filename TYPE TEXT;"))
+                 conn.commit()
+             except Exception as e_alt:
+                 pass
     try:
         garantir_coluna('admins', 'cpf', 'VARCHAR(14)')
         garantir_coluna('admins', 'birth_date', 'DATE')
