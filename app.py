@@ -183,7 +183,7 @@ class Establishment(db.Model):
     url_prefix = db.Column(db.String(50), nullable=False, unique=True)
     contact_phone = db.Column(db.String(20), nullable=True)
     contact_email = db.Column(db.String(120), nullable=True)
-    logo_filename = db.Column(db.String(100), nullable=True)
+    logo_filename = db.Column(db.Text, nullable=True)
     is_active = db.Column(db.Boolean, default=False)
     capacity = db.Column(db.Integer, default=1, nullable=False)
     plan_type = db.Column(db.String(20), default='solo')
@@ -246,7 +246,7 @@ class Product(db.Model):
     name = db.Column(db.String(100), nullable=False)
     price = db.Column(db.Float, nullable=False, default=0.0)
     description = db.Column(db.Text, nullable=True)
-    image_filename = db.Column(db.String(100), nullable=True)
+    image_filename = db.Column(db.Text, nullable=True)
     stock_quantity = db.Column(db.Integer, default=0)
     establishment_id = db.Column(db.Integer, db.ForeignKey('establishments.id'), nullable=False)
 
@@ -960,7 +960,7 @@ def admin_dashboard():
     ).all()
     # Lembre-se de adicionar aniv_equipe=aniv_equipe no seu render_template!
     
-    return render_template('admin.html', appointments=appts, services=services, categories=categories, establishment=est, schedules=schedules, blacklists=blacklists, professionals=professionals, today_count=today_count, aniv_equipe=aniv_equipe)
+    return render_template('admin.html', appointments=appts, services=services, categories=categories, establishment=est, schedules=schedules, blacklists=blacklists, professionals=professionals, today_count=today_count, aniv_equipe=aniv_equipe, recent_sales=recent_sales)
 
 @app.route('/admin/produto/adicionar', methods=['POST'])
 @login_required

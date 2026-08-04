@@ -3,7 +3,7 @@
 <div class="container py-5" id="container-vitrine" style="max-width: 1000px;">
     <div class="text-center mb-5">
         {% if establishment.logo_filename %}
-            <img src="{{ establishment.logo_filename if ('data:image' in str(establishment.logo_filename) or 'http' in str(establishment.logo_filename)) else url_for('static', filename='uploads/' + establishment.logo_filename) }}" 
+            <img src="{{ establishment.logo_filename if ('data:image' in establishment.logo_filename or 'http' in establishment.logo_filename) else url_for('static', filename='uploads/' + establishment.logo_filename) }}" 
                  alt="{{ establishment.name }}"
                  class="rounded-circle shadow mb-3 border border-3 border-white" 
                  style="width: 120px; height: 120px; object-fit: cover; cursor: pointer;"
@@ -67,7 +67,7 @@
                                                 
                                                 <div class="d-flex align-items-center gap-3 w-100">
                                                     {% if s.image_url %}
-                                                        <img src="{{ s.image_url if ('data:image' in str(s.image_url) or 'http' in str(s.image_url)) else url_for('static', filename='uploads/' + s.image_url) }}" 
+                                                        <img src="{{ s.image_url if ('data:image' in s.image_url or 'http' in s.image_url) else url_for('static', filename='uploads/' + s.image_url) }}" 
                                                              class="rounded-3 shadow-sm flex-shrink-0" style="width: 70px; height: 70px; object-fit: cover; cursor: pointer;"
                                                              onclick="abrirZoom(this.src, '{{ s.name|e }}')">
                                                     {% else %}
