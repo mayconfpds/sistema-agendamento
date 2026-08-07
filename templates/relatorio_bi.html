@@ -14,13 +14,19 @@
     
     <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center mb-4 gap-3">
         <div>
+            {% if getattr(current_user, 'role', 'dono') == 'barbeiro' %}
+            <h2 class="fw-black text-body-emphasis mb-1"><i class="bi bi-wallet2 text-success me-2"></i> Fechamento de Caixa Diário</h2>
+            <p class="text-body-secondary mb-0">Resumo da sua produção e comissões de hoje.</p>
+            {% else %}
             <h2 class="fw-black text-body-emphasis mb-1"><i class="bi bi-pie-chart-fill text-primary me-2"></i> Painel de BI Avançado</h2>
             <p class="text-body-secondary mb-0">Gestão estratégica de faturamento, equipe e fidelização.</p>
+            {% endif %}
         </div>
     
         <div class="d-flex flex-column flex-md-row gap-3 align-items-md-center">
             <button class="btn btn-outline-secondary btn-sm fw-bold shadow-sm d-none d-md-inline-block" onclick="window.print()"><i class="bi bi-printer"></i> Imprimir</button>
             
+            {% if getattr(current_user, 'role', 'dono') != 'barbeiro' %}
             <form method="GET" action="{{ url_for('relatorio_bi') }}" class="w-100">
                 <div class="row g-2 align-items-center bg-body p-2 rounded-4 shadow-sm border m-0">
                     <div class="col-5 col-md-auto">
@@ -35,6 +41,7 @@
                     </div>
                 </div>
             </form>
+            {% endif %}
         </div>
     </div>
 

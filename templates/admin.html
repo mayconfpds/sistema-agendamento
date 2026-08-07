@@ -78,6 +78,7 @@
 
     <ul class="nav nav-pills mb-4 bg-body p-2 rounded-pill d-inline-flex border" id="adminTabs">
         <li class="nav-item"><a class="nav-link active fw-bold rounded-pill" data-bs-toggle="pill" href="#tab-agenda" id="btn-tab-agenda"><i class="bi bi-calendar3"></i> Agenda & Configurações</a></li>
+        {% if getattr(current_user, 'role', 'dono') != 'barbeiro' %}
         <li class="nav-item"><a class="nav-link fw-bold rounded-pill" data-bs-toggle="pill" href="#tab-loja" id="btn-tab-loja"><i class="bi bi-bag-check"></i> Loja & Estoque</a></li>
         
         {% if establishment.plan_type == 'gestao' %}
@@ -89,10 +90,12 @@
                 </a>
             </li>
         {% endif %}
+        {% endif %}
     </ul>
 
     <div class="tab-content">
         <div class="tab-pane fade show active" id="tab-agenda">
+            {% if getattr(current_user, 'role', 'dono') != 'barbeiro' %}
             <div class="card shadow-sm border mb-4 p-3 bg-body-tertiary" id="container-configuracoes">
                 <form action="{{ url_for('update_settings') }}" method="POST" enctype="multipart/form-data" class="row align-items-end g-2" onsubmit="return submeterFormAJAX(event, this, 'container-configuracoes')" data-no-reset="true">
                     <input type="hidden" name="form_type" value="contact"> 
@@ -147,9 +150,10 @@
                     </div>
                 </form>
             </div>
+            {% endif %}
             
             <div class="row">
-                <div class="col-lg-7">
+                <div class="{% if getattr(current_user, 'role', 'dono') == 'barbeiro' %}col-lg-12{% else %}col-lg-7{% endif %}">                    {% if getattr(current_user, 'role', 'dono') != 'barbeiro' %}
                     <div class="card shadow-sm border mb-4" id="container-horarios">
                         <div class="card-header bg-body fw-bold text-body-emphasis border-bottom">Horários de Funcionamento</div>
                         <div class="card-body p-0">
@@ -164,6 +168,7 @@
                             </form>
                         </div>
                     </div>
+                    {% endif %}
 
                     <div class="card shadow-sm border mb-4" id="container-agendamentos">
                         <div class="card-header bg-body p-3 border-bottom d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
@@ -259,6 +264,7 @@
                     </div>
                 </div>
                 
+                {% if getattr(current_user, 'role', 'dono') != 'barbeiro' %}
                 <div class="col-lg-5">
                     <div class="card shadow-sm border mb-4">
                         <div class="card-header bg-body fw-bold d-flex justify-content-between align-items-center border-bottom"><span class="text-body-emphasis"><i class="bi bi-folder text-primary"></i> Categorias</span></div>
@@ -269,6 +275,7 @@
                             </div>
                         </div>
                     </div>
+                    {% endif %}
 
                     <div class="card shadow-sm border mb-4">
                         <div class="card-header bg-body py-3 border-bottom d-flex justify-content-between align-items-center"><h6 class="mb-0 fw-bold text-body-emphasis"><i class="bi bi-scissors text-primary"></i> Serviços Oferecidos</h6><button class="btn btn-sm btn-primary fw-bold px-3 shadow-sm" onclick="abrirModalServico()"><i class="bi bi-plus-lg"></i> Novo Serviço</button></div>
@@ -316,6 +323,7 @@
                         <div class="card-header bg-body py-3 border-bottom d-flex justify-content-between align-items-center">
                             <h6 class="mb-0 fw-bold text-success"><i class="bi bi-people-fill"></i> Minha Equipe (Comissões)</h6>
                             <button class="btn btn-success btn-sm fw-bold shadow-sm" onclick="abrirModalProfissional()"><i class="bi bi-person-plus-fill"></i> Novo</button>
+
                         </div>
                         <div class="card-body" id="container-equipe">
                             <ul class="list-group list-group-flush small" style="max-height: 300px; overflow-y: auto;">
@@ -343,6 +351,7 @@
                                             <span class="badge bg-success-subtle text-success border border-success-subtle">{{ "%.1f"|format(p.commission_rate) }}%</span>
                                         {% endif %}
                                         <div class="d-flex gap-1">
+                                            <button class="btn btn-outline-dark btn-sm border" onclick="abrirModalLoginProfissional({{ p.id }}, '{{ p.name|e }}')" title="Criar Acesso / Login" style="padding: 0.1rem 0.4rem;"><i class="bi bi-key"></i></button>
                                             <button class="btn btn-outline-primary btn-sm border" onclick="abrirModalHorariosProfissional({{ p.id }}, '{{ p.name|e }}')" title="Jornada de Trabalho" style="padding: 0.1rem 0.4rem;"><i class="bi bi-clock"></i></button>
                                             <button class="btn btn-secondary btn-sm border" onclick="editarProfissional(this)" style="padding: 0.1rem 0.4rem;"><i class="bi bi-pencil"></i></button>
                                             <form method="POST" action="{{ url_for('delete_professional', id=p.id) }}" onsubmit="return excluirItemAJAX(event, this, 'container-equipe', 'Demitir este profissional da agenda?');" class="m-0">
@@ -997,10 +1006,82 @@
         </div>
     </div>
 </div>
+
+<div class="modal fade" id="modalLoginProfissional" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content bg-body border-0 shadow-lg rounded-4">
+            <div class="modal-header border-bottom-0 pb-0">
+                <h6 class="modal-title fw-bold text-body-emphasis"><i class="bi bi-key text-dark"></i> Acesso de Barbeiro: <span id="tituloLoginProf" class="text-primary"></span></h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-3">
+                <form id="formLoginProfissional">
+                    <input type="hidden" id="loginProfId">
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-body-emphasis">Nome de Utilizador (Login)</label>
+                        <input type="text" id="loginProfUsername" name="username" class="form-control form-control-sm shadow-sm" placeholder="ex: barbeiro.joao" required>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold text-body-emphasis">Palavra-passe</label>
+                        <input type="password" id="loginProfPassword" name="password" class="form-control form-control-sm shadow-sm" placeholder="Definir nova palavra-passe">
+                        <span class="text-muted" style="font-size: 0.7rem;">Deixe em branco se não quiser alterar a palavra-passe existente.</span>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer border-top-0 pt-0 px-3 pb-3">
+                <button type="button" id="btnSalvarLoginProf" class="btn btn-dark w-100 fw-bold py-2 shadow-sm" onclick="salvarLoginProfissional(this)">
+                    Salvar Acesso
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
+
+    function abrirModalLoginProfissional(profId, profNome) {
+        document.getElementById('loginProfId').value = profId;
+        document.getElementById('tituloLoginProf').innerText = profNome;
+        document.getElementById('loginProfUsername').value = '';
+        document.getElementById('loginProfPassword').value = '';
+        
+        const btn = document.getElementById('btnSalvarLoginProf');
+        if (btn) { btn.disabled = false; btn.innerHTML = 'Salvar Acesso'; }
+        
+        new bootstrap.Modal(document.getElementById('modalLoginProfissional')).show();
+    }
+
+    async function salvarLoginProfissional(btn) {
+        if (btn && btn.disabled) return;
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Salvando...';
+        }
+
+        const profId = document.getElementById('loginProfId').value;
+        const formData = new FormData(document.getElementById('formLoginProfissional'));
+
+        try {
+            const res = await fetch(`/admin/profissional/${profId}/login`, {
+                method: 'POST',
+                body: formData,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+            const data = await res.json();
+            if (data.success) {
+                bootstrap.Modal.getInstance(document.getElementById('modalLoginProfissional')).hide();
+                alert(`Acesso guardado com sucesso! Utilizador: ${data.username}`);
+            } else {
+                alert(data.error || 'Erro ao guardar acesso.');
+                if (btn) { btn.disabled = false; btn.innerHTML = 'Salvar Acesso'; }
+            }
+        } catch (e) {
+            alert('Erro de conexão.');
+            if (btn) { btn.disabled = false; btn.innerHTML = 'Salvar Acesso'; }
+        }
+    }
 
     const nomesDiasSemana = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
 

@@ -315,10 +315,14 @@ class Admin(UserMixin, db.Model):
     establishment_id = db.Column(db.Integer, db.ForeignKey('establishments.id'), nullable=False)
     cpf = db.Column(db.String(14), unique=True, nullable=True) # CPF do dono é único no SaaS todo
     birth_date = db.Column(db.Date, nullable=True)
-    def set_password(self, password): self.password_hash = generate_password_hash(password)
-    def check_password(self, password): return check_password_hash(self.password_hash, password)
     
     is_super_admin = db.Column(db.Boolean, default=False)
+    
+    role = db.Column(db.String(20), default='dono') # 'dono' ou 'barbeiro'
+    professional_id = db.Column(db.Integer, db.ForeignKey('professionals.id'), nullable=True)
+
+    def set_password(self, password): self.password_hash = generate_password_hash(password)
+    def check_password(self, password): return check_password_hash(self.password_hash, password)
 
 class Category(db.Model):
     __tablename__ = 'categories'
@@ -938,6 +942,9 @@ def admin_dashboard():
     filter_date_str = request.args.get('filter_date', '')
     
     query = Appointment.query.filter(Appointment.establishment_id == est.id, Appointment.status.notin_(['arquivado', 'falta', 'cancelado']))
+    if getattr(current_user, 'role', 'dono') == 'barbeiro' and current_user.professional_id:
+        query = query.filter(Appointment.professional_id == current_user.professional_id)
+        
     if filter_date_str:
         try: filter_date = datetime.strptime(filter_date_str, '%Y-%m-%d').date(); query = query.filter(Appointment.appointment_date == filter_date)
         except: pass
@@ -1875,6 +1882,47 @@ def save_professional_schedules(id):
     db.session.commit()
     return jsonify({'success': True})
 
+@app.route('/admin/profissional/<int:id>/login', methods=['POST'])
+@login_required
+def save_professional_login(id):
+    if getattr(current_user, 'role', 'dono') == 'barbeiro':
+        return jsonify({'success': False, 'error': 'Acesso negado.'}), 403
+        
+    prof = Professional.query.get_or_404(id)
+    if prof.establishment_id != current_user.establishment_id:
+        return jsonify({'success': False, 'error': 'Acesso negado.'}), 403
+        
+    username = request.form.get('username', '').strip().lower()
+    password = request.form.get('password', '').strip()
+    
+    if not username:
+        return jsonify({'success': False, 'error': 'Informe um nome de utilizador válido.'})
+        
+    existente = Admin.query.filter_by(username=username).first()
+    admin_prof = Admin.query.filter_by(establishment_id=prof.establishment_id, professional_id=prof.id).first()
+    
+    if existente and (not admin_prof or existente.id != admin_prof.id):
+        return jsonify({'success': False, 'error': 'Este nome de utilizador já está a ser utilizado.'})
+        
+    if not admin_prof:
+        if not password:
+            return jsonify({'success': False, 'error': 'A palavra-passe é obrigatória para criar um novo acesso.'})
+        admin_prof = Admin(
+            username=username,
+            password_hash=generate_password_hash(password),
+            establishment_id=prof.establishment_id,
+            role='barbeiro',
+            professional_id=prof.id
+        )
+        db.session.add(admin_prof)
+    else:
+        admin_prof.username = username
+        if password:
+            admin_prof.password_hash = generate_password_hash(password)
+            
+    db.session.commit()
+    return jsonify({'success': True, 'username': username})
+
 @app.route('/admin/ativar-gestao')
 @login_required
 def ativar_gestao():
@@ -2133,15 +2181,28 @@ def relatorio_bi():
     est = current_user.establishment
     hoje = get_now_brazil().date()
     
-    start_date_str = request.args.get('start_date', (hoje - timedelta(days=30)).strftime('%Y-%m-%d'))
-    end_date_str = request.args.get('end_date', hoje.strftime('%Y-%m-%d'))
-    try: 
-        start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
-        end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
-    except: 
-        start_date = hoje - timedelta(days=30); end_date = hoje
+    is_barbeiro = getattr(current_user, 'role', 'dono') == 'barbeiro' and current_user.professional_id
+    
+    if is_barbeiro:
+        # Força a data para HOJE para servir como Fechamento de Caixa Diário
+        start_date = hoje
+        end_date = hoje
+        start_date_str = hoje.strftime('%Y-%m-%d')
+        end_date_str = hoje.strftime('%Y-%m-%d')
+    else:
+        start_date_str = request.args.get('start_date', (hoje - timedelta(days=30)).strftime('%Y-%m-%d'))
+        end_date_str = request.args.get('end_date', hoje.strftime('%Y-%m-%d'))
+        try: 
+            start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+            end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+        except: 
+            start_date = hoje - timedelta(days=30); end_date = hoje
 
     appts = Appointment.query.filter(Appointment.establishment_id == est.id, Appointment.appointment_date >= start_date, Appointment.appointment_date <= end_date).all()
+    
+    if is_barbeiro:
+        appts = [a for a in appts if a.professional_id == current_user.professional_id]
+
     concluidos = [a for a in appts if a.status in ['concluido', 'arquivado']]
     faltas = [a for a in appts if a.status == 'falta']
     
@@ -2211,6 +2272,8 @@ def relatorio_bi():
     # --- CÁLCULOS DA LOJA ---
     vendas = ProductSale.query.filter(ProductSale.establishment_id == est.id).all()
     vendas_periodo = [v for v in vendas if start_date <= v.sale_date.date() <= end_date]
+    if is_barbeiro:
+        vendas_periodo = [v for v in vendas_periodo if v.professional_id == current_user.professional_id]
     fat_loja = sum(v.total_price for v in vendas_periodo)
     itens_vendidos = sum(v.quantity for v in vendas_periodo)
     
@@ -2597,6 +2660,8 @@ with app.app_context():
         garantir_coluna('appointments', 'payment_method', 'VARCHAR(30)')
         garantir_coluna('appointments', 'discount_amount', 'FLOAT DEFAULT 0.0')
         garantir_coluna('day_schedules', 'professional_id', 'INTEGER')
+        garantir_coluna('admins', 'role', "VARCHAR(20) DEFAULT 'dono'")
+        garantir_coluna('admins', 'professional_id', 'INTEGER')
     except Exception as e:
         print(f"Erro na verificação de colunas: {e}")
 
