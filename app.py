@@ -2071,10 +2071,23 @@ def serializar_campo(val):
         return val.strftime('%H:%M:%S')
     return val
 
+import zipfile
+import io
+import json
+from datetime import datetime, date, time
+
+def serializar_campo(val):
+    """Converte datas e horários em texto seguro para JSON."""
+    if val is None:
+        return None
+    if isinstance(val, (datetime, date, time)):
+        return str(val)
+    return str(val) if not isinstance(val, (int, float, bool, str, list, dict)) else val
+
 @app.route('/admin/exportar_backup_completo')
 @login_required
 def exportar_backup_completo():
-    # Segurança: Apenas o administrador/proprietário pode exportar o backup do estabelecimento
+    # Segurança: Apenas o proprietário pode exportar o backup do estabelecimento
     if getattr(current_user, 'role', 'dono') == 'barbeiro':
         flash('Acesso restrito ao administrador do estabelecimento.', 'danger')
         return redirect(url_for('admin_dashboard'))
@@ -2082,38 +2095,38 @@ def exportar_backup_completo():
     est = current_user.establishment
     hoje_str = get_now_brazil().strftime('%Y-%m-%d_%H%M')
 
-    # 1. Configurações Gerais da Barbearia / Salão
+    # 1. Configurações Gerais
     dados_estabelecimento = {
         'id': est.id,
         'nome': est.name,
         'url_prefix': est.url_prefix,
-        'contact_phone': est.contact_phone,
-        'contact_email': est.contact_email,
-        'plan_type': est.plan_type,
-        'state': est.state,
-        'capacity': est.capacity,
-        'loyalty_points_goal': est.loyalty_points_goal,
-        'loyalty_reward': est.loyalty_reward,
-        'commission_on_gross': est.commission_on_gross,
-        'logo_filename': est.logo_filename,
+        'contact_phone': getattr(est, 'contact_phone', ''),
+        'contact_email': getattr(est, 'contact_email', ''),
+        'plan_type': getattr(est, 'plan_type', 'solo'),
+        'state': getattr(est, 'state', ''),
+        'capacity': getattr(est, 'capacity', 1),
+        'loyalty_points_goal': getattr(est, 'loyalty_points_goal', 0),
+        'loyalty_reward': getattr(est, 'loyalty_reward', ''),
+        'commission_on_gross': getattr(est, 'commission_on_gross', False),
+        'logo_filename': getattr(est, 'logo_filename', ''),
         'created_at': serializar_campo(getattr(est, 'created_at', None))
     }
 
-    # 2. Jornadas de Trabalho e Horários
+    # 2. Jornadas de Trabalho
     schedules = DaySchedule.query.filter_by(establishment_id=est.id).all()
     dados_horarios = [{
         'day_index': s.day_index,
-        'professional_id': s.professional_id,
+        'professional_id': getattr(s, 'professional_id', None),
         'is_active': s.is_active,
         'work_start': serializar_campo(s.work_start),
         'work_end': serializar_campo(s.work_end),
-        'lunch_start': serializar_campo(s.lunch_start),
-        'lunch_end': serializar_campo(s.lunch_end),
-        'pause2_start': serializar_campo(s.pause2_start),
-        'pause2_end': serializar_campo(s.pause2_end)
+        'lunch_start': serializar_campo(getattr(s, 'lunch_start', None)),
+        'lunch_end': serializar_campo(getattr(s, 'lunch_end', None)),
+        'pause2_start': serializar_campo(getattr(s, 'pause2_start', None)),
+        'pause2_end': serializar_campo(getattr(s, 'pause2_end', None))
     } for s in schedules]
 
-    # 3. Categorias, Serviços, Combos e Regras do Clube
+    # 3. Categorias e Serviços
     categories = Category.query.filter_by(establishment_id=est.id).all()
     dados_categorias = []
     for c in categories:
@@ -2122,13 +2135,13 @@ def exportar_backup_completo():
             'name': s.name,
             'price': s.price,
             'duration': s.duration,
-            'description': s.description,
-            'image_url': s.image_url,
-            'is_combo': s.is_combo,
-            'original_price': s.original_price,
-            'is_hidden': s.is_hidden,
-            'is_club_included': s.is_club_included,
-            'allowed_plan_ids': s.allowed_plan_ids
+            'description': getattr(s, 'description', ''),
+            'image_url': getattr(s, 'image_url', ''),
+            'is_combo': getattr(s, 'is_combo', False),
+            'original_price': getattr(s, 'original_price', None),
+            'is_hidden': getattr(s, 'is_hidden', False),
+            'is_club_included': getattr(s, 'is_club_included', False),
+            'allowed_plan_ids': getattr(s, 'allowed_plan_ids', '')
         } for s in c.services]
         dados_categorias.append({
             'categoria_id': c.id,
@@ -2136,15 +2149,15 @@ def exportar_backup_completo():
             'servicos': servicos
         })
 
-    # 4. Produtos e Estoque da Loja
+    # 4. Produtos e Estoque
     produtos = Product.query.filter_by(establishment_id=est.id).all()
     dados_produtos = [{
         'id': p.id,
         'name': p.name,
         'price': p.price,
-        'stock_quantity': p.stock_quantity,
-        'description': p.description,
-        'image_filename': p.image_filename
+        'stock_quantity': getattr(p, 'stock_quantity', 0),
+        'description': getattr(p, 'description', ''),
+        'image_filename': getattr(p, 'image_filename', '')
     } for p in produtos]
 
     # 5. Histórico de Vendas de Produtos
@@ -2154,14 +2167,14 @@ def exportar_backup_completo():
         'product_id': v.product_id,
         'product_name': v.product_name,
         'quantity': v.quantity,
-        'unit_price': v.unit_price,
+        'unit_price': getattr(v, 'unit_price', 0.0),
         'total_price': v.total_price,
         'sale_date': serializar_campo(v.sale_date),
-        'professional_id': v.professional_id,
-        'commission_amount': v.commission_amount
+        'professional_id': getattr(v, 'professional_id', None),
+        'commission_amount': getattr(v, 'commission_amount', 0.0)
     } for v in vendas]
 
-    # 6. Equipa, Comissões e Logins dos Barbeiros
+    # 6. Equipe e Comissões
     profissionais = Professional.query.filter_by(establishment_id=est.id).all()
     dados_equipe = []
     for p in profissionais:
@@ -2169,70 +2182,77 @@ def exportar_backup_completo():
         dados_equipe.append({
             'id': p.id,
             'name': p.name,
-            'phone': p.phone,
-            'cpf': p.cpf,
-            'birth_date': serializar_campo(p.birth_date),
-            'commission_rate': p.commission_rate,
-            'has_product_commission': p.has_product_commission,
-            'product_commission_rate': p.product_commission_rate,
-            'all_products_commission': p.all_products_commission,
-            'allowed_product_ids': p.allowed_product_ids,
+            'phone': getattr(p, 'phone', ''),
+            'cpf': getattr(p, 'cpf', ''),
+            'birth_date': serializar_campo(getattr(p, 'birth_date', None)),
+            'commission_rate': getattr(p, 'commission_rate', 0.0),
+            'has_product_commission': getattr(p, 'has_product_commission', False),
+            'product_commission_rate': getattr(p, 'product_commission_rate', 0.0),
+            'all_products_commission': getattr(p, 'all_products_commission', True),
+            'allowed_product_ids': getattr(p, 'allowed_product_ids', ''),
             'login_username': admin_login.username if admin_login else None
         })
 
-    # 7. Base de Clientes e Pontos de Fidelidade
+    # 7. Clientes e Fidelidade
     clientes = Client.query.filter_by(establishment_id=est.id).all()
     dados_clientes = [{
         'id': cli.id,
         'name': cli.name,
         'phone': cli.phone,
-        'cpf': cli.cpf,
-        'birth_date': serializar_campo(cli.birth_date),
-        'points': cli.points
+        'cpf': getattr(cli, 'cpf', ''),
+        'birth_date': serializar_campo(getattr(cli, 'birth_date', None)),
+        'points': getattr(cli, 'points', 0)
     } for cli in clientes]
 
-    # 8. Lista de Bloqueios (No-Show)
+    # 8. Clientes Bloqueados (No-Show)
     blacklists = Blacklist.query.filter_by(establishment_id=est.id).all()
     dados_bloqueados = [{
         'client_phone': b.client_phone,
-        'client_cpf': b.client_cpf,
-        'client_name': b.client_name,
-        'reason': b.reason
+        'client_cpf': getattr(b, 'client_cpf', ''),
+        'client_name': getattr(b, 'client_name', ''),
+        'reason': getattr(b, 'reason', '')
     } for b in blacklists]
 
-    # 9. Clube VIP de Assinaturas
+    # 9. Assinaturas / Clube VIP
     assinaturas = ClientSubscription.query.filter_by(establishment_id=est.id).all()
     dados_assinaturas = [{
         'id': sub.id,
         'client_name': sub.client_name,
         'client_phone': sub.client_phone,
-        'client_cpf': sub.client_cpf,
+        'client_cpf': getattr(sub, 'client_cpf', ''),
         'plan_name': sub.plan_name,
         'status': sub.status,
         'start_date': serializar_campo(sub.start_date),
         'expiry_date': serializar_campo(sub.expiry_date)
     } for sub in assinaturas]
 
-    # 10. Histórico Completo de Agendamentos (Pagamentos, Descontos e Comissões)
+    # 10. Histórico de Agendamentos (Tratamento seguro para data de nascimento)
     agendamentos = Appointment.query.filter_by(establishment_id=est.id).all()
-    dados_agendamentos = [{
-        'id': a.id,
-        'client_name': a.client_name,
-        'client_phone': a.client_phone,
-        'client_cpf': a.client_cpf,
-        'client_email': a.client_email,
-        'client_birth_date': serializar_campo(a.client_birth_date),
-        'appointment_date': serializar_campo(a.appointment_date),
-        'appointment_time': serializar_campo(a.appointment_time),
-        'servicos_realizados': a.service_names,
-        'professional_id': a.professional_id,
-        'total_duration': a.total_duration,
-        'total_price': a.total_price,
-        'discount_amount': a.discount_amount,
-        'payment_method': a.payment_method,
-        'commission_value': a.commission_value,
-        'status': a.status
-    } for a in agendamentos]
+    dados_agendamentos = []
+    for a in agendamentos:
+        # Busca segura da data de nascimento pelo perfil do cliente no histórico
+        nascimento_cli = None
+        if getattr(a, 'client_profile', None) and getattr(a.client_profile, 'birth_date', None):
+            nascimento_cli = a.client_profile.birth_date
+
+        dados_agendamentos.append({
+            'id': a.id,
+            'client_name': a.client_name,
+            'client_phone': a.client_phone,
+            'client_cpf': getattr(a, 'client_cpf', ''),
+            'client_email': getattr(a, 'client_email', ''),
+            'client_birth_date': serializar_campo(nascimento_cli),
+            'appointment_date': serializar_campo(a.appointment_date),
+            'appointment_time': serializar_campo(a.appointment_time),
+            'servicos_realizados': getattr(a, 'service_names', ''),
+            'professional_id': getattr(a, 'professional_id', None),
+            'total_duration': getattr(a, 'total_duration', 0),
+            'total_price': getattr(a, 'total_price', 0.0),
+            'discount_amount': getattr(a, 'discount_amount', 0.0),
+            'payment_method': getattr(a, 'payment_method', 'PIX'),
+            'commission_value': getattr(a, 'commission_value', 0.0),
+            'status': a.status
+        })
 
     # Estrutura JSON Unificada
     backup_completo = {
@@ -2249,23 +2269,24 @@ def exportar_backup_completo():
         'historico_agendamentos': dados_agendamentos
     }
 
-    # 11. Geração do ficheiro .ZIP em memória contendo o JSON e as imagens
+    # 11. Geração do .ZIP em memória contendo o JSON e imagens físicas
     buffer_zip = io.BytesIO()
     with zipfile.ZipFile(buffer_zip, 'w', zipfile.ZIP_DEFLATED) as zip_file:
         json_bytes = json.dumps(backup_completo, ensure_ascii=False, indent=4).encode('utf-8')
         zip_file.writestr('dados_backup_completo.json', json_bytes)
 
-        # Copia fotos salvas em 'static/uploads' que pertençam a este estabelecimento
+        # Copia apenas arquivos físicos em 'static/uploads' (ignorando strings Base64 ou links HTTP)
         upload_dir = app.config.get('UPLOAD_FOLDER', 'static/uploads')
         if os.path.exists(upload_dir):
             for file_name in os.listdir(upload_dir):
-                is_est_file = file_name.startswith(f"{est.id}_")
-                is_prod_file = any(p.image_filename == file_name for p in produtos if p.image_filename)
-                
-                if is_est_file or is_prod_file:
-                    file_path = os.path.join(upload_dir, file_name)
-                    if os.path.isfile(file_path):
-                        zip_file.write(file_path, arcname=f"midias/{file_name}")
+                if file_name and not file_name.startswith(('data:image', 'http')):
+                    is_est_file = file_name.startswith(f"{est.id}_")
+                    is_prod_file = any(getattr(p, 'image_filename', '') == file_name for p in produtos)
+                    
+                    if is_est_file or is_prod_file:
+                        file_path = os.path.join(upload_dir, file_name)
+                        if os.path.isfile(file_path):
+                            zip_file.write(file_path, arcname=f"midias/{file_name}")
 
     buffer_zip.seek(0)
     nome_arquivo = f"backup_completo_{est.url_prefix}_{hoje_str}.zip"
@@ -2276,6 +2297,150 @@ def exportar_backup_completo():
         as_attachment=True,
         download_name=nome_arquivo
     )
+
+@app.route('/admin/importar_backup_completo', methods=['POST'])
+@login_required
+def importar_backup_completo():
+    # Segurança: Apenas o administrador/proprietário pode restaurar backups
+    if getattr(current_user, 'role', 'dono') == 'barbeiro':
+        flash('Acesso restrito ao administrador do estabelecimento.', 'danger')
+        return redirect(url_for('admin_dashboard'))
+
+    if 'file' not in request.files:
+        flash('Nenhum arquivo enviado para importação.', 'danger')
+        return redirect(url_for('alterar_senha'))
+
+    file = request.files['file']
+    if not file or not file.filename.endswith('.zip'):
+        flash('Por favor, selecione um arquivo de backup válido no formato .ZIP.', 'danger')
+        return redirect(url_for('alterar_senha'))
+
+    est = current_user.establishment
+    upload_dir = app.config.get('UPLOAD_FOLDER', 'static/uploads')
+    os.makedirs(upload_dir, exist_ok=True)
+
+    try:
+        with zipfile.ZipFile(file, 'r') as zip_ref:
+            # 1. Verifica se o arquivo JSON principal existe no ZIP
+            if 'dados_backup_completo.json' not in zip_ref.namelist():
+                flash('O arquivo .ZIP é inválido ou não contém o arquivo dados_backup_completo.json.', 'danger')
+                return redirect(url_for('alterar_senha'))
+
+            # 2. Leitura do arquivo JSON
+            with zip_ref.open('dados_backup_completo.json') as json_file:
+                backup = json.load(json_file)
+
+            # 3. Restauração das imagens/mídias para a pasta de uploads
+            for info in zip_ref.infolist():
+                if info.filename.startswith('midias/') and not info.is_dir():
+                    nome_original = os.path.basename(info.filename)
+                    if nome_original:
+                        caminho_destino = os.path.join(upload_dir, nome_original)
+                        with zip_ref.open(info.filename) as fonte, open(caminho_destino, 'wb') as destino:
+                            destino.write(fonte.read())
+
+        # 4. Restauração de Configurações do Estabelecimento
+        est_data = backup.get('estabelecimento', {})
+        if est_data:
+            est.name = est_data.get('nome', est.name)
+            est.contact_phone = est_data.get('contact_phone', est.contact_phone)
+            est.contact_email = est_data.get('contact_email', est.contact_email)
+            est.state = est_data.get('state', est.state)
+            est.loyalty_points_goal = est_data.get('loyalty_points_goal', est.loyalty_points_goal)
+            est.loyalty_reward = est_data.get('loyalty_reward', est.loyalty_reward)
+            est.commission_on_gross = est_data.get('commission_on_gross', est.commission_on_gross)
+            if est_data.get('logo_filename'):
+                est.logo_filename = est_data.get('logo_filename')
+
+        # 5. Sincronização de Categorias e Serviços
+        cat_map = {}
+        for cat_data in backup.get('categorias_e_servicos', []):
+            cat = Category.query.filter_by(establishment_id=est.id, name=cat_data['nome']).first()
+            if not cat:
+                cat = Category(name=cat_data['nome'], establishment_id=est.id)
+                db.session.add(cat)
+                db.session.flush()
+            cat_map[cat_data.get('categoria_id')] = cat.id
+
+            for s_data in cat_data.get('servicos', []):
+                srv = Service.query.filter_by(establishment_id=est.id, name=s_data['name']).first()
+                if not srv:
+                    srv = Service(establishment_id=est.id, category_id=cat.id)
+                    db.session.add(srv)
+                srv.name = s_data['name']
+                srv.price = s_data['price']
+                srv.duration = s_data['duration']
+                srv.description = s_data.get('description', '')
+                srv.image_url = s_data.get('image_url')
+                srv.is_combo = s_data.get('is_combo', False)
+                srv.original_price = s_data.get('original_price')
+                srv.is_hidden = s_data.get('is_hidden', False)
+                srv.is_club_included = s_data.get('is_club_included', False)
+                srv.allowed_plan_ids = s_data.get('allowed_plan_ids', '')
+
+        # 6. Sincronização de Produtos da Loja
+        for p_data in backup.get('produtos_estoque', []):
+            prod = Product.query.filter_by(establishment_id=est.id, name=p_data['name']).first()
+            if not prod:
+                prod = Product(establishment_id=est.id)
+                db.session.add(prod)
+            prod.name = p_data['name']
+            prod.price = p_data['price']
+            prod.stock_quantity = p_data['stock_quantity']
+            prod.description = p_data.get('description', '')
+            prod.image_filename = p_data.get('image_filename')
+
+        # 7. Sincronização de Profissionais
+        for prof_data in backup.get('equipe_profissionais', []):
+            prof = Professional.query.filter_by(establishment_id=est.id, name=prof_data['name']).first()
+            if not prof:
+                prof = Professional(establishment_id=est.id, name=prof_data['name'])
+                db.session.add(prof)
+                db.session.flush()
+            prof.phone = prof_data.get('phone', '')
+            prof.cpf = prof_data.get('cpf', '')
+            prof.commission_rate = prof_data.get('commission_rate', 0.0)
+            prof.has_product_commission = prof_data.get('has_product_commission', False)
+            prof.product_commission_rate = prof_data.get('product_commission_rate', 0.0)
+            prof.all_products_commission = prof_data.get('all_products_commission', True)
+            prof.allowed_product_ids = prof_data.get('allowed_product_ids', '')
+
+        # 8. Sincronização de Clientes e Pontos de Fidelidade
+        for cli_data in backup.get('clientes', []):
+            cliente = None
+            if cli_data.get('cpf'):
+                cliente = Client.query.filter_by(establishment_id=est.id, cpf=cli_data['cpf']).first()
+            if not cliente and cli_data.get('phone'):
+                cliente = Client.query.filter_by(establishment_id=est.id, phone=cli_data['phone']).first()
+            
+            if not cliente:
+                cliente = Client(establishment_id=est.id, phone=cli_data.get('phone', ''), name=cli_data.get('name', 'Cliente'))
+                db.session.add(cliente)
+            cliente.name = cli_data.get('name', cliente.name)
+            cliente.cpf = cli_data.get('cpf', cliente.cpf)
+            cliente.points = cli_data.get('points', cliente.points)
+
+        # 9. Sincronização da Lista de Bloqueios (No-Show)
+        for b_data in backup.get('clientes_bloqueados', []):
+            blk = Blacklist.query.filter_by(establishment_id=est.id, client_phone=b_data['client_phone']).first()
+            if not blk:
+                blk = Blacklist(
+                    establishment_id=est.id,
+                    client_phone=b_data['client_phone'],
+                    client_cpf=b_data.get('client_cpf'),
+                    client_name=b_data.get('client_name'),
+                    reason=b_data.get('reason', 'Falta / No-show')
+                )
+                db.session.add(blk)
+
+        db.session.commit()
+        flash('Backup restaurado e sincronizado com sucesso! Configurações, cadastros e mídias foram atualizados.', 'success')
+        return redirect(url_for('alterar_senha'))
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao restaurar arquivo de backup: {str(e)}', 'danger')
+        return redirect(url_for('alterar_senha'))
     
 @app.route('/admin/importar_dados', methods=['POST'])
 @login_required

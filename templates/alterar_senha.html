@@ -73,11 +73,17 @@
                     </div>
 
                     <div>
-                        <a href="{{ url_for('exportar_backup_completo') }}" class="btn btn-success w-100 fw-bold py-3 rounded-pill shadow-sm d-flex align-items-center justify-content-center gap-2">
-                            <i class="bi bi-download fs-5"></i> Baixar Backup Completo (.ZIP)
-                        </a>
+                        <div class="d-flex flex-column gap-2">
+                            <a href="{{ url_for('exportar_backup_completo') }}" class="btn btn-success w-100 fw-bold py-3 rounded-pill shadow-sm d-flex align-items-center justify-content-center gap-2">
+                                <i class="bi bi-download fs-5"></i> Baixar Backup Completo (.ZIP)
+                            </a>
+                            
+                            <button type="button" class="btn btn-outline-primary w-100 fw-bold py-2 rounded-pill shadow-sm d-flex align-items-center justify-content-center gap-2" data-bs-toggle="modal" data-bs-target="#modalImportarBackup">
+                                <i class="bi bi-upload fs-5"></i> Importar / Restaurar Backup
+                            </button>
+                        </div>
                         <div class="text-center text-muted mt-2" style="font-size: 0.75rem;">
-                            <i class="bi bi-lock-fill"></i> Gerado em formato aberto (JSON + Mídias)
+                            <i class="bi bi-lock-fill"></i> Sincronização em formato aberto (JSON + Mídias)
                         </div>
                     </div>
                 </div>
@@ -111,6 +117,39 @@
                 <div class="modal-footer border-0">
                     <button type="button" class="btn btn-light btn-sm fw-bold" data-bs-dismiss="modal">Cancelar</button>
                     <button type="submit" class="btn btn-primary btn-sm fw-bold px-4">Processar e Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<div class="modal fade" id="modalImportarBackup" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content bg-body border-0 shadow-lg rounded-4">
+            <div class="modal-header border-bottom-0 pb-0">
+                <h5 class="modal-title fw-bold text-body-emphasis">
+                    <i class="bi bi-arrow-counterclockwise text-primary me-2"></i> Importar / Restaurar Backup
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('importar_backup_completo') }}" enctype="multipart/form-data">
+                <div class="modal-body p-4">
+                    <p class="text-body-secondary small mb-4">
+                        Selecione um arquivo <strong>.ZIP</strong> gerado anteriormente pelo Agenda Fácil. O sistema restaurará suas configurações, catálogo de serviços, produtos do estoque, profissionais e fotos cadastradas.
+                    </p>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-body-emphasis">Arquivo de Backup (.zip)</label>
+                        <input type="file" name="file" class="form-control" accept=".zip" required>
+                    </div>
+                    <div class="alert alert-warning border-warning-subtle py-2 px-3 small mb-0 rounded-3">
+                        <i class="bi bi-exclamation-triangle-fill text-warning me-1"></i>
+                        Os dados do arquivo serão mesclados ao seu estabelecimento sem excluir os agendamentos recentes já existentes.
+                    </div>
+                </div>
+                <div class="modal-footer border-top-0 pt-0 px-4 pb-4">
+                    <button type="button" class="btn btn-secondary fw-bold" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary fw-bold px-4 shadow-sm">
+                        <i class="bi bi-cloud-upload me-1"></i> Iniciar Restauração
+                    </button>
                 </div>
             </form>
         </div>
