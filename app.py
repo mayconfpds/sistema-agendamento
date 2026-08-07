@@ -2450,7 +2450,6 @@ with app.app_context():
                  conn.execute(text("ALTER TABLE establishments ALTER COLUMN logo_filename TYPE TEXT;"))
                  conn.execute(text("ALTER TABLE services ALTER COLUMN image_url TYPE TEXT;"))
                  conn.execute(text("ALTER TABLE products ALTER COLUMN image_filename TYPE TEXT;"))
-                 conn.execute(text("ALTER TABLE products ALTER COLUMN image_filename TYPE TEXT;"))
                  conn.commit()
              except Exception as e_alt:
                  pass

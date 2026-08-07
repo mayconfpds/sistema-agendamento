@@ -203,15 +203,25 @@
                                                 <div class="mt-2 small">{% if a.client_loyalty.points >= establishment.loyalty_points_goal %}<span class="badge bg-warning text-dark fs-6 shadow-sm d-block mb-1"><i class="bi bi-gift-fill"></i> PRÊMIO LIBERADO!</span><form method="POST" action="{{ url_for('reset_loyalty', id=a.client_loyalty.id) }}" onsubmit="return excluirItemAJAX(event, this, 'container-agendamentos', 'Zerar os pontos deste cliente?');"><button class="btn btn-sm btn-outline-secondary w-100 py-0" style="font-size: 0.75rem;">Zerar Pontos</button></form>{% else %}<span class="badge bg-body-tertiary text-body-emphasis border"><i class="bi bi-star-fill text-warning"></i> Pontos: {{ a.client_loyalty.points }}/{{ establishment.loyalty_points_goal }}</span>{% endif %}</div>
                                             {% endif %}
                                         </td>
-                                        <td>{% if a.status != 'concluido' %}<div class="mb-2"><a href="https://wa.me/55{{ a.client_phone }}?text=Olá, {{ a.client_name }}! Tudo bem? Passando só para confirmar o seu horário hoje às {{ a.appointment_time.strftime('%H:%M') }} 💈" target="_blank" class="btn btn-sm btn-outline-success w-100 fw-bold mb-2 shadow-sm"><i class="bi bi-whatsapp"></i> Lembrar</a>
-                                                <button type="button" class="btn btn-sm btn-success w-100 fw-bold mb-2 shadow-sm"
-                                                        onclick="abrirModalConcluir({{ a.id }}, '{{ a.client_name|e }}', '{{ a.service_names|e }}', {{ a.services | sum(attribute='price') }}, {{ a.professional_id or 'null' }})">
-                                                    <i class="bi bi-check-circle"></i> Concluir
-                                                </button>
-                                                    {% if establishment.plan_type == 'gestao' %}<select name="professional_id" class="form-select form-select-sm mb-1 border-success" required><option value="" disabled {% if not a.professional %}selected{% endif %}>Quem atendeu?</option>{% for p in professionals %}<option value="{{ p.id }}" {% if a.professional_id == p.id %}selected{% endif %}>{{ p.name }}</option>{% endfor %}</select>{% endif %}
-                                                    <button class="btn btn-sm btn-success w-100 fw-bold"><i class="bi bi-check-circle"></i> Concluir</button>
-                                                </form></div>
-                                                <div class="d-flex gap-1 flex-column flex-md-row"><form method="POST" action="{{ url_for('delete_appointment', id=a.id) }}" class="w-100" onsubmit="return excluirItemAJAX(event, this, 'container-agendamentos', 'Apenas cancelar o horário?');"><button class="btn btn-sm btn-outline-danger w-100"><i class="bi bi-trash"></i> Cancelar</button></form><form method="POST" action="{{ url_for('mark_no_show', id=a.id) }}" class="w-100" onsubmit="return excluirItemAJAX(event, this, 'container-agendamentos', 'Bloquear este cliente permanentemente?');"><button class="btn btn-sm btn-warning w-100 text-dark fw-bold"><i class="bi bi-person-x-fill"></i> Falta</button></form></div>
+                                        <td>
+                                            {% if a.status != 'concluido' %}
+                                                <div class="mb-2">
+                                                    <a href="https://wa.me/55{{ a.client_phone }}?text=Olá, {{ a.client_name }}! Tudo bem? Passando só para confirmar o seu horário hoje às {{ a.appointment_time.strftime('%H:%M') }} 💈" target="_blank" class="btn btn-sm btn-outline-success w-100 fw-bold mb-2 shadow-sm">
+                                                        <i class="bi bi-whatsapp"></i> Lembrar
+                                                    </a>
+                                                    <button type="button" class="btn btn-sm btn-success w-100 fw-bold mb-2 shadow-sm"
+                                                            onclick="abrirModalConcluir({{ a.id }}, '{{ a.client_name|e }}', '{{ a.service_names|e }}', {{ a.services | sum(attribute='price') }}, {{ a.professional_id or 'null' }})">
+                                                        <i class="bi bi-check-circle"></i> Concluir
+                                                    </button>
+                                                </div>
+                                                <div class="d-flex gap-1 flex-column flex-md-row">
+                                                    <form method="POST" action="{{ url_for('delete_appointment', id=a.id) }}" class="w-100" onsubmit="return excluirItemAJAX(event, this, 'container-agendamentos', 'Apenas cancelar o horário?');">
+                                                        <button class="btn btn-sm btn-outline-danger w-100"><i class="bi bi-trash"></i> Cancelar</button>
+                                                    </form>
+                                                    <form method="POST" action="{{ url_for('mark_no_show', id=a.id) }}" class="w-100" onsubmit="return excluirItemAJAX(event, this, 'container-agendamentos', 'Bloquear este cliente permanentemente?');">
+                                                        <button class="btn btn-sm btn-warning w-100 text-dark fw-bold"><i class="bi bi-person-x-fill"></i> Falta</button>
+                                                    </form>
+                                                </div>
                                             {% else %}
                                                 <span class="badge bg-success mb-1"><i class="bi bi-check-all"></i> Concluído</span><br>
                                                 
