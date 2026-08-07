@@ -27,17 +27,17 @@
                             <input class="form-check-input service-cb" type="checkbox" name="services" value="{{ main_service.id }}" 
                                    data-dur="{{ main_service.duration }}" data-price="{{ main_service.price }}" 
                                    data-isclub="{{ 'true' if main_service.is_club_included else 'false' }}"
-                                   checked onclick="return false;" style="pointer-events: none;">
+                                   checked>
                             <label class="form-check-label fw-bold">
-    				{{ main_service.name }} 
-    				{% if main_service.is_hidden %}
-        			    <span class="badge bg-dark text-warning ms-1 align-middle" style="font-size: 0.75rem;">
-            				<i class="bi bi-star-fill"></i> Oferta Exclusiva
-        			    </span>
-    				{% endif %}
-    				<span class="text-success ms-1">- R$ {{ "%.2f"|format(main_service.price) }}</span>
-			    </label>
-			    </div>
+                                {{ main_service.name }} 
+                                {% if main_service.is_hidden %}
+                                    <span class="badge bg-dark text-warning ms-1 align-middle" style="font-size: 0.75rem;">
+                                        <i class="bi bi-star-fill"></i> Oferta Exclusiva
+                                    </span>
+                                {% endif %}
+                                <span class="text-success ms-1">- R$ {{ "%.2f"|format(main_service.price) }}</span>
+                            </label>
+                        </div>
                         
                         {% if other_services %}
                         <hr class="text-body-secondary">
@@ -142,16 +142,33 @@ let isSubscriber = false;
 
 function updateTotals() {
     let p = 0; let d = 0;
-    document.querySelectorAll('.service-cb:checked').forEach(cb => {
+    const selecionados = document.querySelectorAll('.service-cb:checked');
+    
+    selecionados.forEach(cb => {
         let val = parseFloat(cb.getAttribute('data-price'));
         let isClub = cb.getAttribute('data-isclub') === 'true';
         if (isSubscriber && isClub) { val = 0; }
         p += val; d += parseInt(cb.getAttribute('data-dur'));
     });
+    
     document.getElementById('display-price').innerText = p.toFixed(2);
     document.getElementById('display-dur').innerText = d;
     totalDur = d;
-    if(document.getElementById('date').value) { fetchSlots(); }
+    
+    const slotsDiv = document.getElementById('slots');
+    const btnConfirmar = document.getElementById('btn');
+    
+    // Se nenhum serviço estiver marcado, avisa o cliente e bloqueia horários
+    if (selecionados.length === 0) {
+        slotsDiv.innerHTML = '<span class="text-danger small fw-bold"><i class="bi bi-exclamation-triangle"></i> Seleccione pelo menos um serviço para ver os horários disponíveis.</span>';
+        if (btnConfirmar) btnConfirmar.disabled = true;
+        document.getElementById('time').value = '';
+        return;
+    }
+    
+    if (document.getElementById('date').value) { 
+        fetchSlots(); 
+    }
 }
 
 function mascaraEBuscaCpf(campo) {
@@ -247,8 +264,18 @@ const day = String(today.getDate()).padStart(2, '0');
 document.getElementById('date').min = `${year}-${month}-${day}`;
 
 async function fetchSlots() {
+    // NOVO: Impede a busca de horários se nenhum serviço estiver selecionado
+    const selecionados = document.querySelectorAll('.service-cb:checked');
+    if (selecionados.length === 0) {
+        document.getElementById('slots').innerHTML = '<span class="text-danger small fw-bold"><i class="bi bi-exclamation-triangle"></i> Seleccione pelo menos um serviço para ver os horários disponíveis.</span>';
+        document.getElementById('btn').disabled = true;
+        return;
+    }
+
     const dVal = document.getElementById('date').value;
     if(!dVal) return;
+    
+    // ... restante código do fetchSlots continua igual ...
     
     const profSelect = document.getElementById('professional');
     const profId = profSelect ? profSelect.value : '';
@@ -316,6 +343,14 @@ document.addEventListener("DOMContentLoaded", function() {
 });
 
 document.getElementById('form').addEventListener('submit', function(e) {
+    // NOVO: Garante que pelo menos 1 serviço está marcado antes de submeter
+    const selecionados = document.querySelectorAll('.service-cb:checked');
+    if (selecionados.length === 0) {
+        e.preventDefault();
+        alert("Por favor, seleccione pelo menos um serviço para poder agendar.");
+        return;
+    }
+
     const phoneLimpo = document.getElementById('client_phone_hidden').value;
     if (phoneLimpo.length < 10 || phoneLimpo.length > 11) {
         e.preventDefault();
