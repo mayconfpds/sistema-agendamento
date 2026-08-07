@@ -78,7 +78,7 @@
 
     <ul class="nav nav-pills mb-4 bg-body p-2 rounded-pill d-inline-flex border" id="adminTabs">
         <li class="nav-item"><a class="nav-link active fw-bold rounded-pill" data-bs-toggle="pill" href="#tab-agenda" id="btn-tab-agenda"><i class="bi bi-calendar3"></i> Agenda & Configurações</a></li>
-        {% if getattr(current_user, 'role', 'dono') != 'barbeiro' %}
+        {% if current_user.role != 'barbeiro' %}
         <li class="nav-item"><a class="nav-link fw-bold rounded-pill" data-bs-toggle="pill" href="#tab-loja" id="btn-tab-loja"><i class="bi bi-bag-check"></i> Loja & Estoque</a></li>
         
         {% if establishment.plan_type == 'gestao' %}
@@ -95,7 +95,7 @@
 
     <div class="tab-content">
         <div class="tab-pane fade show active" id="tab-agenda">
-            {% if getattr(current_user, 'role', 'dono') != 'barbeiro' %}
+            {% if current_user.role != 'barbeiro' %}
             <div class="card shadow-sm border mb-4 p-3 bg-body-tertiary" id="container-configuracoes">
                 <form action="{{ url_for('update_settings') }}" method="POST" enctype="multipart/form-data" class="row align-items-end g-2" onsubmit="return submeterFormAJAX(event, this, 'container-configuracoes')" data-no-reset="true">
                     <input type="hidden" name="form_type" value="contact"> 
@@ -153,7 +153,7 @@
             {% endif %}
             
             <div class="row">
-                <div class="{% if getattr(current_user, 'role', 'dono') == 'barbeiro' %}col-lg-12{% else %}col-lg-7{% endif %}">                    {% if getattr(current_user, 'role', 'dono') != 'barbeiro' %}
+                <div class="{% if current_user.role == 'barbeiro' %}col-lg-12{% else %}col-lg-7{% endif %}">                    {% if current_user.role != 'barbeiro' %}
                     <div class="card shadow-sm border mb-4" id="container-horarios">
                         <div class="card-header bg-body fw-bold text-body-emphasis border-bottom">Horários de Funcionamento</div>
                         <div class="card-body p-0">
@@ -264,7 +264,7 @@
                     </div>
                 </div>
                 
-                {% if getattr(current_user, 'role', 'dono') != 'barbeiro' %}
+                {% if current_user.role != 'barbeiro' %}
                 <div class="col-lg-5">
                     <div class="card shadow-sm border mb-4">
                         <div class="card-header bg-body fw-bold d-flex justify-content-between align-items-center border-bottom"><span class="text-body-emphasis"><i class="bi bi-folder text-primary"></i> Categorias</span></div>
