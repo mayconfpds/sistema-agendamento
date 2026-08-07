@@ -126,7 +126,7 @@
                         {% endif %}
 
                         {% if p.image_filename %}
-                            <img src="{{ url_for('static', filename='uploads/' + p.image_filename) }}" class="card-img-top {% if p.stock_quantity <= 0 %}opacity-50{% endif %}" style="height: 220px; object-fit: cover;">
+                            <img src="{{ p.image_filename if ('data:image' in p.image_filename or 'http' in p.image_filename) else url_for('static', filename='uploads/' + p.image_filename) }}" class="card-img-top {% if p.stock_quantity <= 0 %}opacity-50{% endif %}" style="height: 220px; object-fit: cover;">
                         {% else %}
                             <div class="bg-secondary bg-opacity-10 text-body-secondary d-flex align-items-center justify-content-center {% if p.stock_quantity <= 0 %}opacity-50{% endif %}" style="height: 220px;">
                                 <i class="bi bi-box-seam fs-1"></i>
