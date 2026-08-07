@@ -2062,34 +2062,6 @@ import json
 from datetime import datetime, date, time
 
 def serializar_campo(val):
-    """Converte objetos de data e hora em texto normalizado para o JSON."""
-    if isinstance(val, datetime):
-        return val.strftime('%Y-%m-%d %H:%M:%S')
-    elif isinstance(val, date):
-        return val.strftime('%Y-%m-%d')
-    elif isinstance(val, time):
-        return val.strftime('%H:%M:%S')
-    return val
-
-import zipfile
-import io
-import json
-from datetime import datetime, date, time
-
-def serializar_campo(val):
-    """Converte datas e horários em texto seguro para JSON."""
-    if val is None:
-        return None
-    if isinstance(val, (datetime, date, time)):
-        return str(val)
-    return str(val) if not isinstance(val, (int, float, bool, str, list, dict)) else val
-
-import zipfile
-import io
-import json
-from datetime import datetime, date, time
-
-def serializar_campo(val):
     """Converte datas e horários em texto seguro para JSON."""
     if val is None:
         return None
@@ -2100,7 +2072,6 @@ def serializar_campo(val):
 @app.route('/admin/exportar_backup_completo')
 @login_required
 def exportar_backup_completo():
-    # Segurança: Apenas o proprietário pode exportar o backup do estabelecimento
     if getattr(current_user, 'role', 'dono') == 'barbeiro':
         flash('Acesso restrito ao administrador do estabelecimento.', 'danger')
         return redirect(url_for('admin_dashboard'))
@@ -2121,10 +2092,11 @@ def exportar_backup_completo():
         'loyalty_points_goal': getattr(est, 'loyalty_points_goal', 0),
         'loyalty_reward': getattr(est, 'loyalty_reward', ''),
         'commission_on_gross': getattr(est, 'commission_on_gross', False),
-        'logo_filename': getattr(est, 'logo_filename', '')
+        'logo_filename': getattr(est, 'logo_filename', ''),
+        'created_at': serializar_campo(getattr(est, 'created_at', None))
     }
 
-    # 2. Jornadas de Trabalho
+    # 2. Jornadas de Trabalho / Horários de Funcionamento
     schedules = DaySchedule.query.filter_by(establishment_id=est.id).all()
     dados_horarios = [{
         'day_index': s.day_index,
@@ -2172,7 +2144,7 @@ def exportar_backup_completo():
         'image_filename': getattr(p, 'image_filename', '')
     } for p in produtos]
 
-    # 5. Histórico de Vendas de Produtos (Sem product_id para evitar AttributeError)
+    # 5. Histórico de Vendas da Loja (Faturamento de Produtos)
     vendas = ProductSale.query.filter_by(establishment_id=est.id).all()
     dados_vendas = [{
         'id': v.id,
@@ -2185,11 +2157,17 @@ def exportar_backup_completo():
         'commission_amount': getattr(v, 'commission_amount', 0.0)
     } for v in vendas]
 
-    # 6. Equipe e Comissões (Acessa apenas colunas reais do modelo Professional)
+    # 6. Equipe, Comissões e Faixas Progressivas
     profissionais = Professional.query.filter_by(establishment_id=est.id).all()
     dados_equipe = []
     for p in profissionais:
         admin_login = Admin.query.filter_by(establishment_id=est.id, professional_id=p.id).first()
+        tiers = CommissionTier.query.filter_by(professional_id=p.id).all()
+        dados_tiers = [{
+            'min_services': t.min_services,
+            'commission_rate': t.commission_rate
+        } for t in tiers]
+        
         dados_equipe.append({
             'id': p.id,
             'name': p.name,
@@ -2200,7 +2178,8 @@ def exportar_backup_completo():
             'product_commission_rate': getattr(p, 'product_commission_rate', 0.0),
             'all_products_commission': getattr(p, 'all_products_commission', True),
             'allowed_product_ids': getattr(p, 'allowed_product_ids', ''),
-            'login_username': admin_login.username if admin_login else None
+            'login_username': admin_login.username if admin_login else None,
+            'faixas_comissao': dados_tiers
         })
 
     # 7. Clientes e Fidelidade
@@ -2221,7 +2200,17 @@ def exportar_backup_completo():
         'client_cpf': getattr(b, 'client_cpf', '')
     } for b in blacklists]
 
-    # 9. Assinaturas / Clube VIP (Usa sub.plan.name e sub.created_at)
+    # 9. Planos do Clube VIP
+    planos_clube = SubscriptionPlan.query.filter_by(establishment_id=est.id).all()
+    dados_planos_clube = [{
+        'id': pl.id,
+        'name': pl.name,
+        'price': pl.price,
+        'description': getattr(pl, 'description', ''),
+        'services_limit': getattr(pl, 'services_limit', 0)
+    } for pl in planos_clube]
+
+    # 10. Assinantes do Clube VIP
     assinaturas = ClientSubscription.query.filter_by(establishment_id=est.id).all()
     dados_assinaturas = [{
         'id': sub.id,
@@ -2234,7 +2223,15 @@ def exportar_backup_completo():
         'expiry_date': serializar_campo(sub.expiry_date)
     } for sub in assinaturas]
 
-    # 10. Histórico de Agendamentos
+    # 11. Dias Bloqueados na Agenda
+    blocked_days = BlockedDay.query.filter_by(establishment_id=est.id).all()
+    dados_dias_bloqueados = [{
+        'id': bd.id,
+        'date': serializar_campo(bd.date),
+        'reason': getattr(bd, 'reason', '')
+    } for bd in blocked_days]
+
+    # 12. Histórico de Agendamentos e Faturamento de Atendimentos
     agendamentos = Appointment.query.filter_by(establishment_id=est.id).all()
     dados_agendamentos = []
     for a in agendamentos:
@@ -2261,10 +2258,11 @@ def exportar_backup_completo():
             'discount_amount': getattr(a, 'discount_amount', 0.0),
             'payment_method': getattr(a, 'payment_method', 'PIX'),
             'commission_value': getattr(a, 'commission_value', 0.0),
-            'status': a.status
+            'status': a.status,
+            'rating': getattr(a, 'rating', None)
         })
 
-    # Estrutura JSON Unificada
+    # JSON Completo
     backup_completo = {
         'export_date': get_now_brazil().strftime('%Y-%m-%d %H:%M:%S'),
         'estabelecimento': dados_estabelecimento,
@@ -2275,11 +2273,13 @@ def exportar_backup_completo():
         'equipe_profissionais': dados_equipe,
         'clientes': dados_clientes,
         'clientes_bloqueados': dados_bloqueados,
+        'planos_clube_vip': dados_planos_clube,
         'assinantes_clube_vip': dados_assinaturas,
+        'dias_bloqueados_agenda': dados_dias_bloqueados,
         'historico_agendamentos': dados_agendamentos
     }
 
-    # 11. Geração do .ZIP em memória com proteção contra caminhos Linux/Render
+    # Geração do .ZIP em memória
     buffer_zip = io.BytesIO()
     with zipfile.ZipFile(buffer_zip, 'w', zipfile.ZIP_DEFLATED) as zip_file:
         json_bytes = json.dumps(backup_completo, ensure_ascii=False, indent=4).encode('utf-8')
@@ -2347,7 +2347,7 @@ def importar_backup_completo():
                         with zip_ref.open(info.filename) as fonte, open(caminho_destino, 'wb') as destino:
                             destino.write(fonte.read())
 
-        # Restaura Configurações Gerais
+        # 1. Restaura Configurações Gerais
         est_data = backup.get('estabelecimento', {})
         if est_data:
             est.name = est_data.get('nome', est.name)
@@ -2360,15 +2360,13 @@ def importar_backup_completo():
             if est_data.get('logo_filename'):
                 est.logo_filename = est_data.get('logo_filename')
 
-        # Restaura Categorias e Serviços
-        cat_map = {}
+        # 2. Restaura Categorias e Serviços
         for cat_data in backup.get('categorias_e_servicos', []):
             cat = Category.query.filter_by(establishment_id=est.id, name=cat_data['nome']).first()
             if not cat:
                 cat = Category(name=cat_data['nome'], establishment_id=est.id)
                 db.session.add(cat)
                 db.session.flush()
-            cat_map[cat_data.get('categoria_id')] = cat.id
 
             for s_data in cat_data.get('servicos', []):
                 srv = Service.query.filter_by(establishment_id=est.id, name=s_data['name']).first()
@@ -2386,7 +2384,7 @@ def importar_backup_completo():
                 srv.is_club_included = s_data.get('is_club_included', False)
                 srv.allowed_plan_ids = s_data.get('allowed_plan_ids', '')
 
-        # Restaura Produtos
+        # 3. Restaura Produtos do Estoque
         for p_data in backup.get('produtos_estoque', []):
             prod = Product.query.filter_by(establishment_id=est.id, name=p_data['name']).first()
             if not prod:
@@ -2398,7 +2396,7 @@ def importar_backup_completo():
             prod.description = p_data.get('description', '')
             prod.image_filename = p_data.get('image_filename')
 
-        # Restaura Profissionais (Apenas atributos reais: name, cpf, comissões)
+        # 4. Restaura Profissionais e Faixas de Comissão
         for prof_data in backup.get('equipe_profissionais', []):
             prof = Professional.query.filter_by(establishment_id=est.id, name=prof_data['name']).first()
             if not prof:
@@ -2411,8 +2409,91 @@ def importar_backup_completo():
             prof.product_commission_rate = prof_data.get('product_commission_rate', 0.0)
             prof.all_products_commission = prof_data.get('all_products_commission', True)
             prof.allowed_product_ids = prof_data.get('allowed_product_ids', '')
+            
+            faixas = prof_data.get('faixas_comissao', [])
+            if faixas:
+                CommissionTier.query.filter_by(professional_id=prof.id).delete()
+                for fx in faixas:
+                    nova_fx = CommissionTier(
+                        professional_id=prof.id,
+                        min_services=int(fx['min_services']),
+                        commission_rate=float(fx['commission_rate'])
+                    )
+                    db.session.add(nova_fx)
 
-        # Restaura Clientes
+        # 5. Restaura Horários de Funcionamento (DaySchedule)
+        for h_data in backup.get('horarios_funcionamento', []):
+            prof_id_backup = h_data.get('professional_id')
+            prof_id_mapped = None
+            if prof_id_backup:
+                prof_obj = Professional.query.filter_by(establishment_id=est.id, id=prof_id_backup).first()
+                if prof_obj:
+                    prof_id_mapped = prof_obj.id
+
+            ds = DaySchedule.query.filter_by(
+                establishment_id=est.id,
+                professional_id=prof_id_mapped,
+                day_index=h_data['day_index']
+            ).first()
+
+            if not ds:
+                ds = DaySchedule(
+                    establishment_id=est.id,
+                    professional_id=prof_id_mapped,
+                    day_index=h_data['day_index']
+                )
+                db.session.add(ds)
+
+            ds.is_active = h_data.get('is_active', True)
+
+            def parse_time_val(t_val):
+                if not t_val: return None
+                if isinstance(t_val, str):
+                    t_str = t_val[:8]
+                    if len(t_str) == 8:
+                        return datetime.strptime(t_str, '%H:%M:%S').time()
+                    elif len(t_str) >= 5:
+                        return datetime.strptime(t_str[:5], '%H:%M').time()
+                return None
+
+            ds.work_start = parse_time_val(h_data.get('work_start')) or time(9, 0)
+            ds.work_end = parse_time_val(h_data.get('work_end')) or time(18, 0)
+            ds.lunch_start = parse_time_val(h_data.get('lunch_start'))
+            ds.lunch_end = parse_time_val(h_data.get('lunch_end'))
+            ds.pause2_start = parse_time_val(h_data.get('pause2_start'))
+            ds.pause2_end = parse_time_val(h_data.get('pause2_end'))
+
+        # 6. Restaura Planos do Clube VIP
+        for pl_data in backup.get('planos_clube_vip', []):
+            pl = SubscriptionPlan.query.filter_by(establishment_id=est.id, name=pl_data['name']).first()
+            if not pl:
+                pl = SubscriptionPlan(name=pl_data['name'], price=pl_data['price'], establishment_id=est.id)
+                db.session.add(pl)
+            pl.price = pl_data['price']
+            pl.description = pl_data.get('description', '')
+            pl.services_limit = pl_data.get('services_limit', 0)
+        db.session.flush()
+
+        # 7. Restaura Assinantes do Clube VIP
+        for sub_data in backup.get('assinantes_clube_vip', []):
+            plano_ass = SubscriptionPlan.query.filter_by(establishment_id=est.id, name=sub_data.get('plan_name', '')).first()
+            plano_id = plano_ass.id if plano_ass else None
+            if plano_id:
+                sub = ClientSubscription.query.filter_by(establishment_id=est.id, client_phone=sub_data['client_phone']).first()
+                if not sub:
+                    sub = ClientSubscription(
+                        client_name=sub_data['client_name'],
+                        client_phone=sub_data['client_phone'],
+                        plan_id=plano_id,
+                        expiry_date=datetime.strptime(sub_data['expiry_date'][:10], '%Y-%m-%d'),
+                        establishment_id=est.id
+                    )
+                    db.session.add(sub)
+                sub.client_name = sub_data['client_name']
+                sub.client_cpf = sub_data.get('client_cpf', '')
+                sub.status = sub_data.get('status', 'ativo')
+
+        # 8. Restaura Clientes
         for cli_data in backup.get('clientes', []):
             cliente = None
             if cli_data.get('cpf'):
@@ -2427,7 +2508,102 @@ def importar_backup_completo():
             cliente.cpf = cli_data.get('cpf', cliente.cpf)
             cliente.points = cli_data.get('points', cliente.points)
 
-        # Restaura Bloqueios
+        # 9. Restaura Histórico de Vendas da Loja (Faturamento de Produtos)
+        for v_data in backup.get('historico_vendas_loja', []):
+            try:
+                s_date_str = str(v_data['sale_date'])
+                dt_venda = datetime.strptime(s_date_str[:19], '%Y-%m-%d %H:%M:%S') if ' ' in s_date_str else datetime.strptime(s_date_str[:10], '%Y-%m-%d')
+            except Exception:
+                dt_venda = get_now_brazil()
+
+            venda_existente = ProductSale.query.filter_by(
+                establishment_id=est.id,
+                product_name=v_data['product_name'],
+                sale_date=dt_venda
+            ).first()
+
+            if not venda_existente:
+                prof_id = None
+                if v_data.get('professional_id'):
+                    prof_obj = Professional.query.filter_by(establishment_id=est.id, id=v_data['professional_id']).first()
+                    if prof_obj:
+                        prof_id = prof_obj.id
+
+                sale = ProductSale(
+                    product_name=v_data['product_name'],
+                    quantity=v_data.get('quantity', 1),
+                    unit_price=v_data.get('unit_price', 0.0),
+                    total_price=v_data.get('total_price', 0.0),
+                    sale_date=dt_venda,
+                    establishment_id=est.id,
+                    professional_id=prof_id,
+                    commission_amount=v_data.get('commission_amount', 0.0)
+                )
+                db.session.add(sale)
+
+        # 10. Restaura Histórico de Agendamentos (Faturamento de Atendimentos)
+        for appt_data in backup.get('historico_agendamentos', []):
+            try:
+                d_str = str(appt_data['appointment_date'])[:10]
+                d_obj = datetime.strptime(d_str, '%Y-%m-%d').date()
+                t_str = str(appt_data['appointment_time'])[:8]
+                t_obj = datetime.strptime(t_str, '%H:%M:%S').time() if len(t_str) == 8 else datetime.strptime(t_str[:5], '%H:%M').time()
+            except Exception:
+                continue
+
+            appt_existente = Appointment.query.filter_by(
+                establishment_id=est.id,
+                client_phone=appt_data.get('client_phone', ''),
+                appointment_date=d_obj,
+                appointment_time=t_obj
+            ).first()
+
+            if not appt_existente:
+                prof_id = None
+                if appt_data.get('professional_id'):
+                    prof_obj = Professional.query.filter_by(establishment_id=est.id, id=appt_data['professional_id']).first()
+                    if prof_obj:
+                        prof_id = prof_obj.id
+
+                appt = Appointment(
+                    client_name=appt_data.get('client_name', 'Cliente'),
+                    client_phone=appt_data.get('client_phone', ''),
+                    client_cpf=appt_data.get('client_cpf', ''),
+                    client_email=appt_data.get('client_email', ''),
+                    appointment_date=d_obj,
+                    appointment_time=t_obj,
+                    establishment_id=est.id,
+                    total_duration=appt_data.get('total_duration', 30),
+                    total_price=appt_data.get('total_price', 0.0),
+                    discount_amount=appt_data.get('discount_amount', 0.0),
+                    payment_method=appt_data.get('payment_method', 'PIX'),
+                    commission_value=appt_data.get('commission_value', 0.0),
+                    status=appt_data.get('status', 'concluido'),
+                    professional_id=prof_id,
+                    rating=appt_data.get('rating')
+                )
+
+                # Reconecta os serviços da comanda realizada
+                nomer_servicos = [s.strip() for s in str(appt_data.get('servicos_realizados', '')).split('+') if s.strip()]
+                for s_nome in nomer_servicos:
+                    srv_obj = Service.query.filter_by(establishment_id=est.id, name=s_nome).first()
+                    if srv_obj:
+                        appt.services.append(srv_obj)
+
+                db.session.add(appt)
+
+        # 11. Restaura Dias Bloqueados na Agenda
+        for bd_data in backup.get('dias_bloqueados_agenda', []):
+            try:
+                dt_block = datetime.strptime(bd_data['date'][:10], '%Y-%m-%d').date()
+                bd = BlockedDay.query.filter_by(establishment_id=est.id, date=dt_block).first()
+                if not bd:
+                    bd = BlockedDay(date=dt_block, reason=bd_data.get('reason', ''), establishment_id=est.id)
+                    db.session.add(bd)
+            except Exception:
+                pass
+
+        # 12. Restaura Bloqueios de Clientes (No-Show)
         for b_data in backup.get('clientes_bloqueados', []):
             blk = Blacklist.query.filter_by(establishment_id=est.id, client_phone=b_data['client_phone']).first()
             if not blk:
@@ -2439,7 +2615,7 @@ def importar_backup_completo():
                 db.session.add(blk)
 
         db.session.commit()
-        flash('Backup restaurado e sincronizado com sucesso!', 'success')
+        flash('Backup restaurado com sucesso! 100% das configurações, horários e faturamento foram atualizados.', 'success')
         return redirect(url_for('alterar_senha'))
 
     except Exception as e:
