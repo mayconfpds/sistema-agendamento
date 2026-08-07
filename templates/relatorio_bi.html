@@ -42,37 +42,86 @@
         <div class="col-md-3">
             <div class="card border-0 shadow-sm bg-primary text-white h-100 rounded-4">
                 <div class="card-body">
-                    <h6 class="small fw-bold opacity-75 text-uppercase">Faturamento Total</h6>
-                    <h3 class="fw-black mb-0">R$ {{ "%.2f"|format(fat_total) }}</h3>
-                    <div class="small mt-2 opacity-75"><i class="bi bi-graph-up"></i> Agenda + Loja</div>
+                    <h6 class="small fw-bold opacity-75 text-uppercase">Faturamento Total (Bruto)</h6>
+                    <h3 class="fw-black mb-1">R$ {{ "%.2f"|format(fat_total) }}</h3>
+                    {% if establishment.plan_type == 'gestao' and comissao_total_geral > 0 %}
+                    <div class="small mt-2 pt-2 border-top border-white border-opacity-25" style="font-size: 0.78rem;">
+                        <span>🤝 (-) R$ {{ "%.2f"|format(comissao_total_geral) }} comissões totais</span><br>
+                        <strong>💵 (=) R$ {{ "%.2f"|format(fat_total_liquido) }} Líquido Salão</strong>
+                    </div>
+                    {% else %}
+                    <span class="small opacity-75">Agenda + Loja no período</span>
+                    {% endif %}
                 </div>
             </div>
         </div>
+
         <div class="col-md-3">
             <div class="card border-0 shadow-sm bg-success text-white h-100 rounded-4">
                 <div class="card-body">
-                    <h6 class="small fw-bold opacity-75 text-uppercase">Receita Agenda</h6>
-                    <h3 class="fw-black mb-0">R$ {{ "%.2f"|format(fat_agenda) }}</h3>
-                    <div class="small mt-2 opacity-75"><i class="bi bi-calendar-check"></i> {{ qtd_concluidos }} atendimentos</div>
+                    <h6 class="small fw-bold opacity-75 text-uppercase">Receita Agenda (Bruta)</h6>
+                    <h3 class="fw-black mb-1">R$ {{ "%.2f"|format(fat_agenda) }}</h3>
+                    {% if establishment.plan_type == 'gestao' and comissao_agenda_total > 0 %}
+                    <div class="small mt-2 pt-2 border-top border-white border-opacity-25" style="font-size: 0.78rem;">
+                        <span>🤝 (-) R$ {{ "%.2f"|format(comissao_agenda_total) }} comissões agenda</span><br>
+                        <strong>💵 (=) R$ {{ "%.2f"|format(fat_agenda_liquido) }} Líquido Agenda</strong>
+                    </div>
+                    {% else %}
+                    <span class="small opacity-75"><i class="bi bi-scissors"></i> {{ qtd_concluidos }} atendimentos</span>
+                    {% endif %}
                 </div>
             </div>
         </div>
+
         <div class="col-md-3">
             <div class="card border-0 shadow-sm bg-info text-white h-100 rounded-4">
                 <div class="card-body">
-                    <h6 class="small fw-bold opacity-75 text-uppercase">Vendas Loja</h6>
-                    <h3 class="fw-black mb-0">R$ {{ "%.2f"|format(fat_loja) }}</h3>
-                    <div class="small mt-2 opacity-75"><i class="bi bi-cart-check"></i> {{ itens_vendidos }} itens vendidos</div>
+                    <h6 class="small fw-bold opacity-75 text-uppercase">Vendas Loja (Bruta)</h6>
+                    <h3 class="fw-black mb-1">R$ {{ "%.2f"|format(fat_loja) }}</h3>
+                    {% if establishment.plan_type == 'gestao' and comissao_loja_total > 0 %}
+                    <div class="small mt-2 pt-2 border-top border-white border-opacity-25" style="font-size: 0.78rem;">
+                        <span>🤝 (-) R$ {{ "%.2f"|format(comissao_loja_total) }} comissões loja</span><br>
+                        <strong>💵 (=) R$ {{ "%.2f"|format(fat_loja_liquido) }} Líquido Loja</strong>
+                    </div>
+                    {% else %}
+                    <span class="small opacity-75"><i class="bi bi-cart-check"></i> {{ itens_vendidos }} itens vendidos</span>
+                    {% endif %}
                 </div>
             </div>
         </div>
+
         <div class="col-md-3">
             <div class="card border-0 shadow-sm bg-dark text-white h-100 rounded-4">
                 <div class="card-body">
-                    <h6 class="small fw-bold opacity-75 text-uppercase">Recorrência (MRR)</h6>
-                    <h3 class="fw-black mb-0">R$ {{ "%.2f"|format(mrr) }}</h3>
-                    <div class="small mt-2 opacity-75"><i class="bi bi-star-fill text-warning"></i> {{ total_assinantes }} assinantes VIP</div>
+                    <h6 class="small fw-bold text-warning text-uppercase">Recorrência Clube (MRR)</h6>
+                    <h3 class="fw-black mb-1">R$ {{ "%.2f"|format(mrr) }}</h3>
+                    <span class="small opacity-75"><i class="bi bi-people-fill"></i> {{ total_assinantes }} assinantes ativos</span>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-lg-8">
+            <div class="card border-0 shadow-sm rounded-4 p-4 h-100">
+                <h6 class="fw-bold mb-3"><i class="bi bi-wallet2 text-primary me-2"></i> Receita por Forma de Pagamento (Agenda)</h6>
+                <div class="d-flex flex-wrap gap-2">
+                    {% for metodo, val in resumo_pagamentos.items() %}
+                    <div class="border rounded-3 p-3 bg-body-tertiary flex-grow-1 text-center" style="min-width: 120px;">
+                        <div class="small text-muted fw-bold text-uppercase">{{ metodo }}</div>
+                        <div class="fs-5 fw-black text-body-emphasis">R$ {{ "%.2f"|format(val) }}</div>
+                    </div>
+                    {% else %}
+                    <div class="text-muted small">Nenhum pagamento registrado no período.</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="card border-0 shadow-sm rounded-4 p-4 h-100 d-flex flex-column justify-content-center text-center bg-warning-subtle">
+                <h6 class="small fw-bold text-dark text-uppercase mb-1"><i class="bi bi-tag-fill me-1"></i> Total de Descontos Concedidos</h6>
+                <div class="h3 fw-black text-dark mb-0">R$ {{ "%.2f"|format(total_descontos_agenda) }}</div>
+                <span class="small text-dark opacity-75 mt-1">Descontos aplicados em comandas concluídas</span>
             </div>
         </div>
     </div>
@@ -284,7 +333,15 @@
                                 <tr>
                                     <td>{{ a.appointment_date.strftime('%d/%m/%Y') }}</td>
                                     <td><span class="badge bg-primary-subtle text-primary border border-primary-subtle">Agenda</span></td>
-                                    <td>{{ a.client_name }} - {{ a.service_names }}</td>
+                                    <td>
+                                        {{ a.client_name }} - {{ a.service_names }}
+                                        {% if a.payment_method %}
+                                        <span class="badge bg-secondary-subtle text-secondary border ms-1" style="font-size: 0.75rem;">{{ a.payment_method }}</span>
+                                        {% endif %}
+                                        {% if a.discount_amount and a.discount_amount > 0 %}
+                                        <span class="badge bg-danger-subtle text-danger border ms-1" style="font-size: 0.75rem;">- R$ {{ "%.2f"|format(a.discount_amount) }} desc.</span>
+                                        {% endif %}
+                                    </td>
                                     <td class="text-end pe-4 fw-bold">R$ {{ "%.2f"|format(a.total_price) }}</td>
                                 </tr>
                                 {% endfor %}

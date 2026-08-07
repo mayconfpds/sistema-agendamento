@@ -192,6 +192,7 @@ class Establishment(db.Model):
     loyalty_reward = db.Column(db.String(150), nullable=True)
     state = db.Column(db.String(2), default='PE')
     internal_notes = db.Column(db.Text, nullable=True)
+    commission_on_gross = db.Column(db.Boolean, default=False)
     
     schedules = db.relationship('DaySchedule', backref='establishment', lazy=True, cascade="all, delete-orphan")
     admins = db.relationship('Admin', backref='establishment', lazy=True)
@@ -437,6 +438,8 @@ class Appointment(db.Model):
     rating = db.Column(db.Integer, nullable=True)
     services = db.relationship('Service', secondary=appointment_services, lazy='subquery', backref=db.backref('appointments', lazy=True))
     edit_token = db.Column(db.String(100), unique=True, nullable=True)
+    payment_method = db.Column(db.String(30), nullable=True)
+    discount_amount = db.Column(db.Float, default=0.0)
 
     @property
     def service_names(self):
@@ -1344,6 +1347,10 @@ def update_settings():
         try: est.loyalty_points_goal = int(request.form.get('loyalty_points_goal', 0))
         except: est.loyalty_points_goal = 0
         est.loyalty_reward = request.form.get('loyalty_reward')
+        
+        # NOVO: Salva a preferência de comissão (Bruto vs Descontado)
+        est.commission_on_gross = request.form.get('commission_on_gross') == 'on'
+        
         if 'logo' in request.files:
             file = request.files['logo']
             if file and file.filename != '':
@@ -1487,19 +1494,33 @@ def complete_appointment(id):
     if a.establishment_id != current_user.establishment_id: return jsonify({'success': False, 'error': 'Erro de acesso'}), 403
     est = a.establishment
     
-    # 1. Calcula a comissão APENAS para este serviço específico
+    # 1. Registra forma de pagamento e desconto
+    payment_method = request.form.get('payment_method', 'PIX')
+    discount_str = request.form.get('discount_amount', '0')
+    try:
+        discount_val = float(str(discount_str).replace(',', '.'))
+    except:
+        discount_val = 0.0
+
+    a.payment_method = payment_method
+    a.discount_amount = max(0.0, discount_val)
+
+    # Valor real da soma de todos os serviços da comanda
+    valor_real_servicos = sum(s.price for s in a.services)
+    valor_cobrado = max(0.0, valor_real_servicos - a.discount_amount)
+    a.total_price = valor_cobrado
+    
+    # 2. Calcula a comissão da agenda com base na preferência do dono (Bruto vs Cobrado)
     if est.plan_type == 'gestao':
         prof_id = request.form.get('professional_id')
         if prof_id: a.professional_id = int(prof_id)
         if a.professional_id:
             prof = Professional.query.get(a.professional_id)
             if prof:
-                valor_real_servicos = sum(s.price for s in a.services)
-                # Chama a função que descobre qual a taxa EXATA para este número de serviço
+                base_calc = valor_real_servicos if est.commission_on_gross else valor_cobrado
                 taxa_dinamica = calcular_taxa_comissao(prof.id, a.appointment_date)
-                a.commission_value = valor_real_servicos * (taxa_dinamica / 100.0)
+                a.commission_value = base_calc * (taxa_dinamica / 100.0)
                 
-    # 2. Muda o status para concluído
     a.status = 'concluido'
     
     # Lógica de fidelidade
@@ -1513,7 +1534,6 @@ def complete_appointment(id):
         if pontos_restantes > 0: msg_fidelidade = f"\n\n🎁 Fidelidade: Você ganhou 1 ponto! Faltam apenas {pontos_restantes} ponto(s) para resgatar o seu prêmio: {est.loyalty_reward}."
         else: msg_fidelidade = f"\n\n🎉 PARABÉNS! Você atingiu {cliente.points} pontos e GANHOU O SEU PRÊMIO: {est.loyalty_reward}! Mostre este e-mail na sua próxima visita."
     
-    # 3. Salva tudo de uma vez
     db.session.commit()
     
     link_av = request.host_url.replace('http://', 'https://') + f'avaliar/{a.id}'
@@ -2157,6 +2177,22 @@ def relatorio_bi():
 
     chart_data_agenda = [grafico_agenda[d] for d in grafico_datas]
     chart_data_loja = [grafico_loja[d] for d in grafico_datas]
+    
+    resumo_pagamentos = {}
+    total_descontos_agenda = 0.0
+    for a in concluidos:
+        metodo = getattr(a, 'payment_method', None) or 'PIX'
+        resumo_pagamentos[metodo] = resumo_pagamentos.get(metodo, 0.0) + a.total_price
+        total_descontos_agenda += getattr(a, 'discount_amount', 0.0) or 0.0
+    
+    # --- CÁLCULOS DE COMISSÕES E FATURAMENTO LÍQUIDO DA CASA ---
+    comissao_agenda_total = sum(a.commission_value for a in concluidos if a.commission_value)
+    comissao_loja_total = sum(getattr(v, 'commission_amount', 0.0) or 0.0 for v in vendas_periodo)
+    comissao_total_geral = comissao_agenda_total + comissao_loja_total
+
+    fat_agenda_liquido = max(0.0, fat_agenda - comissao_agenda_total)
+    fat_loja_liquido = max(0.0, fat_loja - comissao_loja_total)
+    fat_total_liquido = max(0.0, fat_total - comissao_total_geral)
 
     return render_template('relatorio_bi.html', establishment=est, start_date=start_date_str, end_date=end_date_str,
                            fat_total=fat_total, fat_agenda=fat_agenda, fat_loja=fat_loja, mrr=mrr, total_assinantes=total_assinantes,
@@ -2167,7 +2203,12 @@ def relatorio_bi():
                            concluidos=concluidos, vendas_periodo=vendas_periodo,
                            desempenho_profissionais=desempenho_profissionais, taxa_retencao=taxa_retencao,
                            frequencia_media=frequencia_media, taxa_adesao_vip=taxa_adesao_vip, 
-                           clientes_novos=clientes_novos, clientes_recorrentes=clientes_recorrentes)
+                           clientes_novos=clientes_novos, clientes_recorrentes=clientes_recorrentes,
+                           resumo_pagamentos=resumo_pagamentos, total_descontos_agenda=total_descontos_agenda,comissao_agenda_total=comissao_agenda_total, comissao_loja_total=comissao_loja_total,
+                           comissao_total_geral=comissao_total_geral, fat_agenda_liquido=fat_agenda_liquido,
+                           fat_loja_liquido=fat_loja_liquido, fat_total_liquido=fat_total_liquido)
+    
+    
 
 @app.route('/api/whatsapp/webhook', methods=['POST'])
 def whatsapp_webhook():
@@ -2307,18 +2348,17 @@ def master_dashboard():
 @super_admin_required
 def master_editar_estabelecimento(id):
     est = Establishment.query.get_or_404(id)
-    
-    # Atualização de dados gerenciais
     est.name = request.form.get('name')
     est.plan_type = request.form.get('plan_type')
     est.is_active = 'is_active' in request.form
     est.internal_notes = request.form.get('internal_notes', '')
     
-    # Tratamento seguro da data de vencimento do trial
+    # Sincroniza o fim do trial exatamente às 23:59:59 da data escolhida
     trial_str = request.form.get('trial_ends')
     if trial_str:
         try:
-            est.trial_ends = datetime.strptime(trial_str, '%Y-%m-%d')
+            dt_obj = datetime.strptime(trial_str, '%Y-%m-%d').date()
+            est.trial_ends = datetime.combine(dt_obj, time(23, 59, 59))
         except ValueError:
             pass
 
@@ -2433,6 +2473,9 @@ with app.app_context():
         garantir_coluna('product_sales', 'professional_id', 'INTEGER')
         garantir_coluna('product_sales', 'commission_amount', 'FLOAT DEFAULT 0.0')
         garantir_coluna('services', 'allowed_plan_ids', 'TEXT DEFAULT \'\'')
+        garantir_coluna('establishments', 'commission_on_gross', 'BOOLEAN DEFAULT FALSE')
+        garantir_coluna('appointments', 'payment_method', 'VARCHAR(30)')
+        garantir_coluna('appointments', 'discount_amount', 'FLOAT DEFAULT 0.0')
     except Exception as e:
         print(f"Erro na verificação de colunas: {e}")
 

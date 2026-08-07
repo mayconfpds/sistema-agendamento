@@ -131,8 +131,18 @@
                     
                     <div class="col-12 mt-3 border-top pt-3">
                         <div class="row g-2 align-items-center">
-                            <div class="col-md-4"><label class="small fw-bold text-primary"><i class="bi bi-gift"></i> Pontos para o Prêmio (0=desativar):</label><input type="number" name="loyalty_points_goal" class="form-control form-control-sm" value="{{ establishment.loyalty_points_goal or 0 }}"></div>
-                            <div class="col-md-6"><label class="small fw-bold text-primary">Qual é o Prêmio?</label><input type="text" name="loyalty_reward" class="form-control form-control-sm" placeholder="Ex: Um corte grátis!" value="{{ establishment.loyalty_reward or '' }}"></div>
+                            <div class="col-md-3"><label class="small fw-bold text-primary"><i class="bi bi-gift"></i> Pontos p/ Prêmio (0=off):</label><input type="number" name="loyalty_points_goal" class="form-control form-control-sm" value="{{ establishment.loyalty_points_goal or 0 }}"></div>
+                            <div class="col-md-4"><label class="small fw-bold text-primary">Qual é o Prêmio?</label><input type="text" name="loyalty_reward" class="form-control form-control-sm" placeholder="Ex: Um corte grátis!" value="{{ establishment.loyalty_reward or '' }}"></div>
+                            {% if establishment.plan_type == 'gestao' %}
+                            <div class="col-md-5">
+                                <div class="form-check form-switch mt-3">
+                                    <input class="form-check-input" type="checkbox" id="commissionOnGross" name="commission_on_gross" {% if establishment.commission_on_gross %}checked{% endif %}>
+                                    <label class="form-check-label small fw-bold text-body-emphasis" for="commissionOnGross">
+                                        Comissão s/ Valor Bruto? <span class="text-muted fw-normal">(Sem deduzir desconto)</span>
+                                    </label>
+                                </div>
+                            </div>
+                            {% endif %}
                         </div>
                     </div>
                 </form>
@@ -194,7 +204,10 @@
                                             {% endif %}
                                         </td>
                                         <td>{% if a.status != 'concluido' %}<div class="mb-2"><a href="https://wa.me/55{{ a.client_phone }}?text=Olá, {{ a.client_name }}! Tudo bem? Passando só para confirmar o seu horário hoje às {{ a.appointment_time.strftime('%H:%M') }} 💈" target="_blank" class="btn btn-sm btn-outline-success w-100 fw-bold mb-2 shadow-sm"><i class="bi bi-whatsapp"></i> Lembrar</a>
-                                                <form method="POST" action="{{ url_for('complete_appointment', id=a.id) }}" onsubmit="return submeterFormAJAX(event, this, 'container-agendamentos')">
+                                                <button type="button" class="btn btn-sm btn-success w-100 fw-bold mb-2 shadow-sm"
+                                                        onclick="abrirModalConcluir({{ a.id }}, '{{ a.client_name|e }}', '{{ a.service_names|e }}', {{ a.services | sum(attribute='price') }}, {{ a.professional_id or 'null' }})">
+                                                    <i class="bi bi-check-circle"></i> Concluir
+                                                </button>
                                                     {% if establishment.plan_type == 'gestao' %}<select name="professional_id" class="form-select form-select-sm mb-1 border-success" required><option value="" disabled {% if not a.professional %}selected{% endif %}>Quem atendeu?</option>{% for p in professionals %}<option value="{{ p.id }}" {% if a.professional_id == p.id %}selected{% endif %}>{{ p.name }}</option>{% endfor %}</select>{% endif %}
                                                     <button class="btn btn-sm btn-success w-100 fw-bold"><i class="bi bi-check-circle"></i> Concluir</button>
                                                 </form></div>
@@ -836,10 +849,124 @@
         </div>
     </div>
 </div>
+<div class="modal fade" id="modalConcluirAgendamento" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content bg-body border-0 shadow-lg rounded-4">
+            <div class="modal-header border-bottom-0 pb-0">
+                <h6 class="modal-title fw-bold text-body-emphasis"><i class="bi bi-check-circle-fill text-success"></i> Fechar Comanda</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-3">
+                <form id="formConcluirAgendamento">
+                    <input type="hidden" id="concluirApptId">
+                    <div class="small text-body-secondary mb-3 p-2 bg-body-tertiary rounded-3" id="concluirResumoCliente"></div>
+                    
+                    {% if establishment.plan_type == 'gestao' %}
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-success"><i class="bi bi-person-badge"></i> Quem realizou o atendimento?</label>
+                        <select id="concluirProfId" name="professional_id" class="form-select form-select-sm shadow-sm" required>
+                            <option value="" disabled selected>Escolha o profissional...</option>
+                            {% for p in professionals %}
+                            <option value="{{ p.id }}">{{ p.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    {% endif %}
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-body-emphasis"><i class="bi bi-wallet2"></i> Forma de Pagamento</label>
+                        <select id="concluirMetodoPagto" name="payment_method" class="form-select form-select-sm shadow-sm" required>
+                            <option value="PIX">PIX</option>
+                            <option value="Dinheiro">Dinheiro</option>
+                            <option value="Cartão de Crédito">Cartão de Crédito</option>
+                            <option value="Cartão de Débito">Cartão de Débito</option>
+                            <option value="Outro">Outro</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-body-emphasis"><i class="bi bi-tag"></i> Desconto Aplicado (R$)</label>
+                        <input type="number" step="0.01" min="0" id="concluirDesconto" name="discount_amount" class="form-control form-control-sm text-center fw-bold shadow-sm" value="0.00" oninput="recalcularTotalConclusao()">
+                    </div>
+
+                    <div class="p-2 bg-body-tertiary rounded-3 border text-center">
+                        <div class="small text-muted">Total Final a Cobrar:</div>
+                        <div class="fs-4 fw-black text-success" id="concluirTotalExibicao">R$ 0,00</div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer border-top-0 pt-0 px-3 pb-3">
+                <button type="button" id="btnConfirmarConclusao" class="btn btn-success w-100 fw-bold py-2 shadow-sm" onclick="confirmarConclusaoAgendamento(this)">
+                    Confirmar Pagamento
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
+
+    let valBaseConclusao = 0.0;
+
+    function abrirModalConcluir(id, nomeCliente, servicos, valorReal, profId) {
+        document.getElementById('concluirApptId').value = id;
+        document.getElementById('concluirResumoCliente').innerHTML = `<strong>${nomeCliente}</strong><br><span class="text-muted">${servicos}</span>`;
+        
+        valBaseConclusao = parseFloat(valorReal || 0);
+        document.getElementById('concluirDesconto').value = '0.00';
+        document.getElementById('concluirMetodoPagto').value = 'PIX';
+        
+        const selectProf = document.getElementById('concluirProfId');
+        if (selectProf) {
+            selectProf.value = profId ? profId : '';
+        }
+        
+        recalcularTotalConclusao();
+        
+        const btn = document.getElementById('btnConfirmarConclusao');
+        if (btn) { btn.disabled = false; btn.innerHTML = 'Confirmar Pagamento'; }
+        
+        new bootstrap.Modal(document.getElementById('modalConcluirAgendamento')).show();
+    }
+
+    function recalcularTotalConclusao() {
+        const desc = parseFloat(document.getElementById('concluirDesconto').value || 0);
+        const total = Math.max(0, valBaseConclusao - desc);
+        document.getElementById('concluirTotalExibicao').innerText = total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    }
+
+    async function confirmarConclusaoAgendamento(btn) {
+        if (btn && btn.disabled) return;
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Concluindo...';
+        }
+
+        const id = document.getElementById('concluirApptId').value;
+        const formData = new FormData(document.getElementById('formConcluirAgendamento'));
+
+        try {
+            const res = await fetch(`/admin/agendamentos/concluir/${id}`, {
+                method: 'POST',
+                body: formData,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+            const data = await res.json();
+            if (data.success) {
+                bootstrap.Modal.getInstance(document.getElementById('modalConcluirAgendamento')).hide();
+                await atualizarContainerSilenciosamente('container-agendamentos');
+            } else {
+                alert(data.error || 'Erro ao concluir agendamento.');
+                if (btn) { btn.disabled = false; btn.innerHTML = 'Confirmar Pagamento'; }
+            }
+        } catch (e) {
+            alert('Erro de conexão.');
+            if (btn) { btn.disabled = false; btn.innerHTML = 'Confirmar Pagamento'; }
+        }
+    }
+    
     function confirmarUpgradeMenu() {
         if(confirm("O Clube de Assinaturas é uma ferramenta exclusiva do Plano Gestão. Deseja evoluir seu plano agora para liberar essa funcionalidade?")) {
             const form = document.createElement('form');
