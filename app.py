@@ -1232,27 +1232,36 @@ def alterar_senha():
 def historico_atendimentos():
     if not current_user.establishment.has_access: return redirect(url_for('planos'))
     est = current_user.establishment
-    
-    # 1. FILTRO AUTOMÁTICO IGUAL AO DO PAINEL BI (Últimos 30 dias por padrão)
     hoje = get_now_brazil().date()
-    start_date_str = request.args.get('start_date', (hoje - timedelta(days=30)).strftime('%Y-%m-%d'))
-    end_date_str = request.args.get('end_date', hoje.strftime('%Y-%m-%d'))
     
-    query = Appointment.query.filter_by(establishment_id=est.id)
+    is_barbeiro = current_user.role == 'barbeiro'
     
-    if start_date_str:
+    # 1. SE FOR BARBEIRO, IGNORA OS PARÂMETROS DA URL E FORÇA A DATA DE HOJE
+    if is_barbeiro:
+        start_date = hoje
+        end_date = hoje
+        start_date_str = hoje.strftime('%Y-%m-%d')
+        end_date_str = hoje.strftime('%Y-%m-%d')
+    else:
+        start_date_str = request.args.get('start_date', (hoje - timedelta(days=30)).strftime('%Y-%m-%d'))
+        end_date_str = request.args.get('end_date', hoje.strftime('%Y-%m-%d'))
         try: 
             start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
-            query = query.filter(Appointment.appointment_date >= start_date)
-        except: pass
-        
-    if end_date_str:
-        try: 
             end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
-            query = query.filter(Appointment.appointment_date <= end_date)
-        except: pass
+        except: 
+            start_date = hoje - timedelta(days=30); end_date = hoje
         
-    # 2. ORDEM EXATA: Do mais recente para o mais antigo (descendente)
+    query = Appointment.query.filter_by(establishment_id=est.id)
+    
+    # 2. SE FOR BARBEIRO, FILTRA APENAS OS ATENDIMENTOS DA CADEIRA DELE
+    if is_barbeiro and current_user.professional_id:
+        query = query.filter_by(professional_id=current_user.professional_id)
+    
+    if start_date:
+        query = query.filter(Appointment.appointment_date >= start_date)
+    if end_date:
+        query = query.filter(Appointment.appointment_date <= end_date)
+        
     appts = query.order_by(Appointment.appointment_date.desc(), Appointment.appointment_time.desc()).all()
     
     total_revenue = sum(a.total_price for a in appts if a.status in ['concluido', 'arquivado'])
