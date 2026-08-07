@@ -343,6 +343,7 @@
                                             <span class="badge bg-success-subtle text-success border border-success-subtle">{{ "%.1f"|format(p.commission_rate) }}%</span>
                                         {% endif %}
                                         <div class="d-flex gap-1">
+                                            <button class="btn btn-outline-primary btn-sm border" onclick="abrirModalHorariosProfissional({{ p.id }}, '{{ p.name|e }}')" title="Jornada de Trabalho" style="padding: 0.1rem 0.4rem;"><i class="bi bi-clock"></i></button>
                                             <button class="btn btn-secondary btn-sm border" onclick="editarProfissional(this)" style="padding: 0.1rem 0.4rem;"><i class="bi bi-pencil"></i></button>
                                             <form method="POST" action="{{ url_for('delete_professional', id=p.id) }}" onsubmit="return excluirItemAJAX(event, this, 'container-equipe', 'Demitir este profissional da agenda?');" class="m-0">
                                                 <button type="submit" class="btn btn-outline-danger btn-sm border" style="padding: 0.1rem 0.4rem;"><i class="bi bi-trash"></i></button>
@@ -959,10 +960,117 @@
         </div>
     </div>
 </div>
+<div class="modal fade" id="modalHorariosProfissional" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content bg-body border-0 shadow-lg rounded-4">
+            <div class="modal-header border-bottom-0 pb-0">
+                <h6 class="modal-title fw-bold text-body-emphasis"><i class="bi bi-clock text-primary"></i> Jornada de Trabalho: <span id="tituloHorarioProf" class="text-primary"></span></h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <form id="formHorariosProfissional">
+                    <input type="hidden" id="horarioProfId">
+                    <div class="table-responsive">
+                        <table class="table table-bordered border-secondary-subtle mb-0 align-middle text-center small">
+                            <thead class="table-tertiary text-body-emphasis">
+                                <tr>
+                                    <th style="width: 50px;">Ativo</th>
+                                    <th>Dia</th>
+                                    <th>Abertura</th>
+                                    <th>Fecho</th>
+                                    <th>Almoço Início</th>
+                                    <th>Almoço Fim</th>
+                                    <th>Pausa Início</th>
+                                    <th>Pausa Fim</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabelaHorariosProfissional">
+                                </tbody>
+                        </table>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer border-top-0 pt-0 px-4 pb-4">
+                <button type="button" class="btn btn-secondary fw-bold" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" id="btnSalvarHorarioProf" class="btn btn-primary fw-bold shadow-sm px-4" onclick="salvarHorariosProfissional(this)">Salvar Jornada</button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
+
+    const nomesDiasSemana = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
+
+    async function abrirModalHorariosProfissional(profId, profNome) {
+        document.getElementById('horarioProfId').value = profId;
+        document.getElementById('tituloHorarioProf').innerText = profNome;
+        
+        const tbody = document.getElementById('tabelaHorariosProfissional');
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4"><span class="spinner-border spinner-border-sm text-primary"></span> Carregando jornada do profissional...</td></tr>';
+        
+        new bootstrap.Modal(document.getElementById('modalHorariosProfissional')).show();
+
+        try {
+            const res = await fetch(`/admin/profissional/${profId}/horarios`);
+            const data = await res.json();
+            
+            if (data.success) {
+                tbody.innerHTML = '';
+                data.schedules.forEach(s => {
+                    tbody.innerHTML += `
+                        <tr class="${!s.is_active ? 'bg-body-tertiary text-muted' : ''}">
+                            <input type="hidden" name="schedule_id" value="${s.id}">
+                            <td><input class="form-check-input" type="checkbox" name="active_${s.id}" ${s.is_active ? 'checked' : ''}></td>
+                            <td class="fw-bold text-start">${nomesDiasSemana[s.day_index]}</td>
+                            <td><input type="time" class="form-control form-control-sm" name="work_start_${s.id}" value="${s.work_start}"></td>
+                            <td><input type="time" class="form-control form-control-sm" name="work_end_${s.id}" value="${s.work_end}"></td>
+                            <td><input type="time" class="form-control form-control-sm" name="lunch_start_${s.id}" value="${s.lunch_start}"></td>
+                            <td><input type="time" class="form-control form-control-sm" name="lunch_end_${s.id}" value="${s.lunch_end}"></td>
+                            <td><input type="time" class="form-control form-control-sm" name="pause2_start_${s.id}" value="${s.pause2_start}"></td>
+                            <td><input type="time" class="form-control form-control-sm" name="pause2_end_${s.id}" value="${s.pause2_end}"></td>
+                        </tr>
+                    `;
+                });
+            } else {
+                tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-danger">Erro ao carregar horários.</td></tr>';
+            }
+        } catch (e) {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-danger">Erro de conexão.</td></tr>';
+        }
+    }
+
+    async function salvarHorariosProfissional(btn) {
+        if (btn && btn.disabled) return;
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Salvando...';
+        }
+
+        const profId = document.getElementById('horarioProfId').value;
+        const formData = new FormData(document.getElementById('formHorariosProfissional'));
+
+        try {
+            const res = await fetch(`/admin/profissional/${profId}/horarios/salvar`, {
+                method: 'POST',
+                body: formData,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+            const data = await res.json();
+            if (data.success) {
+                bootstrap.Modal.getInstance(document.getElementById('modalHorariosProfissional')).hide();
+                alert("Jornada de trabalho salva com sucesso!");
+            } else {
+                alert("Erro ao salvar jornada do profissional.");
+            }
+        } catch (e) {
+            alert("Erro de conexão ao salvar.");
+        } finally {
+            if (btn) { btn.disabled = false; btn.innerHTML = 'Salvar Jornada'; }
+        }
+    }
 
     function abrirModalComanda(id, nomeCliente, servicosIdsAtuais) {
         document.getElementById('comandaApptId').value = id;

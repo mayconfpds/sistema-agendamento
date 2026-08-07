@@ -297,6 +297,7 @@ class DaySchedule(db.Model):
     __tablename__ = 'day_schedules'
     id = db.Column(db.Integer, primary_key=True)
     establishment_id = db.Column(db.Integer, db.ForeignKey('establishments.id'), nullable=False)
+    professional_id = db.Column(db.Integer, db.ForeignKey('professionals.id'), nullable=True)
     day_index = db.Column(db.Integer, nullable=False)
     is_active = db.Column(db.Boolean, default=True)
     work_start = db.Column(db.Time, nullable=False, default=time(9, 0))
@@ -1798,6 +1799,82 @@ def delete_professional(id):
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest': return jsonify({'success': True})
     return redirect(url_for('admin_dashboard'))
 
+@app.route('/admin/profissional/<int:id>/horarios', methods=['GET'])
+@login_required
+def get_professional_schedules(id):
+    prof = Professional.query.get_or_404(id)
+    if prof.establishment_id != current_user.establishment_id:
+        return jsonify({'success': False}), 403
+        
+    scheds = DaySchedule.query.filter_by(establishment_id=prof.establishment_id, professional_id=prof.id).order_by(DaySchedule.day_index).all()
+    
+    # Se o barbeiro ainda não tem jornada criada, clonamos a jornada padrão da barbearia para ele
+    if not scheds:
+        padroes = DaySchedule.query.filter_by(establishment_id=prof.establishment_id, professional_id=None).order_by(DaySchedule.day_index).all()
+        for p_sched in padroes:
+            novo = DaySchedule(
+                establishment_id=prof.establishment_id,
+                professional_id=prof.id,
+                day_index=p_sched.day_index,
+                is_active=p_sched.is_active,
+                work_start=p_sched.work_start,
+                work_end=p_sched.work_end,
+                lunch_start=p_sched.lunch_start,
+                lunch_end=p_sched.lunch_end,
+                pause2_start=p_sched.pause2_start,
+                pause2_end=p_sched.pause2_end
+            )
+            db.session.add(novo)
+        db.session.commit()
+        scheds = DaySchedule.query.filter_by(establishment_id=prof.establishment_id, professional_id=prof.id).order_by(DaySchedule.day_index).all()
+        
+    resultado = []
+    for s in scheds:
+        resultado.append({
+            'id': s.id,
+            'day_index': s.day_index,
+            'is_active': s.is_active,
+            'work_start': s.work_start.strftime('%H:%M'),
+            'work_end': s.work_end.strftime('%H:%M'),
+            'lunch_start': s.lunch_start.strftime('%H:%M') if s.lunch_start else '',
+            'lunch_end': s.lunch_end.strftime('%H:%M') if s.lunch_end else '',
+            'pause2_start': s.pause2_start.strftime('%H:%M') if s.pause2_start else '',
+            'pause2_end': s.pause2_end.strftime('%H:%M') if s.pause2_end else ''
+        })
+    return jsonify({'success': True, 'schedules': resultado})
+
+@app.route('/admin/profissional/<int:id>/horarios/salvar', methods=['POST'])
+@login_required
+def save_professional_schedules(id):
+    prof = Professional.query.get_or_404(id)
+    if prof.establishment_id != current_user.establishment_id:
+        return jsonify({'success': False}), 403
+        
+    for sid in request.form.getlist('schedule_id'):
+        ds = DaySchedule.query.get(sid)
+        if ds and ds.establishment_id == current_user.establishment_id and ds.professional_id == prof.id:
+            ds.is_active = (request.form.get(f'active_{sid}') == 'on')
+            ws, we = request.form.get(f'work_start_{sid}'), request.form.get(f'work_end_{sid}')
+            ls, le = request.form.get(f'lunch_start_{sid}'), request.form.get(f'lunch_end_{sid}')
+            p2s, p2e = request.form.get(f'pause2_start_{sid}'), request.form.get(f'pause2_end_{sid}')
+            
+            if ws and we:
+                ds.work_start = datetime.strptime(ws, '%H:%M').time()
+                ds.work_end = datetime.strptime(we, '%H:%M').time()
+            if ls and le:
+                ds.lunch_start = datetime.strptime(ls, '%H:%M').time()
+                ds.lunch_end = datetime.strptime(le, '%H:%M').time()
+            else:
+                ds.lunch_start = None; ds.lunch_end = None
+            if p2s and p2e:
+                ds.pause2_start = datetime.strptime(p2s, '%H:%M').time()
+                ds.pause2_end = datetime.strptime(p2e, '%H:%M').time()
+            else:
+                ds.pause2_start = None; ds.pause2_end = None
+                
+    db.session.commit()
+    return jsonify({'success': True})
+
 @app.route('/admin/ativar-gestao')
 @login_required
 def ativar_gestao():
@@ -1828,7 +1905,15 @@ def get_available_times():
         return jsonify([])
     
     est = Establishment.query.get(est_id)
-    day_sched = DaySchedule.query.filter_by(establishment_id=est.id, day_index=sel_date.weekday()).first()
+    
+    # NOVO: Busca primeiro a jornada personalizada do barbeiro; se não houver, usa a jornada geral do salão (professional_id=None)
+    day_sched = None
+    if prof_id and str(prof_id).isdigit() and prof_id != 'any':
+        day_sched = DaySchedule.query.filter_by(establishment_id=est.id, professional_id=int(prof_id), day_index=sel_date.weekday()).first()
+    
+    if not day_sched:
+        day_sched = DaySchedule.query.filter_by(establishment_id=est.id, professional_id=None, day_index=sel_date.weekday()).first()
+        
     if not day_sched or not day_sched.is_active: return jsonify([])
     
     query = Appointment.query.filter_by(appointment_date=sel_date, establishment_id=est.id).filter(Appointment.status == 'pendente')
@@ -2511,6 +2596,7 @@ with app.app_context():
         garantir_coluna('establishments', 'commission_on_gross', 'BOOLEAN DEFAULT FALSE')
         garantir_coluna('appointments', 'payment_method', 'VARCHAR(30)')
         garantir_coluna('appointments', 'discount_amount', 'FLOAT DEFAULT 0.0')
+        garantir_coluna('day_schedules', 'professional_id', 'INTEGER')
     except Exception as e:
         print(f"Erro na verificação de colunas: {e}")
 
