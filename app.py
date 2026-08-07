@@ -2084,6 +2084,19 @@ def serializar_campo(val):
         return str(val)
     return str(val) if not isinstance(val, (int, float, bool, str, list, dict)) else val
 
+import zipfile
+import io
+import json
+from datetime import datetime, date, time
+
+def serializar_campo(val):
+    """Converte datas e horários em texto seguro para JSON."""
+    if val is None:
+        return None
+    if isinstance(val, (datetime, date, time)):
+        return str(val)
+    return str(val) if not isinstance(val, (int, float, bool, str, list, dict)) else val
+
 @app.route('/admin/exportar_backup_completo')
 @login_required
 def exportar_backup_completo():
@@ -2103,13 +2116,12 @@ def exportar_backup_completo():
         'contact_phone': getattr(est, 'contact_phone', ''),
         'contact_email': getattr(est, 'contact_email', ''),
         'plan_type': getattr(est, 'plan_type', 'solo'),
-        'state': getattr(est, 'state', ''),
+        'state': getattr(est, 'state', 'PE'),
         'capacity': getattr(est, 'capacity', 1),
         'loyalty_points_goal': getattr(est, 'loyalty_points_goal', 0),
         'loyalty_reward': getattr(est, 'loyalty_reward', ''),
         'commission_on_gross': getattr(est, 'commission_on_gross', False),
-        'logo_filename': getattr(est, 'logo_filename', ''),
-        'created_at': serializar_campo(getattr(est, 'created_at', None))
+        'logo_filename': getattr(est, 'logo_filename', '')
     }
 
     # 2. Jornadas de Trabalho
@@ -2160,11 +2172,10 @@ def exportar_backup_completo():
         'image_filename': getattr(p, 'image_filename', '')
     } for p in produtos]
 
-    # 5. Histórico de Vendas de Produtos
+    # 5. Histórico de Vendas de Produtos (Sem product_id para evitar AttributeError)
     vendas = ProductSale.query.filter_by(establishment_id=est.id).all()
     dados_vendas = [{
         'id': v.id,
-        'product_id': v.product_id,
         'product_name': v.product_name,
         'quantity': v.quantity,
         'unit_price': getattr(v, 'unit_price', 0.0),
@@ -2174,7 +2185,7 @@ def exportar_backup_completo():
         'commission_amount': getattr(v, 'commission_amount', 0.0)
     } for v in vendas]
 
-    # 6. Equipe e Comissões
+    # 6. Equipe e Comissões (Acessa apenas colunas reais do modelo Professional)
     profissionais = Professional.query.filter_by(establishment_id=est.id).all()
     dados_equipe = []
     for p in profissionais:
@@ -2182,7 +2193,6 @@ def exportar_backup_completo():
         dados_equipe.append({
             'id': p.id,
             'name': p.name,
-            'phone': getattr(p, 'phone', ''),
             'cpf': getattr(p, 'cpf', ''),
             'birth_date': serializar_campo(getattr(p, 'birth_date', None)),
             'commission_rate': getattr(p, 'commission_rate', 0.0),
@@ -2208,32 +2218,32 @@ def exportar_backup_completo():
     blacklists = Blacklist.query.filter_by(establishment_id=est.id).all()
     dados_bloqueados = [{
         'client_phone': b.client_phone,
-        'client_cpf': getattr(b, 'client_cpf', ''),
-        'client_name': getattr(b, 'client_name', ''),
-        'reason': getattr(b, 'reason', '')
+        'client_cpf': getattr(b, 'client_cpf', '')
     } for b in blacklists]
 
-    # 9. Assinaturas / Clube VIP
+    # 9. Assinaturas / Clube VIP (Usa sub.plan.name e sub.created_at)
     assinaturas = ClientSubscription.query.filter_by(establishment_id=est.id).all()
     dados_assinaturas = [{
         'id': sub.id,
         'client_name': sub.client_name,
         'client_phone': sub.client_phone,
         'client_cpf': getattr(sub, 'client_cpf', ''),
-        'plan_name': sub.plan_name,
+        'plan_name': getattr(sub.plan, 'name', '') if getattr(sub, 'plan', None) else '',
         'status': sub.status,
-        'start_date': serializar_campo(sub.start_date),
+        'created_at': serializar_campo(getattr(sub, 'created_at', None)),
         'expiry_date': serializar_campo(sub.expiry_date)
     } for sub in assinaturas]
 
-    # 10. Histórico de Agendamentos (Tratamento seguro para data de nascimento)
+    # 10. Histórico de Agendamentos
     agendamentos = Appointment.query.filter_by(establishment_id=est.id).all()
     dados_agendamentos = []
     for a in agendamentos:
-        # Busca segura da data de nascimento pelo perfil do cliente no histórico
         nascimento_cli = None
-        if getattr(a, 'client_profile', None) and getattr(a.client_profile, 'birth_date', None):
-            nascimento_cli = a.client_profile.birth_date
+        try:
+            if getattr(a, 'client_profile', None) and getattr(a.client_profile, 'birth_date', None):
+                nascimento_cli = a.client_profile.birth_date
+        except Exception:
+            nascimento_cli = None
 
         dados_agendamentos.append({
             'id': a.id,
@@ -2269,24 +2279,26 @@ def exportar_backup_completo():
         'historico_agendamentos': dados_agendamentos
     }
 
-    # 11. Geração do .ZIP em memória contendo o JSON e imagens físicas
+    # 11. Geração do .ZIP em memória com proteção contra caminhos Linux/Render
     buffer_zip = io.BytesIO()
     with zipfile.ZipFile(buffer_zip, 'w', zipfile.ZIP_DEFLATED) as zip_file:
         json_bytes = json.dumps(backup_completo, ensure_ascii=False, indent=4).encode('utf-8')
         zip_file.writestr('dados_backup_completo.json', json_bytes)
 
-        # Copia apenas arquivos físicos em 'static/uploads' (ignorando strings Base64 ou links HTTP)
-        upload_dir = app.config.get('UPLOAD_FOLDER', 'static/uploads')
+        upload_dir = app.config.get('UPLOAD_FOLDER', os.path.join(basedir, 'static', 'uploads'))
         if os.path.exists(upload_dir):
             for file_name in os.listdir(upload_dir):
-                if file_name and not file_name.startswith(('data:image', 'http')):
-                    is_est_file = file_name.startswith(f"{est.id}_")
+                if file_name and not str(file_name).startswith(('data:image', 'http')):
+                    is_est_file = str(file_name).startswith(f"{est.id}_")
                     is_prod_file = any(getattr(p, 'image_filename', '') == file_name for p in produtos)
                     
                     if is_est_file or is_prod_file:
                         file_path = os.path.join(upload_dir, file_name)
                         if os.path.isfile(file_path):
-                            zip_file.write(file_path, arcname=f"midias/{file_name}")
+                            try:
+                                zip_file.write(file_path, arcname=f"midias/{file_name}")
+                            except Exception:
+                                pass
 
     buffer_zip.seek(0)
     nome_arquivo = f"backup_completo_{est.url_prefix}_{hoje_str}.zip"
@@ -2301,7 +2313,6 @@ def exportar_backup_completo():
 @app.route('/admin/importar_backup_completo', methods=['POST'])
 @login_required
 def importar_backup_completo():
-    # Segurança: Apenas o administrador/proprietário pode restaurar backups
     if getattr(current_user, 'role', 'dono') == 'barbeiro':
         flash('Acesso restrito ao administrador do estabelecimento.', 'danger')
         return redirect(url_for('admin_dashboard'))
@@ -2316,21 +2327,18 @@ def importar_backup_completo():
         return redirect(url_for('alterar_senha'))
 
     est = current_user.establishment
-    upload_dir = app.config.get('UPLOAD_FOLDER', 'static/uploads')
+    upload_dir = app.config.get('UPLOAD_FOLDER', os.path.join(basedir, 'static', 'uploads'))
     os.makedirs(upload_dir, exist_ok=True)
 
     try:
         with zipfile.ZipFile(file, 'r') as zip_ref:
-            # 1. Verifica se o arquivo JSON principal existe no ZIP
             if 'dados_backup_completo.json' not in zip_ref.namelist():
                 flash('O arquivo .ZIP é inválido ou não contém o arquivo dados_backup_completo.json.', 'danger')
                 return redirect(url_for('alterar_senha'))
 
-            # 2. Leitura do arquivo JSON
             with zip_ref.open('dados_backup_completo.json') as json_file:
                 backup = json.load(json_file)
 
-            # 3. Restauração das imagens/mídias para a pasta de uploads
             for info in zip_ref.infolist():
                 if info.filename.startswith('midias/') and not info.is_dir():
                     nome_original = os.path.basename(info.filename)
@@ -2339,7 +2347,7 @@ def importar_backup_completo():
                         with zip_ref.open(info.filename) as fonte, open(caminho_destino, 'wb') as destino:
                             destino.write(fonte.read())
 
-        # 4. Restauração de Configurações do Estabelecimento
+        # Restaura Configurações Gerais
         est_data = backup.get('estabelecimento', {})
         if est_data:
             est.name = est_data.get('nome', est.name)
@@ -2352,7 +2360,7 @@ def importar_backup_completo():
             if est_data.get('logo_filename'):
                 est.logo_filename = est_data.get('logo_filename')
 
-        # 5. Sincronização de Categorias e Serviços
+        # Restaura Categorias e Serviços
         cat_map = {}
         for cat_data in backup.get('categorias_e_servicos', []):
             cat = Category.query.filter_by(establishment_id=est.id, name=cat_data['nome']).first()
@@ -2378,7 +2386,7 @@ def importar_backup_completo():
                 srv.is_club_included = s_data.get('is_club_included', False)
                 srv.allowed_plan_ids = s_data.get('allowed_plan_ids', '')
 
-        # 6. Sincronização de Produtos da Loja
+        # Restaura Produtos
         for p_data in backup.get('produtos_estoque', []):
             prod = Product.query.filter_by(establishment_id=est.id, name=p_data['name']).first()
             if not prod:
@@ -2390,14 +2398,13 @@ def importar_backup_completo():
             prod.description = p_data.get('description', '')
             prod.image_filename = p_data.get('image_filename')
 
-        # 7. Sincronização de Profissionais
+        # Restaura Profissionais (Apenas atributos reais: name, cpf, comissões)
         for prof_data in backup.get('equipe_profissionais', []):
             prof = Professional.query.filter_by(establishment_id=est.id, name=prof_data['name']).first()
             if not prof:
                 prof = Professional(establishment_id=est.id, name=prof_data['name'])
                 db.session.add(prof)
                 db.session.flush()
-            prof.phone = prof_data.get('phone', '')
             prof.cpf = prof_data.get('cpf', '')
             prof.commission_rate = prof_data.get('commission_rate', 0.0)
             prof.has_product_commission = prof_data.get('has_product_commission', False)
@@ -2405,7 +2412,7 @@ def importar_backup_completo():
             prof.all_products_commission = prof_data.get('all_products_commission', True)
             prof.allowed_product_ids = prof_data.get('allowed_product_ids', '')
 
-        # 8. Sincronização de Clientes e Pontos de Fidelidade
+        # Restaura Clientes
         for cli_data in backup.get('clientes', []):
             cliente = None
             if cli_data.get('cpf'):
@@ -2420,123 +2427,25 @@ def importar_backup_completo():
             cliente.cpf = cli_data.get('cpf', cliente.cpf)
             cliente.points = cli_data.get('points', cliente.points)
 
-        # 9. Sincronização da Lista de Bloqueios (No-Show)
+        # Restaura Bloqueios
         for b_data in backup.get('clientes_bloqueados', []):
             blk = Blacklist.query.filter_by(establishment_id=est.id, client_phone=b_data['client_phone']).first()
             if not blk:
                 blk = Blacklist(
                     establishment_id=est.id,
                     client_phone=b_data['client_phone'],
-                    client_cpf=b_data.get('client_cpf'),
-                    client_name=b_data.get('client_name'),
-                    reason=b_data.get('reason', 'Falta / No-show')
+                    client_cpf=b_data.get('client_cpf')
                 )
                 db.session.add(blk)
 
         db.session.commit()
-        flash('Backup restaurado e sincronizado com sucesso! Configurações, cadastros e mídias foram atualizados.', 'success')
+        flash('Backup restaurado e sincronizado com sucesso!', 'success')
         return redirect(url_for('alterar_senha'))
 
     except Exception as e:
         db.session.rollback()
         flash(f'Erro ao restaurar arquivo de backup: {str(e)}', 'danger')
         return redirect(url_for('alterar_senha'))
-    
-@app.route('/admin/importar_dados', methods=['POST'])
-@login_required
-def import_data():
-    if 'file' not in request.files:
-        flash('Nenhum arquivo enviado.', 'danger')
-        return redirect(url_for('admin_dashboard'))
-    
-    file = request.files['file']
-    tipo_importacao = request.form.get('tipo_importacao')
-    
-    if file.filename == '':
-        flash('Por favor, selecione um arquivo CSV.', 'warning')
-        return redirect(url_for('admin_dashboard'))
-
-    if file and file.filename.endswith('.csv'):
-        try:
-            raw_bytes = file.stream.read()
-            try:
-                texto_csv = raw_bytes.decode("utf-8-sig")
-            except UnicodeDecodeError:
-                texto_csv = raw_bytes.decode("latin-1")
-                
-            stream = io.StringIO(texto_csv, newline=None)
-            
-            primeira_linha = texto_csv.split('\n')[0]
-            delimitador = ';' if primeira_linha.count(';') > primeira_linha.count(',') else ','
-            
-            reader = csv.DictReader(stream, delimiter=delimitador)
-            
-            count = 0
-            est_id = current_user.establishment.id
-
-            for row in reader:
-                # CORREÇÃO CRÍTICA: Se for nulo, vira vazio (''), e não a palavra 'None'
-                row_limpa = {str(k).strip().upper(): (str(v).strip() if v is not None else '') for k, v in row.items() if k is not None}
-                
-                if not row_limpa or not any(row_limpa.values()): 
-                    continue
-
-                if tipo_importacao == 'servicos':
-                    nome = row_limpa.get('NOME', '')
-                    
-                    # Ignora se for vazio ou se por acaso a palavra 'None' tiver passado
-                    if not nome or nome.lower() == 'none':
-                        continue
-                        
-                    preco_str = row_limpa.get('PRECO', '0').replace(',', '.')
-                    duracao_str = row_limpa.get('DURACAO_MINUTOS', '30')
-                    promocao = row_limpa.get('PROMOCAO', '').lower()
-                    oculto = row_limpa.get('OCULTO', '').lower()
-                    
-                    if not duracao_str.isdigit(): duracao_str = '30'
-
-                    novo_servico = Service(
-                        name=nome,
-                        price=float(preco_str) if preco_str.replace('.','',1).isdigit() else 0.0,
-                        duration=int(duracao_str),
-                        establishment_id=est_id,
-                        is_combo=(promocao == 'sim'),
-                        is_hidden=(oculto == 'sim')
-                    )
-                    db.session.add(novo_servico)
-                
-                elif tipo_importacao == 'produtos':
-                    nome = row_limpa.get('NOME', '')
-                    if not nome or nome.lower() == 'none':
-                        continue
-
-                    preco_str = row_limpa.get('PRECO', '0').replace(',', '.')
-                    estoque_str = row_limpa.get('ESTOQUE_ATUAL', '0')
-                    descricao = row_limpa.get('DESCRICAO', '')
-                    
-                    if not estoque_str.isdigit(): estoque_str = '0'
-
-                    novo_produto = Product(
-                        name=nome,
-                        price=float(preco_str) if preco_str.replace('.','',1).isdigit() else 0.0,
-                        stock_quantity=int(estoque_str),
-                        description=descricao,
-                        establishment_id=est_id
-                    )
-                    db.session.add(novo_produto)
-                
-                count += 1
-            
-            db.session.commit()
-            flash(f'Sucesso! {count} itens válidos foram importados.', 'success')
-            
-        except Exception as e:
-            db.session.rollback()
-            flash(f'Erro de formato no arquivo: {e}', 'danger')
-    else:
-        flash('Formato de arquivo inválido. Use apenas .csv', 'danger')
-
-    return redirect(url_for('admin_dashboard'))
 
 @app.route('/admin/relatorio_bi')
 @login_required
