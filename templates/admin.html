@@ -224,10 +224,12 @@
                                                     <a href="https://wa.me/55{{ a.client_phone }}?text=Olá, {{ a.client_name }}! Tudo bem? Passando só para confirmar o seu horário hoje às {{ a.appointment_time.strftime('%H:%M') }} 💈" target="_blank" class="btn btn-sm btn-outline-success w-100 fw-bold mb-2 shadow-sm">
                                                         <i class="bi bi-whatsapp"></i> Lembrar
                                                     </a>
+                                                    {% if current_user.role != 'barbeiro' %}
                                                     <button type="button" class="btn btn-sm btn-success w-100 fw-bold mb-2 shadow-sm"
                                                             onclick="abrirModalConcluir({{ a.id }}, '{{ a.client_name|e }}', '{{ a.service_names|e }}', {{ a.services | sum(attribute='price') }}, {{ a.professional_id or 'null' }})">
                                                         <i class="bi bi-check-circle"></i> Concluir
                                                     </button>
+                                                    {% endif %}
                                                 </div>
                                                 <div class="d-flex gap-1 flex-column flex-md-row">
                                                     <form method="POST" action="{{ url_for('delete_appointment', id=a.id) }}" class="w-100" onsubmit="return excluirItemAJAX(event, this, 'container-agendamentos', 'Apenas cancelar o horário?');">
@@ -275,7 +277,6 @@
                             </div>
                         </div>
                     </div>
-                    {% endif %}
 
                     <div class="card shadow-sm border mb-4">
                         <div class="card-header bg-body py-3 border-bottom d-flex justify-content-between align-items-center"><h6 class="mb-0 fw-bold text-body-emphasis"><i class="bi bi-scissors text-primary"></i> Serviços Oferecidos</h6><button class="btn btn-sm btn-primary fw-bold px-3 shadow-sm" onclick="abrirModalServico()"><i class="bi bi-plus-lg"></i> Novo Serviço</button></div>
@@ -393,6 +394,7 @@
                         </div>
                     </div>
                 </div>
+                {% endif %}
             </div>
         </div>
 

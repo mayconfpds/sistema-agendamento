@@ -957,7 +957,7 @@ def admin_dashboard():
     appts = query.order_by(Appointment.appointment_date.asc(), Appointment.appointment_time.asc()).all()
     services = Service.query.filter_by(establishment_id=est.id).all()
     categories = Category.query.filter_by(establishment_id=est.id).all()
-    schedules = DaySchedule.query.filter_by(establishment_id=est.id).order_by(DaySchedule.day_index).all()
+    schedules = DaySchedule.query.filter_by(establishment_id=est.id, professional_id=None).order_by(DaySchedule.day_index).all()
     blacklists = Blacklist.query.filter_by(establishment_id=est.id).all()
     professionals = Professional.query.filter_by(establishment_id=est.id).all() 
     today_count = Appointment.query.filter(Appointment.establishment_id == est.id, Appointment.appointment_date == today).count()
@@ -1209,6 +1209,10 @@ def delete_subscriber(id):
 @app.route('/admin/alterar-senha', methods=['GET', 'POST'])
 @login_required
 def alterar_senha():
+    # NOVO: Impede acesso do barbeiro à página de alterar senha do estabelecimento
+    if getattr(current_user, 'role', 'dono') == 'barbeiro':
+        flash('Acesso restrito ao administrador do estabelecimento.', 'danger')
+        return redirect(url_for('admin_dashboard'))
     if request.method == 'POST':
         senha_atual = request.form.get('senha_atual')
         nova_senha = request.form.get('nova_senha')
@@ -1345,7 +1349,13 @@ def api_clientes_inativos():
 @login_required
 def update_settings():
     if not current_user.establishment.has_access: return redirect(url_for('planos'))
+    
+    # BLOQUEIO: Barbeiro não pode alterar configurações ou segurança
+    if getattr(current_user, 'role', 'dono') == 'barbeiro':
+        return jsonify({'success': False, 'error': 'Acesso negado.'}), 403
+
     est = current_user.establishment; ft = request.form.get('form_type')
+    # Restante do código de update_settings continua igual...
     if ft == 'contact':
         est.contact_phone = request.form.get('contact_phone'); est.contact_email = request.form.get('contact_email')
         est.state = request.form.get('state', est.state)
@@ -1534,7 +1544,13 @@ def edit_appointment_services(id):
 @login_required
 def complete_appointment(id):
     if not current_user.establishment.has_access: return redirect(url_for('planos'))
+    
+    # BLOQUEIO: Barbeiro não pode concluir agendamentos
+    if getattr(current_user, 'role', 'dono') == 'barbeiro':
+        return jsonify({'success': False, 'error': 'Acesso negado.'}), 403
+
     a = Appointment.query.get_or_404(id)
+    # Restante do código de complete_appointment continua igual...
     if a.establishment_id != current_user.establishment_id: return jsonify({'success': False, 'error': 'Erro de acesso'}), 403
     est = a.establishment
     
@@ -2181,10 +2197,10 @@ def relatorio_bi():
     est = current_user.establishment
     hoje = get_now_brazil().date()
     
-    is_barbeiro = getattr(current_user, 'role', 'dono') == 'barbeiro' and current_user.professional_id
+    is_barbeiro = getattr(current_user, 'role', 'dono') == 'barbeiro'
     
     if is_barbeiro:
-        # Força a data para HOJE para servir como Fechamento de Caixa Diário
+        # FORÇA A DATA RIGOROSAMENTE PARA HOJE (SEM PERMITIR FILTRAR OUTRAS DATAS)
         start_date = hoje
         end_date = hoje
         start_date_str = hoje.strftime('%Y-%m-%d')
@@ -2197,6 +2213,8 @@ def relatorio_bi():
             end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
         except: 
             start_date = hoje - timedelta(days=30); end_date = hoje
+
+    # Restante da rota relatorio_bi continua igual...
 
     appts = Appointment.query.filter(Appointment.establishment_id == est.id, Appointment.appointment_date >= start_date, Appointment.appointment_date <= end_date).all()
     
