@@ -2056,51 +2056,225 @@ def check_novos_agendamentos():
     ultimo = Appointment.query.filter_by(establishment_id=current_user.establishment_id).order_by(Appointment.id.desc()).first()
     return jsonify({'max_id': ultimo.id if ultimo else 0})
 
-@app.route('/admin/exportar_dados')
-@login_required
-def export_data():
-    est_id = current_user.establishment.id
-    
-    # Cria um arquivo ZIP na memória do servidor
-    memory_file = io.BytesIO()
-    
-    with zipfile.ZipFile(memory_file, 'w') as zf:
-        
-        # 1. Planilha de Serviços
-        servicos = Service.query.filter_by(establishment_id=est_id).all()
-        si = io.StringIO()
-        cw = csv.writer(si)
-        cw.writerow(['ID', 'Nome', 'Preco', 'Duracao_Minutos', 'Categoria', 'Promocao', 'Oculto'])
-        for s in servicos:
-            cat_nome = s.category.name if s.category else 'Geral'
-            cw.writerow([s.id, s.name, s.price, s.duration, cat_nome, 'Sim' if s.is_combo else 'Nao', 'Sim' if s.is_hidden else 'Nao'])
-        zf.writestr('meus_servicos.csv', si.getvalue())
-        
-        # 2. Planilha de Produtos (Estoque)
-        produtos = Product.query.filter_by(establishment_id=est_id).all()
-        pi = io.StringIO()
-        cw = csv.writer(pi)
-        cw.writerow(['ID', 'Nome', 'Preco', 'Estoque_Atual', 'Descricao'])
-        for p in produtos:
-            cw.writerow([p.id, p.name, p.price, p.stock_quantity, p.description])
-        zf.writestr('meus_produtos.csv', pi.getvalue())
-        
-        # 3. Planilha de Clientes / Agendamentos
-        agendamentos = Appointment.query.filter_by(establishment_id=est_id).order_by(Appointment.appointment_date.desc()).all()
-        ai = io.StringIO()
-        cw = csv.writer(ai)
-        cw.writerow(['Data', 'Hora', 'Nome_Cliente', 'WhatsApp', 'Servicos_Realizados', 'Valor_Pago', 'Status'])
-        for a in agendamentos:
-            cw.writerow([a.appointment_date.strftime('%d/%m/%Y'), a.appointment_time.strftime('%H:%M'), a.client_name, a.client_phone, a.service_names, a.total_price, a.status])
-        zf.writestr('meu_historico_clientes.csv', ai.getvalue())
+import zipfile
+import io
+import json
+from datetime import datetime, date, time
 
-    # Prepara o arquivo ZIP para ser baixado
-    memory_file.seek(0)
+def serializar_campo(val):
+    """Converte objetos de data e hora em texto normalizado para o JSON."""
+    if isinstance(val, datetime):
+        return val.strftime('%Y-%m-%d %H:%M:%S')
+    elif isinstance(val, date):
+        return val.strftime('%Y-%m-%d')
+    elif isinstance(val, time):
+        return val.strftime('%H:%M:%S')
+    return val
+
+@app.route('/admin/exportar_backup_completo')
+@login_required
+def exportar_backup_completo():
+    # Segurança: Apenas o administrador/proprietário pode exportar o backup do estabelecimento
+    if getattr(current_user, 'role', 'dono') == 'barbeiro':
+        flash('Acesso restrito ao administrador do estabelecimento.', 'danger')
+        return redirect(url_for('admin_dashboard'))
+
+    est = current_user.establishment
+    hoje_str = get_now_brazil().strftime('%Y-%m-%d_%H%M')
+
+    # 1. Configurações Gerais da Barbearia / Salão
+    dados_estabelecimento = {
+        'id': est.id,
+        'nome': est.name,
+        'url_prefix': est.url_prefix,
+        'contact_phone': est.contact_phone,
+        'contact_email': est.contact_email,
+        'plan_type': est.plan_type,
+        'state': est.state,
+        'capacity': est.capacity,
+        'loyalty_points_goal': est.loyalty_points_goal,
+        'loyalty_reward': est.loyalty_reward,
+        'commission_on_gross': est.commission_on_gross,
+        'logo_filename': est.logo_filename,
+        'created_at': serializar_campo(getattr(est, 'created_at', None))
+    }
+
+    # 2. Jornadas de Trabalho e Horários
+    schedules = DaySchedule.query.filter_by(establishment_id=est.id).all()
+    dados_horarios = [{
+        'day_index': s.day_index,
+        'professional_id': s.professional_id,
+        'is_active': s.is_active,
+        'work_start': serializar_campo(s.work_start),
+        'work_end': serializar_campo(s.work_end),
+        'lunch_start': serializar_campo(s.lunch_start),
+        'lunch_end': serializar_campo(s.lunch_end),
+        'pause2_start': serializar_campo(s.pause2_start),
+        'pause2_end': serializar_campo(s.pause2_end)
+    } for s in schedules]
+
+    # 3. Categorias, Serviços, Combos e Regras do Clube
+    categories = Category.query.filter_by(establishment_id=est.id).all()
+    dados_categorias = []
+    for c in categories:
+        servicos = [{
+            'id': s.id,
+            'name': s.name,
+            'price': s.price,
+            'duration': s.duration,
+            'description': s.description,
+            'image_url': s.image_url,
+            'is_combo': s.is_combo,
+            'original_price': s.original_price,
+            'is_hidden': s.is_hidden,
+            'is_club_included': s.is_club_included,
+            'allowed_plan_ids': s.allowed_plan_ids
+        } for s in c.services]
+        dados_categorias.append({
+            'categoria_id': c.id,
+            'nome': c.name,
+            'servicos': servicos
+        })
+
+    # 4. Produtos e Estoque da Loja
+    produtos = Product.query.filter_by(establishment_id=est.id).all()
+    dados_produtos = [{
+        'id': p.id,
+        'name': p.name,
+        'price': p.price,
+        'stock_quantity': p.stock_quantity,
+        'description': p.description,
+        'image_filename': p.image_filename
+    } for p in produtos]
+
+    # 5. Histórico de Vendas de Produtos
+    vendas = ProductSale.query.filter_by(establishment_id=est.id).all()
+    dados_vendas = [{
+        'id': v.id,
+        'product_id': v.product_id,
+        'product_name': v.product_name,
+        'quantity': v.quantity,
+        'unit_price': v.unit_price,
+        'total_price': v.total_price,
+        'sale_date': serializar_campo(v.sale_date),
+        'professional_id': v.professional_id,
+        'commission_amount': v.commission_amount
+    } for v in vendas]
+
+    # 6. Equipa, Comissões e Logins dos Barbeiros
+    profissionais = Professional.query.filter_by(establishment_id=est.id).all()
+    dados_equipe = []
+    for p in profissionais:
+        admin_login = Admin.query.filter_by(establishment_id=est.id, professional_id=p.id).first()
+        dados_equipe.append({
+            'id': p.id,
+            'name': p.name,
+            'phone': p.phone,
+            'cpf': p.cpf,
+            'birth_date': serializar_campo(p.birth_date),
+            'commission_rate': p.commission_rate,
+            'has_product_commission': p.has_product_commission,
+            'product_commission_rate': p.product_commission_rate,
+            'all_products_commission': p.all_products_commission,
+            'allowed_product_ids': p.allowed_product_ids,
+            'login_username': admin_login.username if admin_login else None
+        })
+
+    # 7. Base de Clientes e Pontos de Fidelidade
+    clientes = Client.query.filter_by(establishment_id=est.id).all()
+    dados_clientes = [{
+        'id': cli.id,
+        'name': cli.name,
+        'phone': cli.phone,
+        'cpf': cli.cpf,
+        'birth_date': serializar_campo(cli.birth_date),
+        'points': cli.points
+    } for cli in clientes]
+
+    # 8. Lista de Bloqueios (No-Show)
+    blacklists = Blacklist.query.filter_by(establishment_id=est.id).all()
+    dados_bloqueados = [{
+        'client_phone': b.client_phone,
+        'client_cpf': b.client_cpf,
+        'client_name': b.client_name,
+        'reason': b.reason
+    } for b in blacklists]
+
+    # 9. Clube VIP de Assinaturas
+    assinaturas = ClientSubscription.query.filter_by(establishment_id=est.id).all()
+    dados_assinaturas = [{
+        'id': sub.id,
+        'client_name': sub.client_name,
+        'client_phone': sub.client_phone,
+        'client_cpf': sub.client_cpf,
+        'plan_name': sub.plan_name,
+        'status': sub.status,
+        'start_date': serializar_campo(sub.start_date),
+        'expiry_date': serializar_campo(sub.expiry_date)
+    } for sub in assinaturas]
+
+    # 10. Histórico Completo de Agendamentos (Pagamentos, Descontos e Comissões)
+    agendamentos = Appointment.query.filter_by(establishment_id=est.id).all()
+    dados_agendamentos = [{
+        'id': a.id,
+        'client_name': a.client_name,
+        'client_phone': a.client_phone,
+        'client_cpf': a.client_cpf,
+        'client_email': a.client_email,
+        'client_birth_date': serializar_campo(a.client_birth_date),
+        'appointment_date': serializar_campo(a.appointment_date),
+        'appointment_time': serializar_campo(a.appointment_time),
+        'servicos_realizados': a.service_names,
+        'professional_id': a.professional_id,
+        'total_duration': a.total_duration,
+        'total_price': a.total_price,
+        'discount_amount': a.discount_amount,
+        'payment_method': a.payment_method,
+        'commission_value': a.commission_value,
+        'status': a.status
+    } for a in agendamentos]
+
+    # Estrutura JSON Unificada
+    backup_completo = {
+        'export_date': get_now_brazil().strftime('%Y-%m-%d %H:%M:%S'),
+        'estabelecimento': dados_estabelecimento,
+        'horarios_funcionamento': dados_horarios,
+        'categorias_e_servicos': dados_categorias,
+        'produtos_estoque': dados_produtos,
+        'historico_vendas_loja': dados_vendas,
+        'equipe_profissionais': dados_equipe,
+        'clientes': dados_clientes,
+        'clientes_bloqueados': dados_bloqueados,
+        'assinantes_clube_vip': dados_assinaturas,
+        'historico_agendamentos': dados_agendamentos
+    }
+
+    # 11. Geração do ficheiro .ZIP em memória contendo o JSON e as imagens
+    buffer_zip = io.BytesIO()
+    with zipfile.ZipFile(buffer_zip, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+        json_bytes = json.dumps(backup_completo, ensure_ascii=False, indent=4).encode('utf-8')
+        zip_file.writestr('dados_backup_completo.json', json_bytes)
+
+        # Copia fotos salvas em 'static/uploads' que pertençam a este estabelecimento
+        upload_dir = app.config.get('UPLOAD_FOLDER', 'static/uploads')
+        if os.path.exists(upload_dir):
+            for file_name in os.listdir(upload_dir):
+                is_est_file = file_name.startswith(f"{est.id}_")
+                is_prod_file = any(p.image_filename == file_name for p in produtos if p.image_filename)
+                
+                if is_est_file or is_prod_file:
+                    file_path = os.path.join(upload_dir, file_name)
+                    if os.path.isfile(file_path):
+                        zip_file.write(file_path, arcname=f"midias/{file_name}")
+
+    buffer_zip.seek(0)
+    nome_arquivo = f"backup_completo_{est.url_prefix}_{hoje_str}.zip"
+    
     return send_file(
-        memory_file,
+        buffer_zip,
         mimetype='application/zip',
         as_attachment=True,
-        download_name='backup_agendafacil.zip'
+        download_name=nome_arquivo
     )
     
 @app.route('/admin/importar_dados', methods=['POST'])

@@ -51,20 +51,34 @@
 
         <div class="col-md-6">
             <div class="card shadow-sm border-0 h-100">
-                <div class="card-body p-4 p-md-5">
-                    <h5 class="fw-bold mb-3 text-body-emphasis"><i class="bi bi-database-fill-gear text-primary me-2"></i> Portabilidade</h5>
-                    <p class="small text-muted mb-4">Tenha total controle sobre as suas informações. Exporte para backup ou importe dados de outros sistemas.</p>
-                    
-                    <div class="p-3 border rounded-3 bg-body-tertiary mb-3">
-                        <h6 class="fw-bold small mb-1"><i class="bi bi-download me-1"></i> Exportar Backup</h6>
-                        <p class="text-muted mb-3" style="font-size: 0.75rem;">Baixe suas planilhas (Serviços, Produtos e Clientes) num arquivo .zip.</p>
-                        <a href="{{ url_for('export_data') }}" class="btn btn-outline-primary btn-sm fw-bold w-100">Baixar Meus Dados</a>
+                <div class="card-body p-4 p-md-5 d-flex flex-column justify-content-between">
+                    <div>
+                        <h5 class="fw-bold mb-3 text-body-emphasis">
+                            <i class="bi bi-file-earmark-zip text-success me-2"></i> Portabilidade e Backup Completo
+                        </h5>
+                        <p class="text-body-secondary small leading-relaxed mb-4">
+                            Faça o download integral de todas as informações do seu estabelecimento em um único arquivo compactado <strong>(.ZIP)</strong>.
+                        </p>
+                        <div class="bg-body-tertiary p-3 rounded-3 border mb-4 small text-body-secondary">
+                            <div class="fw-bold text-body-emphasis mb-2"><i class="bi bi-check2-circle text-success me-1"></i> O arquivo gerado contém:</div>
+                            <ul class="list-unstyled mb-0 space-y-1" style="font-size: 0.82rem;">
+                                <li>• Todas as configurações, horários e regras da loja</li>
+                                <li>• Cadastro de serviços, categorias e produtos do estoque</li>
+                                <li>• Base de clientes, pontos de fidelidade e clientes bloqueados</li>
+                                <li>• Assinantes ativos do Clube VIP e histórico de cobrança</li>
+                                <li>• Histórico integral de agendamentos, comissões e pagamentos</li>
+                                <li>• Pasta com as fotos dos serviços, produtos e logotipo</li>
+                            </ul>
+                        </div>
                     </div>
 
-                    <div class="p-3 border rounded-3 bg-body-tertiary">
-                        <h6 class="fw-bold small mb-1"><i class="bi bi-upload me-1"></i> Importar Dados</h6>
-                        <p class="text-muted mb-3" style="font-size: 0.75rem;">Cadastre serviços ou produtos em massa subindo um arquivo .csv.</p>
-                        <button class="btn btn-primary btn-sm fw-bold w-100" data-bs-toggle="modal" data-bs-target="#modalImportar">Iniciar Importação</button>
+                    <div>
+                        <a href="{{ url_for('exportar_backup_completo') }}" class="btn btn-success w-100 fw-bold py-3 rounded-pill shadow-sm d-flex align-items-center justify-content-center gap-2">
+                            <i class="bi bi-download fs-5"></i> Baixar Backup Completo (.ZIP)
+                        </a>
+                        <div class="text-center text-muted mt-2" style="font-size: 0.75rem;">
+                            <i class="bi bi-lock-fill"></i> Gerado em formato aberto (JSON + Mídias)
+                        </div>
                     </div>
                 </div>
             </div>
