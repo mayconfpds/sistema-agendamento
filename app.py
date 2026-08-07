@@ -1486,6 +1486,42 @@ def delete_appointment(id):
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest': return jsonify({'success': True})
     return redirect(url_for('admin_dashboard'))
 
+@app.route('/admin/agendamentos/editar_comanda/<int:id>', methods=['POST'])
+@login_required
+def edit_appointment_services(id):
+    if not current_user.establishment.has_access:
+        return jsonify({'success': False, 'error': 'Sem acesso.'}), 403
+    
+    a = Appointment.query.get_or_404(id)
+    if a.establishment_id != current_user.establishment_id:
+        return jsonify({'success': False, 'error': 'Acesso negado.'}), 403
+        
+    service_ids = request.form.getlist('service_ids[]')
+    selected_services = Service.query.filter(Service.id.in_(service_ids), Service.establishment_id == a.establishment_id).all()
+    
+    if not selected_services:
+        return jsonify({'success': False, 'error': 'Selecione pelo menos um serviço para a comanda.'})
+        
+    # Atualiza os serviços e a duração total do agendamento
+    a.services = selected_services
+    a.total_duration = sum(s.duration for s in selected_services)
+    
+    # Recalcula o valor (isenta serviços de clube se o cliente for assinante ativo)
+    now = get_now_brazil()
+    active_sub = ClientSubscription.query.filter_by(
+        establishment_id=a.establishment_id, 
+        client_phone=a.client_phone, 
+        status='ativo'
+    ).filter(ClientSubscription.expiry_date >= now).first()
+    
+    if active_sub:
+        a.total_price = sum(s.price for s in selected_services if not s.is_club_included)
+    else:
+        a.total_price = sum(s.price for s in selected_services)
+        
+    db.session.commit()
+    return jsonify({'success': True})
+
 @app.route('/admin/agendamentos/concluir/<int:id>', methods=['POST'])
 @login_required
 def complete_appointment(id):

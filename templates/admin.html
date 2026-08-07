@@ -179,7 +179,17 @@
                             <table class="table table-hover mb-0 align-middle"><thead class="table-tertiary text-body-emphasis"><tr><th>Data/Hora</th><th>Serviços / Cliente</th><th>Ações</th></tr></thead><tbody>
                                     {% for a in appointments %}<tr>
                                         <td><div class="fw-bold text-primary">{{ a.appointment_date.strftime('%d/%m') }}</div><div class="text-body-emphasis">{{ a.appointment_time.strftime('%H:%M') }}</div><div class="small text-muted">{{ a.total_duration }}min</div></td>
-                                        <td><div class="fw-bold text-body-emphasis">{{ a.service_names }}</div>
+                                        <td>
+                                            <div class="fw-bold text-body-emphasis">
+                                                {{ a.service_names }}
+                                                {% if a.status != 'concluido' %}
+                                                <button type="button" class="btn btn-sm btn-outline-primary py-0 px-2 ms-2 align-middle shadow-sm" style="font-size: 0.72rem;" 
+                                                        onclick="abrirModalComanda({{ a.id }}, '{{ a.client_name|e }}', [{% for s in a.services %}{{ s.id }}{% if not loop.last %},{% endif %}{% endfor %}])">
+                                                    <i class="bi bi-pencil-square"></i> Comanda
+                                                </button>
+                                                {% endif %}
+                                            </div>
+                                            </div>
                                             {% set valor_real = a.services | sum(attribute='price') %}
                                             <div class="text-success fw-bold small mt-1">
                                                 {% if a.total_price < valor_real %}
@@ -913,10 +923,91 @@
         </div>
     </div>
 </div>
+<div class="modal fade" id="modalEditarComanda" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content bg-body border-0 shadow-lg rounded-4">
+            <div class="modal-header border-bottom-0 pb-0">
+                <h6 class="modal-title fw-bold text-body-emphasis"><i class="bi bi-receipt text-primary"></i> Editar Comanda / Adicionar Serviços</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <form id="formEditarComanda">
+                    <input type="hidden" id="comandaApptId">
+                    <div class="small fw-bold text-body-secondary mb-3 p-2 bg-body-tertiary rounded-3" id="comandaNomeCliente"></div>
+                    
+                    <label class="form-label small fw-bold text-body-emphasis mb-2">Marque os Serviços Realizados:</label>
+                    <div class="bg-body-tertiary p-3 rounded-3 border" style="max-height: 250px; overflow-y: auto;">
+                        {% for s in services %}
+                        <div class="form-check mb-2">
+                            <input class="form-check-input check-comanda-servico" type="checkbox" name="service_ids[]" value="{{ s.id }}" id="check_comanda_srv_{{ s.id }}">
+                            <label class="form-check-label small text-body-emphasis d-flex justify-content-between pe-2" for="check_comanda_srv_{{ s.id }}">
+                                <span>{{ s.name }} <span class="text-muted">({{ s.duration }}m)</span></span>
+                                <strong class="text-success">R$ {{ "%.2f"|format(s.price) }}</strong>
+                            </label>
+                        </div>
+                        {% else %}
+                        <div class="text-muted text-center py-2 small">Nenhum serviço cadastrado.</div>
+                        {% endfor %}
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer border-top-0 pt-0 px-4 pb-4">
+                <button type="button" id="btnSalvarComanda" class="btn btn-primary w-100 fw-bold py-2 shadow-sm" onclick="salvarEdicaoComanda(this)">
+                    Atualizar Comanda
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
+
+    function abrirModalComanda(id, nomeCliente, servicosIdsAtuais) {
+        document.getElementById('comandaApptId').value = id;
+        document.getElementById('comandaNomeCliente').innerHTML = `<i class="bi bi-person"></i> Cliente: <strong>${nomeCliente}</strong>`;
+        
+        // Marca na lista os serviços que o cliente já tinha agendado
+        document.querySelectorAll('.check-comanda-servico').forEach(chk => {
+            chk.checked = servicosIdsAtuais.includes(parseInt(chk.value, 10));
+        });
+
+        const btn = document.getElementById('btnSalvarComanda');
+        if (btn) { btn.disabled = false; btn.innerHTML = 'Atualizar Comanda'; }
+
+        new bootstrap.Modal(document.getElementById('modalEditarComanda')).show();
+    }
+
+    async function salvarEdicaoComanda(btn) {
+        if (btn && btn.disabled) return;
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Atualizando...';
+        }
+
+        const id = document.getElementById('comandaApptId').value;
+        const formData = new FormData(document.getElementById('formEditarComanda'));
+
+        try {
+            const res = await fetch(`/admin/agendamentos/editar_comanda/${id}`, {
+                method: 'POST',
+                body: formData,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+            const data = await res.json();
+            if (data.success) {
+                bootstrap.Modal.getInstance(document.getElementById('modalEditarComanda')).hide();
+                await atualizarContainerSilenciosamente('container-agendamentos');
+            } else {
+                alert(data.error || 'Erro ao atualizar comanda.');
+                if (btn) { btn.disabled = false; btn.innerHTML = 'Atualizar Comanda'; }
+            }
+        } catch (e) {
+            alert('Erro de conexão ao atualizar a comanda.');
+            if (btn) { btn.disabled = false; btn.innerHTML = 'Atualizar Comanda'; }
+        }
+    }
 
     let valBaseConclusao = 0.0;
 
