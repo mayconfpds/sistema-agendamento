@@ -194,15 +194,20 @@ class Establishment(db.Model):
     internal_notes = db.Column(db.Text, nullable=True)
     commission_on_gross = db.Column(db.Boolean, default=False)
     
+    # RELACIONAMENTOS COM EFEITO CASCATA
     schedules = db.relationship('DaySchedule', backref='establishment', lazy=True, cascade="all, delete-orphan")
-    admins = db.relationship('Admin', backref='establishment', lazy=True)
-    services = db.relationship('Service', backref='establishment', lazy=True)
-    appointments = db.relationship('Appointment', backref='establishment', lazy=True)
-    blacklists = db.relationship('Blacklist', backref='establishment', lazy=True)
-    products = db.relationship('Product', backref='establishment', lazy=True)
-    sales = db.relationship('ProductSale', backref='establishment', lazy=True)
-    subscriptions = db.relationship('ClientSubscription', backref='establishment', lazy=True)
-    subscription_plans = db.relationship('SubscriptionPlan', backref='establishment', lazy=True)
+    admins = db.relationship('Admin', backref='establishment', lazy=True, cascade="all, delete-orphan")
+    services = db.relationship('Service', backref='establishment', lazy=True, cascade="all, delete-orphan")
+    appointments = db.relationship('Appointment', backref='establishment', lazy=True, cascade="all, delete-orphan")
+    blacklists = db.relationship('Blacklist', backref='establishment', lazy=True, cascade="all, delete-orphan")
+    products = db.relationship('Product', backref='establishment', lazy=True, cascade="all, delete-orphan")
+    sales = db.relationship('ProductSale', backref='establishment', lazy=True, cascade="all, delete-orphan")
+    subscriptions = db.relationship('ClientSubscription', backref='establishment', lazy=True, cascade="all, delete-orphan")
+    subscription_plans = db.relationship('SubscriptionPlan', backref='establishment', lazy=True, cascade="all, delete-orphan")
+    professionals = db.relationship('Professional', backref='establishment', lazy=True, cascade="all, delete-orphan")
+    categories = db.relationship('Category', backref='establishment', lazy=True, cascade="all, delete-orphan")
+    clients = db.relationship('Client', backref='establishment', lazy=True, cascade="all, delete-orphan")
+    blocked_days = db.relationship('BlockedDay', backref='establishment', lazy=True, cascade="all, delete-orphan")
 
     @property
     def has_access(self):
